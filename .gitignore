@@ -1,3 +1,4 @@
+# Base ignore.
 dist
 dist-*
 cabal-dev
@@ -26,3 +27,6 @@ cabal.project.local~
 
 # Log files.
 *.log
+
+# Generated cabal.
+**.cabal
