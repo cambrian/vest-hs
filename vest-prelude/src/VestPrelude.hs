@@ -5,7 +5,16 @@ module VestPrelude
 
 import qualified Control.Concurrent.STM.TVar as TVar
 import qualified Control.Monad.STM as STM
-import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
+import Data.Aeson as Reexports
+  ( FromJSON
+  , ToJSON
+  , (.=)
+  , decode
+  , encode
+  , object
+  , parseJSON
+  , toJSON
+  )
 import Data.Hashable (Hashable)
 import Data.Time.Clock as Reexports
 import qualified Data.Vector as Vector
@@ -38,6 +47,12 @@ instance FromJSON Route
 
 instance ToJSON Route
 
+newtype Port =
+  Port Int
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Hashable Port
+
 -- Timeouts are in micros.
 newtype Timeout =
   Timeout Int
@@ -47,11 +62,11 @@ instance Exception Timeout
 
 instance Hashable Timeout
 
-newtype Port =
-  Port Int
+newtype URI =
+  URI Text
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
-instance Hashable Port
+instance Hashable URI
 
 repeatableTimeoutStream :: DiffTime -> IO (Maybe a -> IO (), Streamly.Serial a)
 repeatableTimeoutStream _timeout = do

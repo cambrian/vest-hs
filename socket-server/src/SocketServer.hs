@@ -1,9 +1,10 @@
 module SocketServer
   ( T(..)
   , makeServer
-  , makeClient
+  , makeClient -- Purely for testing purposes.
   , serveRPC
-  , callRPC
+  , callRPC -- Purely for testing purposes.
+  , callRPCTimeout -- Purely for testing purposes.
   ) where
 
 import qualified Control.Exception as Exception
@@ -14,11 +15,11 @@ import qualified Data.Text as Text
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Network.HTTP.Types as Http
+import qualified Network.Socket.Internal as Socket
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
-import qualified Safe
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
@@ -61,6 +62,12 @@ data T = T
   , handlers :: HashTable Route (Text -> Streamly.Serial Response) -- Serial req to response.
   }
 
+data SocketClient = SocketClient
+  { uri :: URI
+  , port :: Port
+  , path :: Route
+  }
+
 data SocketServerException
   = BadCall Text
   | InternalSocketServerException Text -- If you get one of these, file a bug report.
@@ -69,34 +76,35 @@ data SocketServerException
 instance Exception SocketServerException
 
 -- Creates socket server and starts listening.
-makeServer :: Port -> IO T
+makeServer :: Int -> IO T
 makeServer port = do
   clients <- HashTable.new
   handlers <- HashTable.new
-  let state = T {clients, handlers}
+  let socketServer = T {clients, handlers}
   forkIO $
     -- Warp runs forever as an IO action, so put it on its own thread.
    do
-    Warp.run 3000 $
-      WS.websocketsOr WS.defaultConnectionOptions (wsApp state) httpApp
-  return state
+    Warp.run port $
+      WS.websocketsOr WS.defaultConnectionOptions (wsApp socketServer) httpApp
+  return socketServer
 
 httpApp :: Wai.Application
 httpApp _ respond =
   respond $ Wai.responseLBS Http.status400 [] "not a WebSocket request"
 
 wsApp :: T -> WS.ServerApp
-wsApp state pendingConn = do
-  let T {clients} = state
+wsApp socketServer pendingConn = do
   conn <- WS.acceptRequest pendingConn
-  clientId <- connectClient state conn
+  clientId <- connectClient socketServer conn
   -- Each connection gets its own handler thread.
   WS.forkPingThread conn 30 -- TODO: Make configurable.
-  Exception.finally (serveClient state conn) (disconnectClient state clientId)
+  Exception.finally
+    (serveClient socketServer conn)
+    (disconnectClient socketServer clientId)
 
 connectClient :: T -> WS.Connection -> IO Id
-connectClient state conn = do
-  let T {clients} = state
+connectClient socketServer conn = do
+  let T {clients} = socketServer
   clientIdRaw <- UUID.nextRandom
   let clientId = UUID.toText clientIdRaw
   HashTable.insert clients (Id clientId) conn
@@ -113,16 +121,15 @@ serveClient T {handlers} conn =
     case decode rawReqMsg of
       Nothing -> return ()
       Just reqMsg -> do
-        let RequestMessage {id = _id, route = _route, req} = reqMsg
-        let (Id id) = _id
-        let (Route route) = _route
+        let RequestMessage {id, route, req} = reqMsg
+        let (Route _route) = route
         let publish result = do
-              let resMsg = ResponseMessage {requestId = _id, res = result}
+              let resMsg = ResponseMessage {requestId = id, res = result}
               WS.sendTextData conn (encode resMsg)
-        handlerMaybe <- HashTable.lookup handlers _route
+        handlerMaybe <- HashTable.lookup handlers route
         case handlerMaybe of
           Nothing -> do
-            publish (Error (Text.append "invalid route: " route))
+            publish (Error (Text.append "invalid route: " _route))
           Just handler -> do
             let results = handler req
             Streamly.runStream $ Streamly.mapM publish results
@@ -130,16 +137,15 @@ serveClient T {handlers} conn =
     return ()
 
 serveRPC ::
-     (Read req, Show res, FromJSON req, ToJSON res)
+     (FromJSON req, ToJSON res)
   => T
   -> Route
   -> (req -> Streamly.Serial res)
   -> IO ()
 serveRPC T {handlers} route handler = do
   let serialTextHandler sReq =
-        let reqMaybe =
-              sReq & Text.unpack & ByteString.Lazy.UTF8.fromString & decode
-         in case reqMaybe of
+        let reqLazyStr = sReq & Text.unpack & ByteString.Lazy.UTF8.fromString
+         in case decode reqLazyStr of
               Nothing -> Streamly.yield (Error (Text.append "bad input: " sReq))
               Just req ->
                 Streamly.map
@@ -151,61 +157,69 @@ serveRPC T {handlers} route handler = do
                   (handler req)
   HashTable.insert handlers route serialTextHandler
 
--- Creates socket server and starts listening.
-makeClient :: Text -> Port -> Text -> IO (WS.ClientApp ())
-makeClient uri port route = do
-  clients <- HashTable.new
-  handlers <- HashTable.new
-  let state = T {clients, handlers}
-  forkIO $
-    -- Warp runs forever as an IO action, so put it on its own thread.
-   do
-    Warp.run 3000 $
-      WS.websocketsOr WS.defaultConnectionOptions (wsApp state) httpApp
-  return state
+-- Creates config for a socket client.
+makeClient :: Text -> Int -> Text -> SocketClient
+makeClient _uri _port _path =
+  let uri = URI _uri
+   in let port = Port _port
+       in let path = Route _path
+           in SocketClient {uri, port, path}
 
 callRPCTimeout ::
-     forall req res. (Show req, Read res)
-  => ClientConfig
-  -> DiffTime
+     forall req res. (ToJSON req, FromJSON res)
+  => DiffTime
+  -> SocketClient
   -> Route
   -> req
   -> IO (Streamly.Serial res)
-callRPCTimeout maxTimeBetweenUpdates _route req = do
-  let Route route = _route
+callRPCTimeout maxTimeBetweenUpdates SocketClient {uri, port, path} route req = do
+  let URI _uri = uri
+  let Port _port = port
+  let Route _path = path
+  let uriStr = Text.unpack _uri
+  let pathStr = Text.unpack _path
   id <- fmap (Id . UUID.toText) UUID.nextRandom
-  let reqMsg = RequestMessage {id, route, req = Text.pack (show req)}
-  let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
+  let reqMsg =
+        RequestMessage
+          { id
+          , route
+          , req = req & encode & ByteString.Lazy.UTF8.toString & Text.pack
+          }
+  let rawReqMsg = encode reqMsg
   (push, results) <- repeatableTimeoutStream maxTimeBetweenUpdates
   let wsClientApp conn = do
         forkIO $ -- Fork a thread that writes WS data to stream. Read until result is the end or an
                  -- error occurs and forces us to stop reading.
          do
           let readLoop = do
-                msg <- WS.receiveData conn
-                let resMsgMaybe = decode msg
-                shouldContinue <-
-                  case resMsgMaybe of
-                    Nothing -> return () -- TODO: Log error?
-                    Just (ResponseMessage {requestId, res}) -> do
-                      let resMaybe = decode res
-                      case resMaybe of
-                        Nothing -> return () -- TODO: Log error?
-                        Just resOuter -> do
-                          maybeResult <-
-                            case resOuter of
-                              Error msg -> throwIO (BadCall msg)
-                              Result res ->
-                                return $ decode @res (Text.unpack res)
-                              EndOfResults -> return Nothing
-                          push maybeResult
-                          return (maybeResult /= Nothing)
-                when (shouldContinue) readLoop
+                rawResMsg <- WS.receiveData conn
+                result <-
+                  case decode rawResMsg of
+                    Nothing -> return Nothing -- TODO: Log error?
+                    Just (ResponseMessage {res}) -> do
+                      maybeResult <-
+                        case res of
+                          Error errorMsg -> throwIO (BadCall errorMsg)
+                          Result resText -> do
+                            let lazyRes =
+                                  resText & Text.unpack &
+                                  ByteString.Lazy.UTF8.fromString
+                            return $ decode @res lazyRes
+                          EndOfResults -> return Nothing
+                      push maybeResult
+                      return maybeResult
+                when (isJust result) readLoop
           readLoop
-          -- Read from stdin and write to WS
-        WS.sendClose conn ()
-  withSocketsDo $ WS.runClient "echo.websocket.org" 80 "/" app
+        WS.sendTextData conn rawReqMsg
+        WS.sendClose conn ("[EOF]" :: Text)
+  Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
+  return results
 
 -- Has default timeout of 5 seconds.
-callRPC :: (Show req, Read res) => T -> Route -> req -> IO (Streamly.Serial res)
+callRPC ::
+     (ToJSON req, FromJSON res)
+  => SocketClient
+  -> Route
+  -> req
+  -> IO (Streamly.Serial res)
 callRPC = callRPCTimeout (secondsToDiffTime 5)

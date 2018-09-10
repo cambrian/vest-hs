@@ -1,7 +1,6 @@
 module Bridge
   ( Config(..)
   , T(..)
-  , Route(..)
   , make
   , serveRPC
   , callRPC

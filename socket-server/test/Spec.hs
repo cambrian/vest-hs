@@ -1,4 +1,5 @@
-import SocketServer
+import qualified SocketServer
+import VestPrelude
 
 -- import Control.Concurrent (threadDelay)
 -- import Control.Monad (unless, when)
@@ -69,10 +70,10 @@ import SocketServer
 --   putStrLn "passed testConcurrent"
 main :: IO ()
 main = do
-  print $ sum [1, 2, 3]
-  return ()
-  -- bridge <- Bridge.make bridgeConfig
+  socketServer <- SocketServer.makeServer 3000
+  let socketClient = SocketServer.makeClient "localhost" 3000 "/"
   -- testBasic bridge
   -- testMultipleFunctions bridge
   -- testMultipleConsumption bridge
   -- testConcurrent bridge
+  return ()
