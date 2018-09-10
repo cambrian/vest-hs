@@ -35,12 +35,10 @@ data Response
   deriving (Eq, Show, Read)
 
 data ResponseMessage = ResponseMessage
-  { id :: Id
+  { requestId :: Id
     -- other metadata
   , res :: Response
   } deriving (Eq, Show, Read)
-
-type Handler req res = req -> Streamly.Serial res
 
 data Config = Config
   { hostname :: Text
@@ -82,18 +80,19 @@ make Config {hostname, virtualHost, username, password} = do
        let rawMsg = msg & AMQP.msgBody & ByteString.Lazy.UTF8.toString
        case readMaybe rawMsg of
          Nothing -> return ()
-         Just ResponseMessage {id, res} -> do
-           waitingCall <- HashTable.lookup waitingCalls id
+         Just ResponseMessage {requestId, res} -> do
+           waitingCall <- HashTable.lookup waitingCalls requestId
            case waitingCall of
              Just enqueue -> enqueue res
              Nothing ->
                throwIO
                  (InternalBridgeException
-                    (Text.append "no waiting call with id: " (show id)))
+                    (Text.append "no handler for request id: " (show requestId)))
        AMQP.ackEnv env)
   return T {conn, chan, responseQueue = Id queueName, waitingCalls}
 
-serveRPC :: (Read req, Show res) => T -> Route -> Handler req res -> IO ()
+serveRPC ::
+     (Read req, Show res) => T -> Route -> (req -> Streamly.Serial res) -> IO ()
 serveRPC T {chan} route handler = do
   let Route queueName = route
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
@@ -106,7 +105,7 @@ serveRPC T {chan} route handler = do
          let rawReqMsg = msg & AMQP.msgBody & ByteString.Lazy.UTF8.toString
          case readMaybe rawReqMsg of
            Nothing -> return ()
-           Just RequestMessage {id, responseQueue, req} -> do
+           Just RequestMessage {id = requestId, responseQueue, req} -> do
              let Id _responseQueue = responseQueue
              let publish resMsg =
                    let msgBody = ByteString.Lazy.UTF8.fromString $ show resMsg
@@ -119,7 +118,7 @@ serveRPC T {chan} route handler = do
                Nothing -> do
                  publish
                    ResponseMessage
-                     {id, res = Error (Text.append "bad input: " req)}
+                     {requestId, res = Error (Text.append "bad input: " req)}
                  return ()
                Just r -> do
                  let results = handler r
@@ -128,9 +127,9 @@ serveRPC T {chan} route handler = do
                      (\res ->
                         publish
                           ResponseMessage
-                            {id, res = Result (Text.pack (show res))})
+                            {requestId, res = Result (Text.pack (show res))})
                      results
-                 publish ResponseMessage {id, res = EndOfResults}
+                 publish ResponseMessage {requestId, res = EndOfResults}
                  AMQP.ackEnv env
        return ())
   return ()

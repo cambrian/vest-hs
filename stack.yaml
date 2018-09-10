@@ -2,6 +2,7 @@ resolver: lts-12.9
 
 packages:
 - bridge
+- core
 - vest-prelude
 
 extra-deps:
