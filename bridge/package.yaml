@@ -75,7 +75,7 @@ ghc-options:
 - -Wincomplete-record-updates
 - -Wincomplete-uni-patterns
 - -Wredundant-constraints
-- -Wmissing-import-lists
+# - -Wmissing-import-lists
 
 library:
   source-dirs: src

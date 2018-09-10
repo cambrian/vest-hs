@@ -3,7 +3,10 @@ resolver: lts-12.9
 packages:
 - bridge
 - core
+- socket-server
 - vest-prelude
 
 extra-deps:
+- aeson-1.4.0.0
+- network-2.7.0.2
 - streamly-0.5.0

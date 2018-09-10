@@ -1,7 +1,6 @@
 module Bridge
   ( Config(..)
   , T(..)
-  , Route(..)
   , make
   , serveRPC
   , callRPC
@@ -24,12 +23,12 @@ type HashTable k v = HashTable.BasicHashTable k v
 data RequestMessage = RequestMessage
   { id :: Id
   , responseQueue :: Id
-    -- other metadata (time?)
-  , req :: Text -- Should be the serialization of a request object, but this is not guaranteed
+    -- Other metadata (time?).
+  , req :: Text -- Should be the serialization of a request object, but this is not guaranteed.
   } deriving (Eq, Show, Read)
 
 data Response
-  = Result Text -- Should be the serialization of a result object, but this is not guaranteed
+  = Result Text -- Should be the serialization of a result object, but this is not guaranteed.
   | EndOfResults
   | Error Text
   deriving (Eq, Show, Read)
@@ -56,12 +55,12 @@ data T = T
 
 data BridgeException
   = BadCall Text
-  | InternalBridgeException Text -- if you get one of these, file a bug report
+  | InternalBridgeException Text -- If you get one of these, file a bug report.
   deriving (Eq, Ord, Show, Read, Typeable)
 
 instance Exception BridgeException
 
--- Connects to bridge, begins listening on RPC queue
+-- Connects to bridge, begins listening on RPC queue.
 make :: Config -> IO T
 make Config {hostname, virtualHost, username, password} = do
   conn <-
@@ -134,7 +133,7 @@ serveRPC T {chan} route handler = do
        return ())
   return ()
 
--- Timeouts are between successive updates
+-- Timeouts are between successive updates.
 callRPCTimeout ::
      forall req res. (Show req, Read res)
   => DiffTime
@@ -163,6 +162,6 @@ callRPCTimeout maxTimeBetweenUpdates T {chan, responseQueue, waitingCalls} route
   _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
   return results
 
--- Has default timeout of 5 seconds
+-- Has default timeout of 5 seconds.
 callRPC :: (Show req, Read res) => T -> Route -> req -> IO (Streamly.Serial res)
 callRPC = callRPCTimeout (secondsToDiffTime 5)
