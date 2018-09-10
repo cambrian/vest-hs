@@ -8,21 +8,15 @@ module Bridge
   , callRPCTimeout
   ) where
 
-import qualified Control.Concurrent.STM.TVar as TVar
-import qualified Control.Monad.STM as STM
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Data.Text as Text
-import qualified Data.Time.Clock as Time
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
-import qualified Data.Vector as Vector
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import System.Timeout (timeout)
-import Text.Read (read, readMaybe)
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -63,10 +57,9 @@ data T = T
   }
 
 data BridgeException
-  = Timeout Text
-  | BadCall Text
+  = BadCall Text
   | InternalBridgeException Text -- if you get one of these, file a bug report
-  deriving (Eq, Show, Read, Typeable, Ord)
+  deriving (Eq, Ord, Show, Read, Typeable)
 
 instance Exception BridgeException
 
@@ -145,7 +138,7 @@ serveRPC T {chan} route handler = do
 -- Timeouts are between successive updates
 callRPCTimeout ::
      forall req res. (Show req, Read res)
-  => Time.DiffTime
+  => DiffTime
   -> T
   -> Route
   -> req
@@ -155,7 +148,7 @@ callRPCTimeout maxTimeBetweenUpdates T {chan, responseQueue, waitingCalls} route
   id <- fmap (Id . UUID.toText) UUID.nextRandom
   let reqMsg = RequestMessage {id, responseQueue, req = Text.pack (show req)}
   let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
-  (push, results) <- repeatablePushStream maxTimeBetweenUpdates
+  (push, results) <- repeatableTimeoutStream maxTimeBetweenUpdates
   HashTable.insert
     waitingCalls
     id
@@ -171,29 +164,6 @@ callRPCTimeout maxTimeBetweenUpdates T {chan, responseQueue, waitingCalls} route
   _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
   return results
 
-repeatablePushStream ::
-     Time.DiffTime -> IO (Maybe a -> IO (), Streamly.Serial a)
-repeatablePushStream _timeout = do
-  let timeoutMicros =
-        Time.diffTimeToPicoseconds _timeout & fromIntegral & (* 1000000)
-  resultsVar <- TVar.newTVarIO Vector.empty
-  let push a = STM.atomically $ TVar.modifyTVar resultsVar (`Vector.snoc` a)
-  let stream =
-        Streamly.unfoldrM
-          (\idx ->
-             timeout
-               timeoutMicros
-               (STM.atomically $ do
-                  results <- TVar.readTVar resultsVar
-                  unless (idx < Vector.length results) STM.retry
-                  case Vector.unsafeIndex results idx of
-                    Nothing -> return Nothing
-                    Just x -> return $ Just (x, idx + 1)) >>= \case
-               Just result -> return result
-               Nothing -> throwIO $ Timeout "timed out")
-          0
-  return (push, stream)
-
 -- Has default timeout of 5 seconds
 callRPC :: (Show req, Read res) => T -> Route -> req -> IO (Streamly.Serial res)
-callRPC = callRPCTimeout (Time.secondsToDiffTime 5)
+callRPC = callRPCTimeout (secondsToDiffTime 5)
