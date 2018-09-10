@@ -12,5 +12,6 @@ stack hoogle -- server --local --port=$HOOGLE_PORT > /dev/null &
 
 rm -f rabbit.log
 # /usr/local/sbin/rabbitmqctl shutdown
+# NOTE: If you get weird errors, run this manually:
 /usr/local/sbin/rabbitmq-server > rabbit.log &
 stack test --fast --haddock-deps --file-watch

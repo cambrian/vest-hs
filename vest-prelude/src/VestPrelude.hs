@@ -13,7 +13,7 @@ import qualified Streamly.Prelude as Streamly
 import System.Timeout as Reexports (timeout)
 import Text.Read as Reexports (read, readMaybe)
 
--- If you want the Id or Route string you should destructure instead of using show
+-- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
 newtype Id =
