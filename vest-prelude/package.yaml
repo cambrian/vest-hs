@@ -1,14 +1,14 @@
 name:                vest-prelude
 version:             0.1.0.0
-license:             MIT
 author:              "Vest"
-maintainer:          "example@example.com"
 copyright:           "2018 Vest"
 
 extra-source-files:
 - README.md
 
-description:         See README.md
+synopsis:            Vest custom prelude (uses Protolude for standard prelude stuff).
+category:            Prelude
+description:         See README.md.
 
 dependencies:
 - base      >= 4.10 && < 5
