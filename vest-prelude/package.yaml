@@ -11,7 +11,9 @@ category:            Prelude
 description:         See README.md.
 
 dependencies:
+- aeson     >= 1.4  && < 2
 - base      >= 4.10 && < 5
+- hashable  >= 1.2  && < 2
 - protolude >= 0.2  && < 1
 - stm       >= 2.4  && < 3
 - streamly  >= 0.5  && < 1
@@ -28,6 +30,7 @@ default-extensions:
 - ConstraintKinds
 - DataKinds
 - DefaultSignatures
+- DeriveAnyClass
 - DeriveFoldable
 - DeriveFunctor
 - DeriveGeneric

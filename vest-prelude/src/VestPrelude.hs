@@ -5,6 +5,8 @@ module VestPrelude
 
 import qualified Control.Concurrent.STM.TVar as TVar
 import qualified Control.Monad.STM as STM
+import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
+import Data.Hashable (Hashable)
 import Data.Time.Clock as Reexports
 import qualified Data.Vector as Vector
 import Protolude as VestPrelude
@@ -18,18 +20,38 @@ import Text.Read as Reexports (read, readMaybe)
 -- let Id text = (Id "x") -> text == "x"
 newtype Id =
   Id Text
-  deriving (Eq, Ord, Show, Read, Typeable, Hashable)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Hashable Id
+
+instance FromJSON Id
+
+instance ToJSON Id
 
 newtype Route =
   Route Text
-  deriving (Eq, Ord, Show, Read, Typeable, Hashable)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
--- timeouts are in micros
+instance Hashable Route
+
+instance FromJSON Route
+
+instance ToJSON Route
+
+-- Timeouts are in micros.
 newtype Timeout =
   Timeout Int
-  deriving (Eq, Ord, Show, Read, Typeable, Hashable)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
 instance Exception Timeout
+
+instance Hashable Timeout
+
+newtype Port =
+  Port Int
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Hashable Port
 
 repeatableTimeoutStream :: DiffTime -> IO (Maybe a -> IO (), Streamly.Serial a)
 repeatableTimeoutStream _timeout = do

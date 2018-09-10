@@ -7,4 +7,5 @@ packages:
 - vest-prelude
 
 extra-deps:
+- aeson-1.4.0.0
 - streamly-0.5.0

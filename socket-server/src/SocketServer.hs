@@ -1,33 +1,16 @@
 module SocketServer
   ( T(..)
-  -- , make
-  -- , serveRPC
-  -- , testRPC
-  , module Protolude
+  , makeServer
+  , makeClient
+  , serveRPC
+  , callRPC
   ) where
 
--- import Control.Concurrent (forkIO)
--- import qualified Control.Concurrent.STM.TVar as TVar
--- import Control.Monad (unless)
--- import qualified Control.Monad.STM as STM
--- import qualified Data.ByteString.Lazy.UTF8
--- import Data.Function ((&))
--- import Data.Text (Text, append, pack, unpack)
--- import qualified Data.Vector as Vector
--- import qualified Network.AMQP as AMQP
--- import qualified Network.HostName
--- import Text.Read (read, readMaybe)
-import qualified Control.Concurrent as Concurrent
-import Control.Concurrent.MVar (MVar)
-import qualified Control.Concurrent.MVar as MVar
-import Control.Exception (Exception, throw)
 import qualified Control.Exception as Exception
 import qualified Control.Monad as Monad
+import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
-import qualified Data.List as List
-import qualified Data.Maybe as Maybe
-import Data.Text (Text, append, pack, unpack)
-import Data.Typeable (Typeable)
+import qualified Data.Text as Text
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Network.HTTP.Types as Http
@@ -35,179 +18,194 @@ import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
-import Protolude
 import qualified Safe
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-
-type Handler req res = req -> Streamly.Serial res
+import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
 
-type Id = Text
-
-type Port = Int
-
-type Route = Text
-
-data SocketBridgeException =
-  SocketBridgeException Text
-  deriving (Eq, Show, Read, Typeable)
-
-instance Exception SocketBridgeException
-
 data RequestMessage = RequestMessage
-  { requestId :: Id
+  { id :: Id
+  , route :: Route
     -- Other metadata (time?).
   , req :: Text -- Should be the serialization of a request object, but this is not guaranteed.
-  } deriving (Eq, Show, Read)
+  } deriving (Eq, Show, Read, Generic)
+
+instance FromJSON RequestMessage
+
+instance ToJSON RequestMessage
 
 data Response
   = Result Text -- Should be the serialization of a result object, but this is not guaranteed.
-  | End_of_results
+  | EndOfResults
   | Error Text
-  deriving (Eq, Show, Read)
+  deriving (Eq, Show, Read, Generic)
+
+instance FromJSON Response
+
+instance ToJSON Response
 
 data ResponseMessage = ResponseMessage
   { requestId :: Id
     -- Other metadata.
   , res :: Response
-  } deriving (Eq, Show, Read)
+  } deriving (Eq, Show, Read, Generic)
+
+instance FromJSON ResponseMessage
+
+instance ToJSON ResponseMessage
 
 data T = T
   { clients :: HashTable Id WS.Connection
-  , handlers :: HashTable Text (RequestMessage -> Streamly.Serial ResponseMessage)
+  , handlers :: HashTable Route (Text -> Streamly.Serial Response) -- Serial req to response.
   }
+
+data SocketServerException
+  = BadCall Text
+  | InternalSocketServerException Text -- If you get one of these, file a bug report.
+  deriving (Eq, Ord, Show, Read, Typeable)
+
+instance Exception SocketServerException
+
+-- Creates socket server and starts listening.
+makeServer :: Port -> IO T
+makeServer port = do
+  clients <- HashTable.new
+  handlers <- HashTable.new
+  let state = T {clients, handlers}
+  forkIO $
+    -- Warp runs forever as an IO action, so put it on its own thread.
+   do
+    Warp.run 3000 $
+      WS.websocketsOr WS.defaultConnectionOptions (wsApp state) httpApp
+  return state
 
 httpApp :: Wai.Application
 httpApp _ respond =
-  respond $ Wai.responseLBS Http.status400 [] "not a websocket request"
--- -- Creates socket server and starts listening.
--- make :: Port -> IO T
--- make port = do
---   let clients = HashTable.new
---   let handlers = HashTable.new
---   let state = T {clients, handlers}
---   forkIO $
---     -- Warp runs forever as an IO action, so put it on its own thread.
---    do
---     Warp.run 3000 $
---       WS.websocketsOr WS.defaultConnectionOptions (wsApp state) httpApp
---   return state
--- connectClient :: T -> WS.Connection -> IO Id
--- connectClient T {clients} conn = do
---   clientIdRaw <- UUID.nextRandom
---   let clientId = UUID.toText clientIdRaw
---   HashTable.insert clients clientId conn
---   return clientId
--- disconnectClient :: T -> Id -> IO ()
--- disconnectClient T {clients} clientId = do
---   HashTable.delete clients clientId
--- serve :: T -> WS.Connection -> IO ()
--- serve T {handlers} conn =
---   Monad.forever $ do
---     rawReqMsg <- WS.receiveData conn
---     case readMaybe rawReqMsg of
---       Nothing -> return ()
---       Just reqMsg -> do
---         let RequestMessage {requestId, req} = reqMsg
---         case readMaybe (unpack req) of
---           Nothing -> do
---             publish
---               (show
---                  ResponseMessage
---                    {requestId, res = Error (Data.Text.append "bad input: " req)})
---             return ()
---           Just r -> do
---             let results = handler r
---             Streamly.runStream $
---               Streamly.mapM
---                 (\res ->
---                    publish
---                      (show
---                         ResponseMessage
---                           {requestId, res = Result (pack (show res))}))
---                 results
---     return ()
--- serveRPC :: (Read req, Show res) => T -> Route -> Handler req res -> () -- IO ()?
--- serveRPC :: (Read req, Show res) => T -> Route -> Handler req res -> IO ()
--- serveRPC T {chan} route handler = do
---   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName = route}
---   AMQP.consumeMsgs
---     chan
---     route
---     AMQP.Ack
---     (\(msg, env) -> do
---        forkIO $ do
---          let rawReqMsg = msg & AMQP.msgBody & Data.ByteString.Lazy.UTF8.toString
---          case readMaybe rawReqMsg of
---            Nothing -> return ()
---            Just reqMsg -> do
---              let RequestMessage {requestId, responseQueue, req} = reqMsg
---              -- TODO: figure out how to restrict a to Show instances
---              let publish a =
---                    let msgBody = Data.ByteString.Lazy.UTF8.fromString a
---                     in AMQP.publishMsg
---                          chan
---                          "" -- Default exchange just sends message to queue specified by routing key.
---                          responseQueue -- Exchange routing key.
---                          AMQP.newMsg {AMQP.msgBody}
---              case readMaybe (unpack req) of
---                Nothing -> do
---                  publish
---                    (show
---                       ResponseMessage
---                         { requestId
---                         , res = Error (Data.Text.append "bad input: " req)
---                         })
---                  return ()
---                Just r -> do
---                  let results = handler r
---                  Streamly.runStream $
---                    Streamly.mapM
---                      (\res ->
---                         publish
---                           (show
---                              ResponseMessage
---                                {requestId, res = Result (pack (show res))}))
---                      results
---                  publish
---                    (show ResponseMessage {requestId, res = End_of_results})
---                  AMQP.ackEnv env
---        return ())
---   return ()
--- callRPC ::
---      forall req res. (Show req, Read res)
---   => T
---   -> Route
---   -> req
---   -> IO (Streamly.Serial res)
--- callRPC T {chan, responseQueue, waitingCalls} route req = do
---   requestIdRaw <- UUID.nextRandom
---   let requestId = UUID.toText requestIdRaw
---   let reqMsg = RequestMessage {requestId, responseQueue, req = pack (show req)}
---   let msgBody = Data.ByteString.Lazy.UTF8.fromString . show $ reqMsg
---   resultsVar <- TVar.newTVarIO Vector.empty
---   HashTable.insert
---     waitingCalls
---     requestId
---     (\response -> do
---        maybeResult <-
---          case response of
---            Error msg -> throw (BridgeException msg)
---            Result res -> return $ Just (read @res (unpack res))
---            End_of_results -> do
---              HashTable.delete waitingCalls requestId
---              return Nothing
---        STM.atomically $ TVar.modifyTVar resultsVar (`Vector.snoc` maybeResult))
---   AMQP.publishMsg chan "" route AMQP.newMsg {AMQP.msgBody}
---   return $
---     Streamly.unfoldrM
---       (\idx ->
---          STM.atomically $ do
---            results <- TVar.readTVar resultsVar
---            unless (idx < Vector.length results) STM.retry
---            case Vector.unsafeIndex results idx of
---              Nothing -> return Nothing
---              Just x -> return (Just (x, idx + 1)))
---       0
+  respond $ Wai.responseLBS Http.status400 [] "not a WebSocket request"
+
+wsApp :: T -> WS.ServerApp
+wsApp state pendingConn = do
+  let T {clients} = state
+  conn <- WS.acceptRequest pendingConn
+  clientId <- connectClient state conn
+  -- Each connection gets its own handler thread.
+  WS.forkPingThread conn 30 -- TODO: Make configurable.
+  Exception.finally (serveClient state conn) (disconnectClient state clientId)
+
+connectClient :: T -> WS.Connection -> IO Id
+connectClient state conn = do
+  let T {clients} = state
+  clientIdRaw <- UUID.nextRandom
+  let clientId = UUID.toText clientIdRaw
+  HashTable.insert clients (Id clientId) conn
+  return (Id clientId)
+
+disconnectClient :: T -> Id -> IO ()
+disconnectClient T {clients} clientId = do
+  HashTable.delete clients clientId
+
+serveClient :: T -> WS.Connection -> IO ()
+serveClient T {handlers} conn =
+  Monad.forever $ do
+    rawReqMsg <- WS.receiveData conn
+    case decode rawReqMsg of
+      Nothing -> return ()
+      Just reqMsg -> do
+        let RequestMessage {id = _id, route = _route, req} = reqMsg
+        let (Id id) = _id
+        let (Route route) = _route
+        let publish result = do
+              let resMsg = ResponseMessage {requestId = _id, res = result}
+              WS.sendTextData conn (encode resMsg)
+        handlerMaybe <- HashTable.lookup handlers _route
+        case handlerMaybe of
+          Nothing -> do
+            publish (Error (Text.append "invalid route: " route))
+          Just handler -> do
+            let results = handler req
+            Streamly.runStream $ Streamly.mapM publish results
+            publish EndOfResults
+    return ()
+
+serveRPC ::
+     (Read req, Show res, FromJSON req, ToJSON res)
+  => T
+  -> Route
+  -> (req -> Streamly.Serial res)
+  -> IO ()
+serveRPC T {handlers} route handler = do
+  let serialTextHandler sReq =
+        let reqMaybe =
+              sReq & Text.unpack & ByteString.Lazy.UTF8.fromString & decode
+         in case reqMaybe of
+              Nothing -> Streamly.yield (Error (Text.append "bad input: " sReq))
+              Just req ->
+                Streamly.map
+                  (\res ->
+                     let sRes =
+                           res & encode & ByteString.Lazy.UTF8.toString &
+                           Text.pack
+                      in (Result sRes))
+                  (handler req)
+  HashTable.insert handlers route serialTextHandler
+
+-- Creates socket server and starts listening.
+makeClient :: Text -> Port -> Text -> IO (WS.ClientApp ())
+makeClient uri port route = do
+  clients <- HashTable.new
+  handlers <- HashTable.new
+  let state = T {clients, handlers}
+  forkIO $
+    -- Warp runs forever as an IO action, so put it on its own thread.
+   do
+    Warp.run 3000 $
+      WS.websocketsOr WS.defaultConnectionOptions (wsApp state) httpApp
+  return state
+
+callRPCTimeout ::
+     forall req res. (Show req, Read res)
+  => ClientConfig
+  -> DiffTime
+  -> Route
+  -> req
+  -> IO (Streamly.Serial res)
+callRPCTimeout maxTimeBetweenUpdates _route req = do
+  let Route route = _route
+  id <- fmap (Id . UUID.toText) UUID.nextRandom
+  let reqMsg = RequestMessage {id, route, req = Text.pack (show req)}
+  let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
+  (push, results) <- repeatableTimeoutStream maxTimeBetweenUpdates
+  let wsClientApp conn = do
+        forkIO $ -- Fork a thread that writes WS data to stream. Read until result is the end or an
+                 -- error occurs and forces us to stop reading.
+         do
+          let readLoop = do
+                msg <- WS.receiveData conn
+                let resMsgMaybe = decode msg
+                shouldContinue <-
+                  case resMsgMaybe of
+                    Nothing -> return () -- TODO: Log error?
+                    Just (ResponseMessage {requestId, res}) -> do
+                      let resMaybe = decode res
+                      case resMaybe of
+                        Nothing -> return () -- TODO: Log error?
+                        Just resOuter -> do
+                          maybeResult <-
+                            case resOuter of
+                              Error msg -> throwIO (BadCall msg)
+                              Result res ->
+                                return $ decode @res (Text.unpack res)
+                              EndOfResults -> return Nothing
+                          push maybeResult
+                          return (maybeResult /= Nothing)
+                when (shouldContinue) readLoop
+          readLoop
+          -- Read from stdin and write to WS
+        WS.sendClose conn ()
+  withSocketsDo $ WS.runClient "echo.websocket.org" 80 "/" app
+
+-- Has default timeout of 5 seconds.
+callRPC :: (Show req, Read res) => T -> Route -> req -> IO (Streamly.Serial res)
+callRPC = callRPCTimeout (secondsToDiffTime 5)
