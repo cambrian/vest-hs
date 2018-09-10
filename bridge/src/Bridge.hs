@@ -29,7 +29,7 @@ type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
   { id :: Id
-  , responseQueue :: Route
+  , responseQueue :: Id
     -- other metadata (time?)
   , req :: Text -- Should be the serialization of a request object, but this is not guaranteed
   } deriving (Eq, Show, Read)
@@ -58,7 +58,7 @@ data Config = Config
 data T = T
   { conn :: AMQP.Connection
   , chan :: AMQP.Channel
-  , responseQueue :: Route
+  , responseQueue :: Id
   , waitingCalls :: HashTable Id (Response -> IO ())
   }
 
@@ -98,7 +98,7 @@ make Config {hostname, virtualHost, username, password} = do
                  (InternalBridgeException
                     (Text.append "no waiting call with id: " (show id)))
        AMQP.ackEnv env)
-  return T {conn, chan, responseQueue = Route queueName, waitingCalls}
+  return T {conn, chan, responseQueue = Id queueName, waitingCalls}
 
 serveRPC :: (Read req, Show res) => T -> Route -> Handler req res -> IO ()
 serveRPC T {chan} route handler = do
@@ -114,7 +114,7 @@ serveRPC T {chan} route handler = do
          case readMaybe rawReqMsg of
            Nothing -> return ()
            Just RequestMessage {id, responseQueue, req} -> do
-             let Route _responseQueue = responseQueue
+             let Id _responseQueue = responseQueue
              let publish resMsg =
                    let msgBody = ByteString.Lazy.UTF8.fromString $ show resMsg
                     in AMQP.publishMsg
