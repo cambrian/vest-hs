@@ -6,7 +6,7 @@ module VestPrelude
 
 import Protolude
 
--- If you want the Id or Route string you should destructure instead of using show
+-- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
 newtype Id =
