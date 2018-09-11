@@ -147,12 +147,12 @@ serveRPC' ::
 serveRPC' =
   _serveRPC
     (\publish results -> do
-       Streamly.runStream $ Streamly.mapM (publish . Result . show) results
+       Streamly.mapM_ (publish . Result . show) results
        publish EndOfResults)
 
 _callRPCTimeout ::
      (Show req)
-  => IO ((Response -> IO ()), IO res, IO ()) -- Response handler, result, done
+  => IO (Response -> IO (), IO res, IO ()) -- Response handler, result, done
   -> DiffTime
   -> T
   -> Route
@@ -167,7 +167,7 @@ _callRPCTimeout handler _timeout T {chan, responseQueue, waitingCalls} route req
   renewTimeout <- timeoutThrowIO' done _timeout
   HashTable.insert waitingCalls id (\x -> renewTimeout >> h x)
   _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
-  done >> HashTable.delete waitingCalls id
+  forkIO $ done >> HashTable.delete waitingCalls id
   res
 
 callRPCTimeout ::

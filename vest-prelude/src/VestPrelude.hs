@@ -84,7 +84,7 @@ timeoutThrowIO' :: IO a -> DiffTime -> IO (IO ())
 timeoutThrowIO' action _timeout = do
   let micros = diffTimeToMicros _timeout
   timer <- UpdatableTimer.replacer (throwIO (Timeout micros) :: IO ()) micros
-  action >> Killable.kill timer
+  forkIO $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
 
 repeatableStream :: IO (Maybe a -> IO (), Streamly.Serial a)
