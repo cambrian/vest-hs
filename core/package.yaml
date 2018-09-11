@@ -11,6 +11,7 @@ description:         See README.md.
 
 dependencies:
 - base               >= 4.10 && < 5
+- bridge
 - vest-prelude
 
 # The default-extensions and ghc-options have been taken from here:

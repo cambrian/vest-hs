@@ -1,4 +1,5 @@
 module Core
-  () where
+  (
+  ) where
 
 import VestPrelude

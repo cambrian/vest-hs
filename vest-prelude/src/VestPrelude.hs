@@ -3,6 +3,7 @@ module VestPrelude
   , module Reexports
   ) where
 
+import qualified Control.Concurrent.Killable as Killable
 import qualified Control.Concurrent.STM.TVar as TVar
 import qualified Control.Monad.STM as STM
 import Data.Aeson as Reexports
@@ -22,6 +23,7 @@ import Protolude as VestPrelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import System.Timeout as Reexports (timeout)
+import qualified System.Timer.Updatable as UpdatableTimer
 import Text.Read as Reexports (read, readMaybe)
 
 -- If you want the Id or Route string you should destructure instead of using show:
@@ -55,8 +57,8 @@ instance Hashable Port
 
 -- Timeouts are in micros.
 newtype Timeout =
-  Timeout Int
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+  Timeout Int64
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Enum, Num)
 
 instance Exception Timeout
 
@@ -68,27 +70,23 @@ newtype URI =
 
 instance Hashable URI
 
-repeatableTimeoutStream :: DiffTime -> IO (Maybe a -> IO (), Streamly.Serial a)
-repeatableTimeoutStream _timeout = do
-  let timeoutMicros =
-        diffTimeToPicoseconds _timeout & fromIntegral & (* 1000000)
-  resultsVar <- TVar.newTVarIO Vector.empty
-  let push a = STM.atomically $ TVar.modifyTVar resultsVar (`Vector.snoc` a)
-  let stream =
-        Streamly.unfoldrM
-          (\idx ->
-             timeout
-               timeoutMicros
-               (STM.atomically $ do
-                  results <- TVar.readTVar resultsVar
-                  unless (idx < Vector.length results) STM.retry
-                  case Vector.unsafeIndex results idx of
-                    Nothing -> return Nothing
-                    Just x -> return $ Just (x, idx + 1)) >>= \case
-               Just result -> return result
-               Nothing -> throwIO $ Timeout timeoutMicros)
-          0
-  return (push, stream)
+diffTimeToMicros :: (Num num) => DiffTime -> num
+diffTimeToMicros x = fromIntegral (diffTimeToPicoseconds x) * 1000000
+
+timeoutThrowIO :: IO a -> DiffTime -> IO ()
+timeoutThrowIO action _timeout = do
+  let micros = diffTimeToMicros _timeout
+  timer <- UpdatableTimer.replacer (throwIO (Timeout micros) :: IO ()) micros
+  action >> Killable.kill timer
+  return ()
+
+-- returns (renew, result)
+timeoutThrowIO' :: IO a -> DiffTime -> IO (IO ())
+timeoutThrowIO' action _timeout = do
+  let micros = diffTimeToMicros _timeout
+  timer <- UpdatableTimer.replacer (throwIO (Timeout micros) :: IO ()) micros
+  action >> Killable.kill timer
+  return (STM.atomically $ UpdatableTimer.renew timer micros)
 
 repeatableStream :: IO (Maybe a -> IO (), Streamly.Serial a)
 repeatableStream = do
