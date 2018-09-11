@@ -103,7 +103,7 @@ _serveRPC ::
   => ((Response -> IO ()) -> res -> IO ())
   -> T
   -> Route
-  -> (req -> res)
+  -> (req -> IO res)
   -> IO ()
 _serveRPC publisher T {chan} route handler = do
   let Route queueName = route
@@ -132,18 +132,24 @@ _serveRPC publisher T {chan} route handler = do
              case readMaybe $ Text.unpack req of
                Nothing ->
                  publish . Left . BadCall $ Text.append "bad input: " req
-               Just r -> publisher (publish . Right) (handler r)
+               Just r -> do
+                 res <- handler r
+                 publisher (publish . Right) res
              AMQP.ackEnv env
        return ())
   return ()
 
 -- Direct RPC server
-serveRPC :: (Read req, Show res) => T -> Route -> (req -> res) -> IO ()
+serveRPC :: (Read req, Show res) => T -> Route -> (req -> IO res) -> IO ()
 serveRPC = _serveRPC (\publish res -> publish $ Result (show res))
 
 -- Streaming RPC server
 serveRPC' ::
-     (Read req, Show res) => T -> Route -> (req -> Streamly.Serial res) -> IO ()
+     (Read req, Show res)
+  => T
+  -> Route
+  -> (req -> IO (Streamly.Serial res))
+  -> IO ()
 serveRPC' =
   _serveRPC
     (\publish results -> do

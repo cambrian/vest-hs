@@ -15,11 +15,19 @@ bridgeConfig =
     , password = "guest"
     }
 
+testDirect :: Bridge.T -> IO ()
+testDirect bridge = do
+  let route = Route "testDirect"
+  Bridge.serveRPC @Int bridge route (\x -> return $ x * 2)
+  result <- Bridge.callRPC @Int @Int bridge route 1
+  unless (result == 2) $ panic "testDirect failed."
+  putText "passed testDirect"
+
 testBasic :: Bridge.T -> IO ()
 testBasic bridge = do
   let xs = [1, 2, 3]
   let route = Route "testBasic"
-  Bridge.serveRPC' bridge route (\() -> Streamly.fromList xs)
+  Bridge.serveRPC' bridge route (\() -> return $ Streamly.fromList xs)
   results <- Bridge.callRPC' @() @Int bridge route ()
   resultList <- Streamly.toList results
   when (resultList /= xs) $ panic "testBasic failed."
@@ -31,8 +39,8 @@ testMultipleFunctions bridge = do
   let chars = ['a', 'b', 'c']
   let routeNums = Route "testMultipleFunctionsNums"
   let routeChars = Route "testMultipleFunctionsChars"
-  Bridge.serveRPC' bridge routeNums (\() -> Streamly.fromList nums)
-  Bridge.serveRPC' bridge routeChars (\() -> Streamly.fromList chars)
+  Bridge.serveRPC' bridge routeNums (\() -> return $ Streamly.fromList nums)
+  Bridge.serveRPC' bridge routeChars (\() -> return $ Streamly.fromList chars)
   resultNums <- Bridge.callRPC' @() @Int bridge routeNums ()
   resultChars <- Bridge.callRPC' @() @Char bridge routeChars ()
   resultNumList <- Streamly.toList resultNums
@@ -45,7 +53,7 @@ testMultipleConsumption :: Bridge.T -> IO ()
 testMultipleConsumption bridge = do
   let xs = [1, 2, 3]
   let route = Route "testMultipleConsumption'"
-  Bridge.serveRPC' bridge route (\() -> Streamly.fromList xs)
+  Bridge.serveRPC' bridge route (\() -> return $ Streamly.fromList xs)
   results <- Bridge.callRPC' @() @Int bridge route ()
   resultList <- Streamly.toList results
   resultList2 <- Streamly.toList results
@@ -57,9 +65,11 @@ testConcurrent :: Bridge.T -> IO ()
 testConcurrent bridge = do
   let route = Route "testConcurrent"
   Bridge.serveRPC'
+    @Int
     bridge
     route
-    (\(x :: Int) ->
+    (\x ->
+       return $
        Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
   results1 <- Bridge.callRPC' @Int @Int bridge route 1
   results2 <- Bridge.callRPC' @Int @Int bridge route 2
@@ -74,6 +84,7 @@ testConcurrent bridge = do
 main :: IO ()
 main = do
   bridge <- Bridge.make bridgeConfig
+  testDirect bridge
   testBasic bridge
   testMultipleFunctions bridge
   testMultipleConsumption bridge
