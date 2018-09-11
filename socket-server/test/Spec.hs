@@ -1,79 +1,75 @@
+import qualified Data.List
 import qualified SocketServer
+import qualified Streamly.Prelude as Streamly
+import Test.Hspec
 import VestPrelude
 
--- import Control.Concurrent (threadDelay)
--- import Control.Monad (unless, when)
--- import Data.Function ((&))
--- import qualified Data.List
--- import qualified Streamly
--- import qualified Streamly.Prelude as Streamly
--- bridgeConfig :: Bridge.Config
--- bridgeConfig =
---   Bridge.Config
---     { hostname = "localhost"
---     , virtualHost = "/"
---     , username = "guest"
---     , password = "guest"
---     }
--- testBasic :: Bridge.T -> IO ()
--- testBasic bridge = do
---   let xs = [1, 2, 3]
---   Bridge.serveRPC bridge "testBasic" (\() -> Streamly.fromList xs)
---   results <- Bridge.callRPC @() @Int bridge "testBasic" ()
---   resultList <- Streamly.toList results
---   when (resultList /= xs) $ error "testBasic failed."
---   putStrLn "passed testBasic"
--- testMultipleFunctions :: Bridge.T -> IO ()
--- testMultipleFunctions bridge = do
---   let nums = [1, 2, 3]
---   let chars = ['a', 'b', 'c']
---   Bridge.serveRPC
---     bridge
---     "testMultipleFunctionsNums"
---     (\() -> Streamly.fromList nums)
---   Bridge.serveRPC
---     bridge
---     "testMultipleFunctionsChars"
---     (\() -> Streamly.fromList chars)
---   resultNums <- Bridge.callRPC @() @Int bridge "testMultipleFunctionsNums" ()
---   resultChars <- Bridge.callRPC @() @Char bridge "testMultipleFunctionsChars" ()
---   resultNumList <- Streamly.toList resultNums
---   resultCharList <- Streamly.toList resultChars
---   when (resultNumList /= nums) $ error "testMultipleFunctions failed."
---   when (resultCharList /= chars) $ error "testMultipleFunctions failed."
---   putStrLn "passed testMultipleFunctions"
--- testMultipleConsumption :: Bridge.T -> IO ()
--- testMultipleConsumption bridge = do
---   let xs = [1, 2, 3]
---   Bridge.serveRPC bridge "testMultipleConsumption" (\() -> Streamly.fromList xs)
---   results <- Bridge.callRPC @() @Int bridge "testMultipleConsumption" ()
---   resultList <- Streamly.toList results
---   resultList2 <- Streamly.toList results
---   when (resultList /= xs) $ error "testMultipleConsumption failed."
---   when (resultList2 /= xs) $ error "testMultipleConsumption failed."
---   putStrLn "passed testMultipleConsumption"
--- testConcurrent :: Bridge.T -> IO ()
--- testConcurrent bridge = do
---   Bridge.serveRPC
---     bridge
---     "testConcurrent"
---     (\(x :: Int) ->
---        Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
---   results1 <- Bridge.callRPC @Int @Int bridge "testConcurrent" 1
---   results2 <- Bridge.callRPC @Int @Int bridge "testConcurrent" 2
---   resultList1 <- Streamly.toList results1
---   resultList2 <- Streamly.toList results2
---   unless (Data.List.all (\x -> x == 1) resultList1) $
---     error "testConcurrent failed."
---   unless (Data.List.all (\x -> x == 2) resultList2) $
---     error "testConcurrent failed."
---   putStrLn "passed testConcurrent"
+localTestConfig :: Int -> SocketServer.SocketClientConfig
+-- For some sus reason, this won't connect with "localhost" as the URI.
+localTestConfig port = SocketServer.makeClientConfig "127.0.0.1" port "/"
+
+withServerOnPort :: Int -> (SocketServer.T -> IO ()) -> IO ()
+withServerOnPort port =
+  bracket (SocketServer.makeServer port) SocketServer.killServer
+
+echoTest :: Spec
+echoTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running simple echo RPC" $ do
+      it "returns the original output" $ \s -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        SocketServer.serveRPC s route (\() -> Streamly.fromList xs)
+        results <- SocketServer.callRPC @() @Int (localTestConfig 3000) route ()
+        Streamly.toList results `shouldReturn` xs
+
+multipleFnTest :: Spec
+multipleFnTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running multiple echo RPCs" $ do
+      it "returns the original output for both" $ \s -> do
+        let (route, xs) = (Route "echoInts", [1, 2, 3] :: [Int])
+        let (routeCh, chars) = (Route "echoChars", ['a', 'b', 'c'])
+        SocketServer.serveRPC s route (\() -> Streamly.fromList xs)
+        SocketServer.serveRPC s routeCh (\() -> Streamly.fromList chars)
+        results <- SocketServer.callRPC @() @Int (localTestConfig 3000) route ()
+        resultsCh <-
+          SocketServer.callRPC @() @Char (localTestConfig 3000) routeCh ()
+        Streamly.toList results `shouldReturn` xs
+        Streamly.toList resultsCh `shouldReturn` chars
+
+multipleConsumeTest :: Spec
+multipleConsumeTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running echo with multiple stream consumers" $ do
+      it "returns the original output for both" $ \s -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        SocketServer.serveRPC s route (\() -> Streamly.fromList xs)
+        results <- SocketServer.callRPC @() @Int (localTestConfig 3000) route ()
+        Streamly.toList results `shouldReturn` xs
+        Streamly.toList results `shouldReturn` xs
+
+concurrentTest :: Spec
+concurrentTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running RPCs with concurrent callers" $ do
+      it "returns the correct output for both" $ \s -> do
+        let route = Route "concurrent"
+        SocketServer.serveRPC
+          s
+          route
+          (\(x :: Int) ->
+             Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
+        results1 <-
+          SocketServer.callRPC @Int @Int (localTestConfig 3000) route 1
+        results2 <-
+          SocketServer.callRPC @Int @Int (localTestConfig 3000) route 2
+        resultList1 <- Streamly.toList results1
+        resultList2 <- Streamly.toList results2
+        resultList1 `shouldSatisfy` Data.List.all (\x -> x == 1)
+        resultList2 `shouldSatisfy` Data.List.all (\x -> x == 2)
+
 main :: IO ()
 main = do
-  socketServer <- SocketServer.makeServer 3000
-  let socketClient = SocketServer.makeClient "localhost" 3000 "/"
-  -- testBasic bridge
-  -- testMultipleFunctions bridge
-  -- testMultipleConsumption bridge
-  -- testConcurrent bridge
-  return ()
+  hspec $ do
+    describe "socket server" $
+      echoTest >> multipleFnTest >> multipleConsumeTest >> concurrentTest

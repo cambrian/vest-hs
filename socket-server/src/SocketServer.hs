@@ -1,12 +1,15 @@
 module SocketServer
   ( T(..)
+  , SocketClientConfig(..) -- Purely for testing purposes.
   , makeServer
-  , makeClient -- Purely for testing purposes.
+  , killServer
   , serveRPC
+  , makeClientConfig -- Purely for testing purposes.
   , callRPC -- Purely for testing purposes.
   , callRPCTimeout -- Purely for testing purposes.
   ) where
 
+import qualified Control.Concurrent.MVar as MVar
 import qualified Control.Exception as Exception
 import qualified Control.Monad as Monad
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
@@ -58,11 +61,12 @@ instance FromJSON ResponseMessage
 instance ToJSON ResponseMessage
 
 data T = T
-  { clients :: HashTable Id WS.Connection
+  { threadId :: ThreadId
+  , clients :: HashTable Id WS.Connection
   , handlers :: HashTable Route (Text -> Streamly.Serial Response) -- Serial req to response.
   }
 
-data SocketClient = SocketClient
+data SocketClientConfig = SocketClientConfig
   { uri :: URI
   , port :: Port
   , path :: Route
@@ -80,13 +84,23 @@ makeServer :: Int -> IO T
 makeServer port = do
   clients <- HashTable.new
   handlers <- HashTable.new
-  let socketServer = T {clients, handlers}
-  forkIO $
-    -- Warp runs forever as an IO action, so put it on its own thread.
-   do
-    Warp.run port $
-      WS.websocketsOr WS.defaultConnectionOptions (wsApp socketServer) httpApp
+  socketServerVar <- MVar.newEmptyMVar
+  -- Warp runs forever on its own thread.
+  threadId <-
+    forkIO $ do
+      socketServer <- MVar.readMVar socketServerVar
+      -- Wait for thread ID to be added to server state.
+      Warp.run port $
+        WS.websocketsOr WS.defaultConnectionOptions (wsApp socketServer) httpApp
+  let socketServer = T {threadId, clients, handlers}
+  MVar.putMVar socketServerVar socketServer
+  -- Wait for init to avoid race conditions.
+  threadDelay 100000 -- TODO: Is this jank?
   return socketServer
+
+killServer :: T -> IO ()
+killServer T {threadId} = do
+  killThread threadId
 
 httpApp :: Wai.Application
 httpApp _ respond =
@@ -95,8 +109,8 @@ httpApp _ respond =
 wsApp :: T -> WS.ServerApp
 wsApp socketServer pendingConn = do
   conn <- WS.acceptRequest pendingConn
+  -- Each connection is on a new thread.
   clientId <- connectClient socketServer conn
-  -- Each connection gets its own handler thread.
   WS.forkPingThread conn 30 -- TODO: Make configurable.
   Exception.finally
     (serveClient socketServer conn)
@@ -158,21 +172,21 @@ serveRPC T {handlers} route handler = do
   HashTable.insert handlers route serialTextHandler
 
 -- Creates config for a socket client.
-makeClient :: Text -> Int -> Text -> SocketClient
-makeClient _uri _port _path =
+makeClientConfig :: Text -> Int -> Text -> SocketClientConfig
+makeClientConfig _uri _port _path =
   let uri = URI _uri
    in let port = Port _port
        in let path = Route _path
-           in SocketClient {uri, port, path}
+           in SocketClientConfig {uri, port, path}
 
 callRPCTimeout ::
      forall req res. (ToJSON req, FromJSON res)
   => DiffTime
-  -> SocketClient
+  -> SocketClientConfig
   -> Route
   -> req
   -> IO (Streamly.Serial res)
-callRPCTimeout maxTimeBetweenUpdates SocketClient {uri, port, path} route req = do
+callRPCTimeout maxTimeBetweenUpdates SocketClientConfig {uri, port, path} route req = do
   let URI _uri = uri
   let Port _port = port
   let Route _path = path
@@ -187,10 +201,11 @@ callRPCTimeout maxTimeBetweenUpdates SocketClient {uri, port, path} route req = 
           }
   let rawReqMsg = encode reqMsg
   (push, results) <- repeatableTimeoutStream maxTimeBetweenUpdates
+  -- Fork a thread that writes incoming WS data to the stream.
+  -- Then send the outbound request and wait for reader thread to finish.
   let wsClientApp conn = do
-        forkIO $ -- Fork a thread that writes WS data to stream. Read until result is the end or an
-                 -- error occurs and forces us to stop reading.
-         do
+        gotEOR <- MVar.newEmptyMVar
+        forkIO $ do
           let readLoop = do
                 rawResMsg <- WS.receiveData conn
                 result <-
@@ -209,8 +224,10 @@ callRPCTimeout maxTimeBetweenUpdates SocketClient {uri, port, path} route req = 
                       push maybeResult
                       return maybeResult
                 when (isJust result) readLoop
+                putMVar gotEOR ()
           readLoop
         WS.sendTextData conn rawReqMsg
+        _ <- MVar.takeMVar gotEOR
         WS.sendClose conn ("[EOF]" :: Text)
   Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
   return results
@@ -218,7 +235,7 @@ callRPCTimeout maxTimeBetweenUpdates SocketClient {uri, port, path} route req = 
 -- Has default timeout of 5 seconds.
 callRPC ::
      (ToJSON req, FromJSON res)
-  => SocketClient
+  => SocketClientConfig
   -> Route
   -> req
   -> IO (Streamly.Serial res)
