@@ -19,8 +19,8 @@ testBasic :: Bridge.T -> IO ()
 testBasic bridge = do
   let xs = [1, 2, 3]
   let route = Route "testBasic"
-  Bridge.serveRPC bridge route (\() -> Streamly.fromList xs)
-  results <- Bridge.callRPC @() @Int bridge route ()
+  Bridge.serveRPC' bridge route (\() -> Streamly.fromList xs)
+  results <- Bridge.callRPC' @() @Int bridge route ()
   resultList <- Streamly.toList results
   when (resultList /= xs) $ panic "testBasic failed."
   putText "passed testBasic"
@@ -31,10 +31,10 @@ testMultipleFunctions bridge = do
   let chars = ['a', 'b', 'c']
   let routeNums = Route "testMultipleFunctionsNums"
   let routeChars = Route "testMultipleFunctionsChars"
-  Bridge.serveRPC bridge routeNums (\() -> Streamly.fromList nums)
-  Bridge.serveRPC bridge routeChars (\() -> Streamly.fromList chars)
-  resultNums <- Bridge.callRPC @() @Int bridge routeNums ()
-  resultChars <- Bridge.callRPC @() @Char bridge routeChars ()
+  Bridge.serveRPC' bridge routeNums (\() -> Streamly.fromList nums)
+  Bridge.serveRPC' bridge routeChars (\() -> Streamly.fromList chars)
+  resultNums <- Bridge.callRPC' @() @Int bridge routeNums ()
+  resultChars <- Bridge.callRPC' @() @Char bridge routeChars ()
   resultNumList <- Streamly.toList resultNums
   resultCharList <- Streamly.toList resultChars
   when (resultNumList /= nums) $ panic "testMultipleFunctions failed."
@@ -44,9 +44,9 @@ testMultipleFunctions bridge = do
 testMultipleConsumption :: Bridge.T -> IO ()
 testMultipleConsumption bridge = do
   let xs = [1, 2, 3]
-  let route = Route "testMultipleConsumption"
-  Bridge.serveRPC bridge route (\() -> Streamly.fromList xs)
-  results <- Bridge.callRPC @() @Int bridge route ()
+  let route = Route "testMultipleConsumption'"
+  Bridge.serveRPC' bridge route (\() -> Streamly.fromList xs)
+  results <- Bridge.callRPC' @() @Int bridge route ()
   resultList <- Streamly.toList results
   resultList2 <- Streamly.toList results
   when (resultList /= xs) $ panic "testMultipleConsumption failed."
@@ -56,13 +56,13 @@ testMultipleConsumption bridge = do
 testConcurrent :: Bridge.T -> IO ()
 testConcurrent bridge = do
   let route = Route "testConcurrent"
-  Bridge.serveRPC
+  Bridge.serveRPC'
     bridge
     route
     (\(x :: Int) ->
        Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
-  results1 <- Bridge.callRPC @Int @Int bridge route 1
-  results2 <- Bridge.callRPC @Int @Int bridge route 2
+  results1 <- Bridge.callRPC' @Int @Int bridge route 1
+  results2 <- Bridge.callRPC' @Int @Int bridge route 2
   resultList1 <- Streamly.toList results1
   resultList2 <- Streamly.toList results2
   unless (Data.List.all (\x -> x == 1) resultList1) $

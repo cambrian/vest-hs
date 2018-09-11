@@ -204,7 +204,7 @@ callRPCTimeout' =
               \case
                 Result res -> push (Just (read @res (Text.unpack res)))
                 EndOfResults -> push Nothing
-        let done = void (Streamly.length results)
+        let done = void (Streamly.mapM_ return results)
         return (handler, return results, done))
 
 callRPC :: (Show req, Read res) => T -> Route -> req -> IO res
