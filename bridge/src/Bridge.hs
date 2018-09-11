@@ -135,7 +135,7 @@ _serveRPC publisher T {chan} route handler = do
                Just r -> do
                  res <- handler r
                  publisher (publish . Right) res
-             AMQP.ackEnv env
+         AMQP.ackEnv env
        return ())
   return ()
 
