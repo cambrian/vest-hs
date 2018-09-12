@@ -130,13 +130,17 @@ timeoutTest' = do
              return $
              Streamly.fromList xs &
              Streamly.mapM (\x -> threadDelay (500000 * x) >> return x))
-        (SocketServer.callRPCTimeout'
-           @()
-           @Int
-           (secondsToDiffTime 1)
-           (localTestConfig 3000)
-           route
-           ()) `shouldThrow`
+        (do results <-
+              SocketServer.callRPCTimeout'
+                @()
+                @Int
+                (secondsToDiffTime 1)
+                (localTestConfig 3000)
+                route
+                ()
+            -- Have to coerce results to actually reach the timeout.
+            resultsList <- Streamly.toList results
+            print resultsList) `shouldThrow`
           (== Timeout 1000000)
 
 main :: IO ()

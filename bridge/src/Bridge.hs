@@ -83,25 +83,28 @@ make Config {hostname, virtualHost, username, password} = do
   let queueName = Text.pack $ myHostname ++ (UUID.toString uuid)
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   waitingCalls <- HashTable.new
-  AMQP.consumeMsgs
-    chan
-    queueName
-    AMQP.Ack
-    (\(msg, env) -> do
-       let rawMsg = amqpMsgToString msg
-       case readMaybe rawMsg of
-         Nothing -> return ()
-         Just ResponseMessage {requestId, res} -> do
-           waitingCall <- HashTable.lookup waitingCalls requestId
-           case waitingCall of
-             Nothing ->
-               throwIO
-                 (InternalBridgeException
-                    (Text.append "no handler for request id: " (show requestId)))
+  consumerTag <-
+    AMQP.consumeMsgs
+      chan
+      queueName
+      AMQP.Ack
+      (\(msg, env) -> do
+         let rawMsg = amqpMsgToString msg
+         case readMaybe rawMsg of
+           Nothing -> return ()
+           Just ResponseMessage {requestId, res} -> do
+             waitingCall <- HashTable.lookup waitingCalls requestId
+             case waitingCall of
+               Nothing ->
+                 throwIO
+                   (InternalBridgeException
+                      (Text.append
+                         "no handler for request id: "
+                         (show requestId)))
                     -- TODO: Is this unsafe? Allows other servers to tank this with a bad message.
-             Just handler -> handler res
-       AMQP.ackEnv env)
-  return T {conn, chan, responseQueue = Id queueName, waitingCalls}
+               Just handler -> handler res
+         AMQP.ackEnv env)
+  return T {conn, chan, responseQueue = Id queueName, consumerTag, waitingCalls}
 
 -- Kills and cleans up bridge.
 kill :: T -> IO ()
@@ -187,6 +190,7 @@ _callRPCTimeout handler _timeout T {chan, responseQueue, waitingCalls} route req
   let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrowIO' waitForDone _timeout
+  print "timeout setup"
   HashTable.insert waitingCalls id (\x -> renewTimeout >> push x)
   _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
   forkIO $ waitForDone >> HashTable.delete waitingCalls id
