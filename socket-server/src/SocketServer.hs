@@ -1,8 +1,8 @@
 module SocketServer
   ( T(..)
   , SocketClientConfig(..) -- Purely for testing purposes.
-  , makeServer
-  , killServer
+  , make
+  , kill
   , serveRPC
   , serveRPC'
   , makeClientConfig -- Purely for testing purposes.
@@ -85,8 +85,8 @@ data SocketServerException
 instance Exception SocketServerException
 
 -- Creates socket server and starts listening.
-makeServer :: Int -> Int -> IO T
-makeServer port pingInterval = do
+make :: Int -> Int -> IO T
+make port pingInterval = do
   clients <- HashTable.new
   directHandlers <- HashTable.new
   streamingHandlers <- HashTable.new
@@ -107,8 +107,8 @@ makeServer port pingInterval = do
   threadDelay 100000 -- TODO: Make less jank.
   return socketServer
 
-killServer :: T -> IO ()
-killServer T {threadId} = do
+kill :: T -> IO ()
+kill T {threadId} = do
   killThread threadId
 
 httpApp :: Wai.Application
@@ -237,7 +237,6 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
   let rawReqMsg = encode reqMsg
   (push, result, waitForDone) <- helpers
   renewTimeout <- timeoutThrowIO' waitForDone _timeout
-  print "timeout created"
   -- Fork a thread that writes incoming WS data to the stream.
   -- Then send the outbound request and wait for reader thread to finish.
   let wsClientApp conn =
@@ -246,11 +245,10 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
                 forkIO $ do
                   let readLoop = do
                         rawResMsg <- WS.receiveData conn
+                        renewTimeout
                         case decode rawResMsg of
                           Nothing -> return () -- Timeout handles garbled EOR/single result cases.
                           Just (ResponseMessage {res}) -> push res
-                        -- print "timeout renewed"
-                        -- renewTimeout
                         readLoop
                   readLoop
               WS.sendTextData conn rawReqMsg

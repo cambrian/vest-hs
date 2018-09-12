@@ -9,8 +9,7 @@ localTestConfig :: Int -> SocketServer.SocketClientConfig
 localTestConfig port = SocketServer.makeClientConfig "127.0.0.1" port "/"
 
 withServerOnPort :: Int -> (SocketServer.T -> IO ()) -> IO ()
-withServerOnPort port =
-  bracket (SocketServer.makeServer port 30) SocketServer.killServer
+withServerOnPort port = bracket (SocketServer.make port 30) SocketServer.kill
 
 echoTest :: Spec
 echoTest = do
