@@ -10,7 +10,7 @@ localTestConfig port = SocketServer.makeClientConfig "127.0.0.1" port "/"
 
 withServerOnPort :: Int -> (SocketServer.T -> IO ()) -> IO ()
 withServerOnPort port =
-  bracket (SocketServer.makeServer port) SocketServer.killServer
+  bracket (SocketServer.makeServer port 30) SocketServer.killServer
 
 echoTest :: Spec
 echoTest = do
@@ -102,10 +102,49 @@ concurrentTest' = do
         resultList1 `shouldSatisfy` Data.List.all (\x -> x == 1)
         resultList2 `shouldSatisfy` Data.List.all (\x -> x == 2)
 
+timeoutTest :: Spec
+timeoutTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running RPCs that take too long" $ do
+      it "forces callers to time out" $ \s -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        SocketServer.serveRPC s route (\() -> threadDelay 3000000 >> return xs)
+        (SocketServer.callRPCTimeout
+           @()
+           @[Int]
+           (secondsToDiffTime 1)
+           (localTestConfig 3000)
+           route
+           ()) `shouldThrow`
+          (== Timeout 1000000)
+
+timeoutTest' :: Spec
+timeoutTest' = do
+  around (withServerOnPort 3000) $ do
+    context "when running RPCs that take too long" $ do
+      it "forces callers to time out" $ \s -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        SocketServer.serveRPC'
+          s
+          route
+          (\() ->
+             return $
+             Streamly.fromList xs &
+             Streamly.mapM (\x -> threadDelay (500000 * x) >> return x))
+        (SocketServer.callRPCTimeout'
+           @()
+           @Int
+           (secondsToDiffTime 1)
+           (localTestConfig 3000)
+           route
+           ()) `shouldThrow`
+          (== Timeout 1000000)
+
 main :: IO ()
 main = do
-  return ()
   hspec $ do
-    describe "direct RPC socket server" $ echoTest >> multipleFnTest
+    describe "direct RPC socket server" $
+      echoTest >> multipleFnTest >> timeoutTest
     describe "streaming RPC socket server" $
-      echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest'
+      echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
+      timeoutTest'

@@ -70,8 +70,8 @@ newtype URI =
 
 instance Hashable URI
 
-diffTimeToMicros :: (Num num) => DiffTime -> num
-diffTimeToMicros x = fromIntegral (diffTimeToPicoseconds x) * 1000000
+diffTimeToMicros :: (Integral num) => DiffTime -> num
+diffTimeToMicros x = fromIntegral (diffTimeToPicoseconds x) `quot` 1000000
 
 timeoutThrowIO :: IO a -> DiffTime -> IO ()
 timeoutThrowIO action _timeout = do
@@ -82,8 +82,10 @@ timeoutThrowIO action _timeout = do
 -- returns timeout renewer
 timeoutThrowIO' :: IO a -> DiffTime -> IO (IO ())
 timeoutThrowIO' action _timeout = do
+  outerThreadId <- myThreadId
   let micros = diffTimeToMicros _timeout
-  timer <- UpdatableTimer.replacer (throwIO (Timeout micros) :: IO ()) micros
+  timer <-
+    UpdatableTimer.replacer (throwTo outerThreadId (Timeout micros)) micros
   forkIO $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
 
