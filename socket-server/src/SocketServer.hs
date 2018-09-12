@@ -223,9 +223,9 @@ serveRPC' T {directHandlers, streamingHandlers} route handler = do
 makeClientConfig :: Text -> Int -> Text -> SocketClientConfig
 makeClientConfig _uri _port _path =
   let uri = URI _uri
-   in let port = Port _port
-       in let path = Route _path
-           in SocketClientConfig {uri, port, path}
+      port = Port _port
+      path = Route _path
+   in SocketClientConfig {uri, port, path}
 
 _callRPCTimeout ::
      forall req res. (ToJSON req)
@@ -320,10 +320,12 @@ callRPCTimeout' =
         let waitForDone = Streamly.mapM_ return results
         return (push, return results, waitForDone))
 
+-- Direct RPC call with default timeout.
 callRPC ::
      (ToJSON req, FromJSON res) => SocketClientConfig -> Route -> req -> IO res
 callRPC = callRPCTimeout defaultTimeout
 
+-- Streaming RPC call with default timeout.
 callRPC' ::
      (ToJSON req, FromJSON res)
   => SocketClientConfig

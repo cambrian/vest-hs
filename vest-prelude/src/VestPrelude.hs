@@ -79,7 +79,7 @@ timeoutThrowIO action _timeout = do
   timer <- UpdatableTimer.replacer (throwIO (Timeout micros) :: IO ()) micros
   action >> Killable.kill timer
 
--- returns timeout renewer
+-- Returns timeout renewer.
 timeoutThrowIO' :: IO a -> DiffTime -> IO (IO ())
 timeoutThrowIO' action _timeout = do
   outerThreadId <- myThreadId
@@ -106,15 +106,15 @@ repeatableStream = do
   return (push, stream)
 
 -- Creates a TVar that is updated with the latest value from as.
--- The TVar is Nothing until the first value is received
+-- The TVar is Nothing until the first value is received.
 makeStreamVar :: Streamly.Serial a -> IO (TVar.TVar (Maybe a))
 makeStreamVar as = do
   var <- TVar.newTVarIO Nothing
   forkIO $ Streamly.mapM_ (STM.atomically . TVar.writeTVar var . Just) as
   return var
 
--- Creates a TVar that is updated with the latest value from as,
--- with explicit initial value
+-- Creates a TVar that is updated with the latest value from as.
+-- The TVar has an explicit initial value.
 makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar.TVar a)
 makeStreamVar' as init = do
   var <- TVar.newTVarIO init

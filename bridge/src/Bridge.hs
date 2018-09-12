@@ -15,6 +15,7 @@ module Bridge
 import qualified Control.Concurrent.MVar as MVar
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
+import qualified Data.HashTable.ST.Basic as HashTableST
 import qualified Data.String as String
 import qualified Data.Text as Text
 import qualified Data.UUID as UUID
@@ -73,31 +74,37 @@ data T = T
 amqpMsgToString :: AMQP.Message -> String.String
 amqpMsgToString = ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
+generateNewQueueName :: IO Text
+generateNewQueueName = do
+  uuid <- UUID.nextRandom
+  myHostName <- Network.HostName.getHostName
+  return $ Text.pack (myHostName ++ "." ++ UUID.toString uuid)
+
 -- Connects to bridge, begins listening on RPC queue.
 make :: Config -> IO T
 make Config {hostname, virtualHost, username, password} = do
   conn <-
     AMQP.openConnection (Text.unpack hostname) virtualHost username password
   chan <- AMQP.openChannel conn
-  myHostname <- Network.HostName.getHostName
-  uuid <- UUID.nextRandom
-  let queueName = Text.pack (myHostname ++ UUID.toString uuid)
+  queueName <- generateNewQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   waitingCalls <- HashTable.new
-  AMQP.consumeMsgs
-    chan
-    queueName
-    AMQP.Ack
-    (\(msg, env) -> do
-       let rawMsg = msg & AMQP.msgBody & ByteString.Lazy.UTF8.toString
-       case readMaybe rawMsg of
-         Nothing -> return ()
-         Just ResponseMessage {requestId, res} ->
-           case res of
-             Left exception -> throwIO exception
-             Right r -> HashTable.lookup waitingCalls requestId >>= mapM_ ($ r)
-       AMQP.ackEnv env)
-  return T {conn, chan, responseQueue = Id queueName, waitingCalls}
+  consumerTag <-
+    AMQP.consumeMsgs
+      chan
+      queueName
+      AMQP.Ack
+      (\(msg, env) -> do
+         let rawMsg = msg & AMQP.msgBody & ByteString.Lazy.UTF8.toString
+         case readMaybe rawMsg of
+           Nothing -> return ()
+           Just ResponseMessage {requestId, res} ->
+             case res of
+               Left exception -> throwIO exception
+               Right r ->
+                 HashTable.lookup waitingCalls requestId >>= mapM_ ($ r)
+         AMQP.ackEnv env)
+  return T {conn, chan, responseQueue = Id queueName, consumerTag, waitingCalls}
 
 -- Kills and cleans up bridge.
 kill :: T -> IO ()
@@ -231,11 +238,31 @@ callRPCTimeout' =
         let waitForDone = void (Streamly.mapM_ return results)
         return (push, return results, waitForDone))
 
--- Direct RPC call with default timeout
+-- Direct RPC call with default timeout.
 callRPC :: (Show req, Read res) => T -> Route -> req -> IO res
 callRPC = callRPCTimeout defaultTimeout
 
--- Streaming RPC call with default timeout
+-- Streaming RPC call with default timeout.
 callRPC' ::
      (Show req, Read res) => T -> Route -> req -> IO (Streamly.Serial res)
 callRPC' = callRPCTimeout' defaultTimeout
+
+publish :: (Show item) => T -> Id -> item -> IO ()
+publish T {chan} route item = do
+  let Id _route = route
+  AMQP.declareExchange
+    chan
+    AMQP.newExchange {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
+  let msgBody = ByteString.Lazy.UTF8.fromString $ show item
+  AMQP.publishMsg chan _route "" AMQP.newMsg {AMQP.msgBody}
+  return ()
+-- subscribe :: (Read item) => T -> Id -> IO (Streamly.Serial item)
+-- subscribe T {chan} route = do
+--   AMQP.declareExchange chan AMQP.newExchange {exchangeName = route, exchangeType = "fanout"}
+--   -- Sanity check to make sure the desired pub/sub route is actually a fanout exchange.
+--   queueName <- generateNewQueueName
+--   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
+--   AMQP.bindQueue chan queueName route ""
+--   (push, results) <- repeatableStream
+--   AMQP.consumeMsgs chan queueName AMQP.NoAck (\(msg, _) -> do
+--     mapM push (readMaybe msg))
