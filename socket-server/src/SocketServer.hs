@@ -147,7 +147,7 @@ serveClient T {directHandlers, streamingHandlers} conn =
               let resMsg = ResponseMessage {requestId = id, res = result}
               WS.sendTextData conn (encode resMsg)
         directMaybe <- HashTable.lookup directHandlers route
-        -- Look for a direct handler first.
+        -- Look for a direct handler first and service request.
         case directMaybe of
           Nothing -> do
             streamingMaybe <- HashTable.lookup streamingHandlers route
@@ -188,7 +188,7 @@ serveRPC T {directHandlers, streamingHandlers} route handler = do
   streamingHandler <- HashTable.lookup streamingHandlers route
   case streamingHandler of
     Nothing -> HashTable.insert directHandlers route serialTextHandler
-    Just _ -> throwIO . HandlerAlreadyExists $ _route
+    Just _ -> throwIO $ HandlerAlreadyExists _route
 
 serveRPC' ::
      (FromJSON req, ToJSON res)
@@ -208,7 +208,7 @@ serveRPC' T {directHandlers, streamingHandlers} route handler = do
   directHandler <- HashTable.lookup directHandlers route
   case directHandler of
     Nothing -> HashTable.insert streamingHandlers route serialTextHandler
-    Just _ -> throwIO . HandlerAlreadyExists $ _route
+    Just _ -> throwIO $ HandlerAlreadyExists _route
 
 -- Creates config for a socket client.
 makeClientConfig :: Text -> Int -> Text -> SocketClientConfig
@@ -236,22 +236,26 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
   renewTimeout <- timeoutThrowIO' waitForDone _timeout
   -- Fork a thread that writes incoming WS data to the stream.
   -- Then send the outbound request and wait for reader thread to finish.
-  let wsClientApp conn = do
-        doneVar <- MVar.newEmptyMVar
-        readerThreadId <-
-          forkIO $ do
-            let readLoop = do
-                  rawResMsg <- WS.receiveData conn
-                  renewTimeout
-                  case decode rawResMsg of
-                    Nothing -> return () -- TODO: Throw here?
-                    Just (ResponseMessage {res}) -> push res
-                  notDone <- MVar.isEmptyMVar doneVar
-                  when notDone readLoop
-            readLoop
-        WS.sendTextData conn rawReqMsg
-        waitForDone >> MVar.putMVar doneVar ()
-        WS.sendClose conn ("[EOF]" :: Text)
+  let wsClientApp conn =
+        catch
+          (do readerThreadId <-
+                forkIO $ do
+                  let readLoop = do
+                        rawResMsg <- WS.receiveData conn
+                        renewTimeout
+                        case decode rawResMsg of
+                          Nothing -> return () -- TODO: Throw here?
+                          Just (ResponseMessage {res}) -> push res
+                        readLoop
+                  readLoop
+              WS.sendTextData conn rawReqMsg
+              waitForDone >> killThread readerThreadId
+              WS.sendClose conn ("[EOF]" :: Text))
+          (\e -> do
+             let error = Text.pack $ show (e :: WS.ConnectionException)
+             -- ConnectionClosed is expected if the thread was forcefully shut down in the middle
+             -- of waiting for WS.receiveData (at least that's how it appears).
+             when (error /= "ConnectionClosed") (throwIO e))
   Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
   result
 
@@ -267,7 +271,7 @@ callRPCTimeout =
     (do resultVar <- MVar.newEmptyMVar
         let push =
               \case
-                Error errorMsg -> throwIO (BadCall errorMsg)
+                Error errorMsg -> throwIO $ BadCall errorMsg
                 Result resText -> do
                   let lazyRes =
                         resText & Text.unpack & ByteString.Lazy.UTF8.fromString

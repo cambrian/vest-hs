@@ -12,6 +12,17 @@ withServerOnPort :: Int -> (SocketServer.T -> IO ()) -> IO ()
 withServerOnPort port =
   bracket (SocketServer.makeServer port) SocketServer.killServer
 
+echoTest :: Spec
+echoTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running simple echo RPC" $ do
+      it "returns the original output" $ \s -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        SocketServer.serveRPC s route (\() -> return xs)
+        result <-
+          SocketServer.callRPC @() @[Int] (localTestConfig 3000) route ()
+        result `shouldBe` xs
+
 echoTest' :: Spec
 echoTest' = do
   around (withServerOnPort 3000) $ do
@@ -22,6 +33,22 @@ echoTest' = do
         results <-
           SocketServer.callRPC' @() @Int (localTestConfig 3000) route ()
         Streamly.toList results `shouldReturn` xs
+
+multipleFnTest :: Spec
+multipleFnTest = do
+  around (withServerOnPort 3000) $ do
+    context "when running multiple echo RPCs" $ do
+      it "returns the original output for both" $ \s -> do
+        let (route, xs) = (Route "echoInts", [1, 2, 3] :: [Int])
+        let (routeCh, chars) = (Route "echoChars", ['a', 'b', 'c'])
+        SocketServer.serveRPC s route (\() -> return xs)
+        SocketServer.serveRPC s routeCh (\() -> return chars)
+        result <-
+          SocketServer.callRPC @() @[Int] (localTestConfig 3000) route ()
+        resultCh <-
+          SocketServer.callRPC @() @[Char] (localTestConfig 3000) routeCh ()
+        result `shouldBe` xs
+        resultCh `shouldBe` chars
 
 multipleFnTest' :: Spec
 multipleFnTest' = do
@@ -79,5 +106,6 @@ main :: IO ()
 main = do
   return ()
   hspec $ do
-    describe "streaming socket server" $
+    describe "direct RPC socket server" $ echoTest >> multipleFnTest
+    describe "streaming RPC socket server" $
       echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest'
