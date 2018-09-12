@@ -17,7 +17,7 @@ import Data.Aeson as Reexports
   , toJSON
   )
 import Data.Hashable (Hashable)
-import Data.Time.Clock as Reexports
+import Data.Time.Clock as Reexports hiding (secondsToDiffTime)
 import qualified Data.Vector as Vector
 import Protolude as VestPrelude
 import qualified Streamly
@@ -72,6 +72,9 @@ instance Hashable URI
 
 diffTimeToMicros :: (Integral num) => DiffTime -> num
 diffTimeToMicros x = fromIntegral (diffTimeToPicoseconds x) `quot` 1000000
+
+secondsToDiffTime :: (RealFrac num) => num -> DiffTime
+secondsToDiffTime = picosecondsToDiffTime . toInteger . round . (* 1e12)
 
 timeoutThrowIO :: IO a -> DiffTime -> IO ()
 timeoutThrowIO action _timeout = do

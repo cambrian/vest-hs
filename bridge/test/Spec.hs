@@ -86,7 +86,7 @@ concurrentTest' = do
           route
           (\(x :: Int) ->
              return $
-             Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
+             Streamly.repeatM (threadDelay 10000 >> return x) & Streamly.take 3)
         results1 <- Bridge.callRPC' @Int @Int b route 1
         results2 <- Bridge.callRPC' @Int @Int b route 2
         resultList1 <- Streamly.toList results1
@@ -100,9 +100,9 @@ timeoutTest = do
     context "when running RPCs that take too long" $ do
       it "forces callers to time out" $ \b -> do
         let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
-        Bridge.serveRPC b route (\() -> threadDelay 3000000 >> return xs)
-        (Bridge.callRPCTimeout @() @[Int] (secondsToDiffTime 1) b route ()) `shouldThrow`
-          (== Timeout 1000000)
+        Bridge.serveRPC b route (\() -> threadDelay 300000 >> return xs)
+        (Bridge.callRPCTimeout @() @[Int] (secondsToDiffTime 0.1) b route ()) `shouldThrow`
+          (== Timeout 100000)
 
 timeoutTest' :: Spec
 timeoutTest' = do
@@ -116,13 +116,13 @@ timeoutTest' = do
           (\() ->
              return $
              Streamly.fromList xs &
-             Streamly.mapM (\x -> threadDelay (500000 * x) >> return x))
+             Streamly.mapM (\x -> threadDelay (50000 * x) >> return x))
         (do results <-
-              Bridge.callRPCTimeout' @() @Int (secondsToDiffTime 1) b route ()
+              Bridge.callRPCTimeout' @() @Int (secondsToDiffTime 0.1) b route ()
             -- Have to coerce results to actually reach the timeout.
             resultsList <- Streamly.toList results
             print resultsList) `shouldThrow`
-          (== Timeout 1000000)
+          (== Timeout 100000)
 
 main :: IO ()
 main = do

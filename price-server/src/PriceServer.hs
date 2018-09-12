@@ -1,5 +1,8 @@
 module PriceServer
-  (
+  ( Config
+  , T
+  , make
+  , priceTezosContract
   ) where
 
 import qualified Control.Concurrent.STM.TVar as TVar
@@ -13,7 +16,7 @@ data Config = Config
   } deriving (Eq, Show, Read)
 
 data T = T
-  { latestTezosPrice :: TVar.TVar Double
+  { latestTezosPrice :: TVar.TVar Money.ExchangeRate "XTZ" "USD"
   }
 
 make :: Config -> IO T
@@ -21,13 +24,22 @@ make Config {} = do
   let dummyTezosPrice = Streamly.fromList [1]
   latestTezosPrice <- makeStreamVar' dummyTezosPrice 1
   return T {latestTezosPrice}
-
-priceTezosContract ::
-     T
-  -> Money.Discrete "XTZ" "mutez"
-  -> DiffTime
-  -> IO (Money.Discrete "USD" "cent")
-priceTezosContract T {latestTezosPrice} size duration = do
-  let (Money.Dense "XTZ" mutez) = Money.denseFromDiscrete size
-  tezosPrice <- TVar.readTVarIO latestTezosPrice
-  return mutez * tezosPrice
+-- tezosContractPrice ::
+--      Money.ExchangeRate "XTZ" "USD"
+--   -> Money.Discrete "XTZ" "mutez"
+--   -> DiffTime
+--   -> Money.Discrete "USD" "cent"
+-- tezosContractPrice xtzUsd size duration =
+--   let mutez = toRational $ Money.denseFromDiscrete size
+--       seconds = diffTimeToMicros duration / 1000000
+--    in 5
+-- priceTezosContract ::
+--      T
+--   -> Money.Discrete "XTZ" "mutez"
+--   -> DiffTime
+--   -> IO (Money.Discrete "USD" "cent")
+-- priceTezosContract T {latestTezosPrice} size duration = do
+--   let mutez = toRational $ Money.denseFromDiscrete size
+--   tezosPrice <- TVar.readTVarIO latestTezosPrice
+--   let price = mutez * tezosPrice
+--   return $ fst $ Money.discreteFromDense Money.Ceiling (Money.dense' price)
