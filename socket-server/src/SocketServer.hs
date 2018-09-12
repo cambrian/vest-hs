@@ -1,10 +1,10 @@
 module SocketServer
   ( T(..)
-  , SocketClientConfig(..) -- Purely for testing purposes.
   , make
   , kill
   , serveRPC
   , serveRPC'
+  , SocketClientConfig(..) -- Purely for testing purposes.
   , makeClientConfig -- Purely for testing purposes.
   , callRPC -- Purely for testing purposes.
   , callRPC' -- Purely for testing purposes.
@@ -31,6 +31,9 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
+
+defaultTimeout :: DiffTime
+defaultTimeout = (secondsToDiffTime 10)
 
 data RequestMessage = RequestMessage
   { id :: Id
@@ -166,27 +169,30 @@ serveClient T {directHandlers, streamingHandlers} conn =
             result <- handler req
             publish result
 
-parseSReqMaybe :: (FromJSON req) => Text -> Maybe req
-parseSReqMaybe = decode . ByteString.Lazy.UTF8.fromString . Text.unpack
-
 badInput :: Text -> Response
 badInput = Error . (Text.append "bad input: ")
 
-toSerialText :: (ToJSON r) => r -> Text
-toSerialText = Text.pack . ByteString.Lazy.UTF8.toString . encode
+decodeSerialText :: (FromJSON req) => Text -> Maybe req
+decodeSerialText = decode . textToLazy
 
-resToResponse :: (ToJSON res) => res -> Response
-resToResponse = Result . toSerialText
+encodeSerialText :: (ToJSON r) => r -> Text
+encodeSerialText = Text.pack . ByteString.Lazy.UTF8.toString . encode
+
+textToLazy :: Text -> ByteString.Lazy.UTF8.ByteString
+textToLazy = ByteString.Lazy.UTF8.fromString . Text.unpack
+
+toResponse :: (ToJSON res) => res -> Response
+toResponse = Result . encodeSerialText
 
 serveRPC :: (FromJSON req, ToJSON res) => T -> Route -> (req -> IO res) -> IO ()
 serveRPC T {directHandlers, streamingHandlers} route handler = do
   let Route _route = route
   let serialTextHandler sReq =
-        case parseSReqMaybe sReq of
+        case decodeSerialText sReq of
           Nothing -> return $ badInput sReq
           Just req -> do
             res <- handler req
-            return $ resToResponse res
+            return $ toResponse res
   -- Error if a streaming handler has the same route name.
   streamingHandler <- HashTable.lookup streamingHandlers route
   case streamingHandler of
@@ -202,11 +208,11 @@ serveRPC' ::
 serveRPC' T {directHandlers, streamingHandlers} route handler = do
   let Route _route = route
   let serialTextHandler sReq = do
-        case parseSReqMaybe sReq of
+        case decodeSerialText sReq of
           Nothing -> return $ Streamly.yield . badInput $ sReq
           Just req -> do
             resStream <- handler req
-            return $ Streamly.map resToResponse resStream
+            return $ Streamly.map toResponse resStream
   -- Error if a direct handler has the same route name.
   directHandler <- HashTable.lookup directHandlers route
   case directHandler of
@@ -233,7 +239,7 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
   id <- fmap (Id . UUID.toText) UUID.nextRandom
   let (URI _uri, Port _port, Route _path) = (uri, port, path)
   let (uriStr, pathStr) = (Text.unpack _uri, Text.unpack _path)
-  let reqMsg = RequestMessage {id, route, req = toSerialText req}
+  let reqMsg = RequestMessage {id, route, req = encodeSerialText req}
   let rawReqMsg = encode reqMsg
   (push, result, waitForDone) <- helpers
   renewTimeout <- timeoutThrowIO' waitForDone _timeout
@@ -277,9 +283,7 @@ callRPCTimeout =
               \case
                 Error errorMsg -> throwIO $ BadCall errorMsg
                 Result resText -> do
-                  let lazyRes =
-                        resText & Text.unpack & ByteString.Lazy.UTF8.fromString
-                  case decode @res lazyRes of
+                  case decode @res (textToLazy resText) of
                     Nothing -> return () -- Timeout handles garbled single result case.
                     Just res -> MVar.putMVar resultVar res
                 EndOfResults ->
@@ -298,37 +302,32 @@ callRPCTimeout' ::
   -> IO (Streamly.Serial res)
 callRPCTimeout' =
   _callRPCTimeout
-    (do (push, results) <- repeatableStream
+    (do (streamPush, results) <- repeatableStream
         -- Decoding returns Maybe (Maybe result) where the outer Maybe indicates whether the result
         -- is to be pushed or not, and the inner Maybe indicates stream continuation.
-        let pushHelper res = do
+        let push res = do
               maybePushResult <-
                 case res of
-                  Error errorMsg -> throwIO (BadCall errorMsg)
+                  Error errorMsg -> throwIO $ BadCall errorMsg
                   Result resText -> do
-                    let lazyRes =
-                          resText & Text.unpack &
-                          ByteString.Lazy.UTF8.fromString
-                    case decode @res lazyRes of
+                    case decode @res (textToLazy resText) of
                       Nothing -> return Nothing -- Timeout handles garbled EOR case.
                       Just resActual -> return $ Just $ Just resActual
                   EndOfResults -> return $ Just Nothing
               case maybePushResult of
                 Nothing -> return ()
-                Just maybeResult -> push maybeResult
+                Just maybeResult -> streamPush maybeResult
         let waitForDone = Streamly.mapM_ return results
-        return (pushHelper, return results, waitForDone))
+        return (push, return results, waitForDone))
 
--- Has default timeout of 5 seconds.
 callRPC ::
      (ToJSON req, FromJSON res) => SocketClientConfig -> Route -> req -> IO res
-callRPC = callRPCTimeout (secondsToDiffTime 5)
+callRPC = callRPCTimeout defaultTimeout
 
--- Has default timeout of 5 seconds.
 callRPC' ::
      (ToJSON req, FromJSON res)
   => SocketClientConfig
   -> Route
   -> req
   -> IO (Streamly.Serial res)
-callRPC' = callRPCTimeout' (secondsToDiffTime 5)
+callRPC' = callRPCTimeout' defaultTimeout
