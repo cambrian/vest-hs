@@ -58,7 +58,7 @@ instance Hashable Port
 -- Timeouts are in micros.
 newtype Timeout =
   Timeout Int64
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Enum, Num)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
 instance Exception Timeout
 
@@ -102,3 +102,19 @@ repeatableStream = do
                  Just x -> return $ Just (x, idx + 1))
           0
   return (push, stream)
+
+-- Creates a TVar that is updated with the latest value from as.
+-- The TVar is Nothing until the first value is received
+makeStreamVar :: Streamly.Serial a -> IO (TVar.TVar (Maybe a))
+makeStreamVar as = do
+  var <- TVar.newTVarIO Nothing
+  forkIO $ Streamly.mapM_ (STM.atomically . TVar.writeTVar var . Just) as
+  return var
+
+-- Creates a TVar that is updated with the latest value from as,
+-- with explicit initial value
+makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar.TVar a)
+makeStreamVar' as init = do
+  var <- TVar.newTVarIO init
+  forkIO $ Streamly.mapM_ (STM.atomically . TVar.writeTVar var) as
+  return var

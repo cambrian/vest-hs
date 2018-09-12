@@ -3,11 +3,14 @@ resolver: lts-12.9
 packages:
 - bridge
 - core
+- price-server
 - socket-server
 - vest-prelude
 
 extra-deps:
 - aeson-1.4.0.0
 - network-2.7.0.2
+- safe-money-0.7
+- safe-money-aeson-0.1
 - streamly-0.5.0
 - timers-updatable-0.2.0.2
