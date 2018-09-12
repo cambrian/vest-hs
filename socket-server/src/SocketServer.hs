@@ -1,8 +1,8 @@
 module SocketServer
   ( T(..)
   , SocketClientConfig(..) -- Purely for testing purposes.
-  , makeServer
-  , killServer
+  , make
+  , kill
   , serveRPC
   , serveRPC'
   , makeClientConfig -- Purely for testing purposes.
@@ -85,8 +85,8 @@ data SocketServerException
 instance Exception SocketServerException
 
 -- Creates socket server and starts listening.
-makeServer :: Int -> IO T
-makeServer port = do
+make :: Int -> Int -> IO T
+make port pingInterval = do
   clients <- HashTable.new
   directHandlers <- HashTable.new
   streamingHandlers <- HashTable.new
@@ -97,27 +97,30 @@ makeServer port = do
       socketServer <- MVar.readMVar socketServerVar
       -- Wait for thread ID to be added to server state.
       Warp.run port $
-        WS.websocketsOr WS.defaultConnectionOptions (wsApp socketServer) httpApp
+        WS.websocketsOr
+          WS.defaultConnectionOptions
+          (wsApp socketServer pingInterval)
+          httpApp
   let socketServer = T {threadId, clients, directHandlers, streamingHandlers}
   MVar.putMVar socketServerVar socketServer
   -- Wait for init to avoid race conditions.
   threadDelay 100000 -- TODO: Make less jank.
   return socketServer
 
-killServer :: T -> IO ()
-killServer T {threadId} = do
+kill :: T -> IO ()
+kill T {threadId} = do
   killThread threadId
 
 httpApp :: Wai.Application
 httpApp _ respond =
   respond $ Wai.responseLBS Http.status400 [] "not a WebSocket request"
 
-wsApp :: T -> WS.ServerApp
-wsApp socketServer pendingConn = do
+wsApp :: T -> Int -> WS.ServerApp
+wsApp socketServer pingInterval pendingConn = do
   conn <- WS.acceptRequest pendingConn
   -- Each connection is on a new thread.
   clientId <- connectClient socketServer conn
-  WS.forkPingThread conn 30 -- TODO: Make configurable.
+  WS.forkPingThread conn pingInterval
   Exception.finally
     (serveClient socketServer conn)
     (disconnectClient socketServer clientId)
@@ -244,7 +247,7 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
                         rawResMsg <- WS.receiveData conn
                         renewTimeout
                         case decode rawResMsg of
-                          Nothing -> return () -- TODO: Throw here?
+                          Nothing -> return () -- Timeout handles garbled EOR/single result cases.
                           Just (ResponseMessage {res}) -> push res
                         readLoop
                   readLoop
@@ -254,7 +257,8 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
           (\e -> do
              let error = Text.pack $ show (e :: WS.ConnectionException)
              -- ConnectionClosed is expected if the thread was forcefully shut down in the middle
-             -- of waiting for WS.receiveData (at least that's how it appears).
+             -- of waiting for WS.receiveData (at least that's how it appears). We catch this
+             -- explicitly to avoid confusing log messages in test output.
              when (error /= "ConnectionClosed") (throwIO e))
   Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
   result
@@ -276,7 +280,7 @@ callRPCTimeout =
                   let lazyRes =
                         resText & Text.unpack & ByteString.Lazy.UTF8.fromString
                   case decode @res lazyRes of
-                    Nothing -> return () -- TODO: Handle failure here?
+                    Nothing -> return () -- Timeout handles garbled single result case.
                     Just res -> MVar.putMVar resultVar res
                 EndOfResults ->
                   throwIO $
@@ -295,17 +299,23 @@ callRPCTimeout' ::
 callRPCTimeout' =
   _callRPCTimeout
     (do (push, results) <- repeatableStream
+        -- Decoding returns Maybe (Maybe result) where the outer Maybe indicates whether the result
+        -- is to be pushed or not, and the inner Maybe indicates stream continuation.
         let pushHelper res = do
-              maybeResult <-
+              maybePushResult <-
                 case res of
                   Error errorMsg -> throwIO (BadCall errorMsg)
                   Result resText -> do
                     let lazyRes =
                           resText & Text.unpack &
                           ByteString.Lazy.UTF8.fromString
-                    return $ decode @res lazyRes -- TODO: Handle failure here?
-                  EndOfResults -> return Nothing
-              push maybeResult
+                    case decode @res lazyRes of
+                      Nothing -> return Nothing -- Timeout handles garbled EOR case.
+                      Just resActual -> return $ Just $ Just resActual
+                  EndOfResults -> return $ Just Nothing
+              case maybePushResult of
+                Nothing -> return ()
+                Just maybeResult -> push maybeResult
         let waitForDone = Streamly.mapM_ return results
         return (pushHelper, return results, waitForDone))
 
