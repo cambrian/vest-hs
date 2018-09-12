@@ -1,5 +1,6 @@
 import qualified Bridge
 import qualified Data.List
+import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Test.Hspec
 import VestPrelude
@@ -15,6 +16,20 @@ localBridgeConfig =
 
 withBridge :: Bridge.Config -> (Bridge.T -> IO ()) -> IO ()
 withBridge config = bracket (Bridge.make config) Bridge.kill
+
+killTest :: Spec
+killTest = do
+  context "when registering RPCs after server was killed" $ do
+    it "correctly throws an exception" $ do
+      bridge <- Bridge.make localBridgeConfig
+      Bridge.kill bridge
+      (Bridge.serveRPC bridge (Route "unit") (\() -> return ())) `shouldThrow`
+        (== Bridge.DeadBridge)
+      (Bridge.serveRPC'
+         bridge
+         (Route "nil")
+         (\() -> return (Streamly.nil :: Streamly.Serial ()))) `shouldThrow`
+        (== Bridge.DeadBridge)
 
 echoTest :: Spec
 echoTest = do
@@ -127,8 +142,8 @@ timeoutTest' = do
 main :: IO ()
 main = do
   hspec $ do
-    describe "direct RPC bridge server" $
-      echoTest >> multipleFnTest >> timeoutTest
-    describe "streaming RPC bridge server" $
+    describe "bridge server library" $ killTest
+    describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
+    describe "streaming RPC bridge" $
       echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
       timeoutTest'
