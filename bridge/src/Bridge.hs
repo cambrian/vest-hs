@@ -3,6 +3,7 @@ module Bridge
   , T(..)
   , defaultTimeout
   , make
+  , kill
   , serveRPC
   , serveRPC'
   , callRPC
@@ -14,6 +15,7 @@ module Bridge
 import qualified Control.Concurrent.MVar as MVar
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
+import qualified Data.String as String
 import qualified Data.Text as Text
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
@@ -49,7 +51,7 @@ data Response
 
 data ResponseMessage = ResponseMessage
   { requestId :: Id
-    -- other metadata
+    -- Other metadata.
   , res :: Either BridgeException Response
   } deriving (Eq, Show, Read)
 
@@ -64,13 +66,14 @@ data T = T
   { conn :: AMQP.Connection
   , chan :: AMQP.Channel
   , responseQueue :: Id
+  , consumerTag :: AMQP.ConsumerTag
   , waitingCalls :: HashTable Id (Response -> IO ())
   }
 
--- Connects to bridge, begins listening on RPC response queue.
--- Maintains a hash table of open RPC calls.
--- For each incoming message on the response queue, make
--- will attempt to dispatch it to the corresponding waiting RPC call.
+amqpMsgToString :: AMQP.Message -> String.String
+amqpMsgToString = ByteString.Lazy.UTF8.toString . AMQP.msgBody
+
+-- Connects to bridge, begins listening on RPC queue.
 make :: Config -> IO T
 make Config {hostname, virtualHost, username, password} = do
   conn <-
@@ -96,8 +99,16 @@ make Config {hostname, virtualHost, username, password} = do
        AMQP.ackEnv env)
   return T {conn, chan, responseQueue = Id queueName, waitingCalls}
 
--- General RPC server implementation. publisher :: publish -> res -> IO () defines
--- how results should be communicated back to the client.
+-- Kills and cleans up bridge.
+kill :: T -> IO ()
+kill T {conn, chan, responseQueue, consumerTag} = do
+  let Id _responseQueue = responseQueue
+  AMQP.cancelConsumer chan consumerTag
+  _ <- AMQP.deleteQueue chan _responseQueue
+  -- Closing connection implicitly closes chan.
+  AMQP.closeConnection conn
+
+-- RPC server.
 _serveRPC ::
      (Read req)
   => ((Response -> IO ()) -> res -> IO ())
@@ -114,7 +125,7 @@ _serveRPC publisher T {chan} route handler = do
     AMQP.Ack
     (\(msg, env) -> do
        forkIO $ do
-         let rawReqMsg = msg & AMQP.msgBody & ByteString.Lazy.UTF8.toString
+         let rawReqMsg = amqpMsgToString msg
          case readMaybe rawReqMsg of
            Nothing -> return ()
            Just RequestMessage {id = requestId, responseQueue, req} -> do
@@ -137,11 +148,11 @@ _serveRPC publisher T {chan} route handler = do
        return ())
   return ()
 
--- Direct RPC server
+-- Direct RPC server.
 serveRPC :: (Read req, Show res) => T -> Route -> (req -> IO res) -> IO ()
 serveRPC = _serveRPC (\publish res -> publish $ Result (show res))
 
--- Streaming RPC server
+-- Streaming RPC server.
 serveRPC' ::
      (Read req, Show res)
   => T
@@ -162,6 +173,7 @@ serveRPC' =
 _callRPCTimeout ::
      (Show req)
   => IO (Response -> IO (), IO res, IO ())
+  -- Response handler, result, done.
   -> DiffTime
   -> T
   -> Route
@@ -172,12 +184,12 @@ _callRPCTimeout handler _timeout T {chan, responseQueue, waitingCalls} route req
   id <- fmap (Id . UUID.toText) UUID.nextRandom
   let reqMsg = RequestMessage {id, responseQueue, req = show req}
   let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
-  (h, res, done) <- handler
-  renewTimeout <- timeoutThrowIO' done _timeout
-  HashTable.insert waitingCalls id (\x -> renewTimeout >> h x)
-  forkIO $ done >> HashTable.delete waitingCalls id
+  (push, result, waitForDone) <- handler
+  renewTimeout <- timeoutThrowIO' waitForDone _timeout
+  HashTable.insert waitingCalls id (\x -> renewTimeout >> push x)
   _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
-  res
+  forkIO $ waitForDone >> HashTable.delete waitingCalls id
+  result
 
 -- Direct RPC call
 callRPCTimeout ::
@@ -189,16 +201,17 @@ callRPCTimeout ::
   -> IO res
 callRPCTimeout =
   _callRPCTimeout
-    (do result <- MVar.newEmptyMVar
-        let handler =
+    (do resultVar <- MVar.newEmptyMVar
+        let push =
               \case
-                Result res -> MVar.putMVar result (read @res (Text.unpack res))
+                Result res ->
+                  MVar.putMVar resultVar (read @res (Text.unpack res))
                 EndOfResults ->
                   throwIO $
                   InternalBridgeException
                     "Direct RPC should never get EndOfResults"
-        let res = MVar.readMVar result
-        return (handler, res, void res))
+        let result = MVar.readMVar resultVar
+        return (push, result, void result))
 
 -- Streaming RPC call
 callRPCTimeout' ::
@@ -210,13 +223,13 @@ callRPCTimeout' ::
   -> IO (Streamly.Serial res)
 callRPCTimeout' =
   _callRPCTimeout
-    (do (push, results) <- repeatableStream
-        let handler =
+    (do (streamPush, results) <- repeatableStream
+        let push =
               \case
-                Result res -> push (Just (read @res (Text.unpack res)))
-                EndOfResults -> push Nothing
-        let done = Streamly.mapM_ return results
-        return (handler, return results, done))
+                Result res -> streamPush (Just (read @res (Text.unpack res)))
+                EndOfResults -> streamPush Nothing
+        let waitForDone = void (Streamly.mapM_ return results)
+        return (push, return results, waitForDone))
 
 -- Direct RPC call with default timeout
 callRPC :: (Show req, Read res) => T -> Route -> req -> IO res

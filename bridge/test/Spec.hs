@@ -1,13 +1,11 @@
 import qualified Bridge
-import Control.Concurrent (threadDelay)
-import Control.Monad (unless, when)
-import Data.Function ((&))
 import qualified Data.List
 import qualified Streamly.Prelude as Streamly
+import Test.Hspec
 import VestPrelude
 
-bridgeConfig :: Bridge.Config
-bridgeConfig =
+localBridgeConfig :: Bridge.Config
+localBridgeConfig =
   Bridge.Config
     { hostname = "localhost"
     , virtualHost = "/"
@@ -15,77 +13,122 @@ bridgeConfig =
     , password = "guest"
     }
 
-testDirect :: Bridge.T -> IO ()
-testDirect bridge = do
-  let route = Route "testDirect"
-  Bridge.serveRPC @Int bridge route (\x -> return $ x * 2)
-  result <- Bridge.callRPC @Int @Int bridge route 1
-  unless (result == 2) $ panic "testDirect failed."
-  putText "passed testDirect"
+withBridge :: Bridge.Config -> (Bridge.T -> IO ()) -> IO ()
+withBridge config = bracket (Bridge.make config) Bridge.kill
 
-testBasic :: Bridge.T -> IO ()
-testBasic bridge = do
-  let xs = [1, 2, 3]
-  let route = Route "testBasic"
-  Bridge.serveRPC' bridge route (\() -> return $ Streamly.fromList xs)
-  results <- Bridge.callRPC' @() @Int bridge route ()
-  resultList <- Streamly.toList results
-  when (resultList /= xs) $ panic "testBasic failed."
-  putText "passed testBasic"
+echoTest :: Spec
+echoTest = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running simple echo RPC" $ do
+      it "returns the original output" $ \b -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        Bridge.serveRPC b route (\() -> return xs)
+        result <- Bridge.callRPC @() @[Int] b route ()
+        result `shouldBe` xs
 
-testMultipleFunctions :: Bridge.T -> IO ()
-testMultipleFunctions bridge = do
-  let nums = [1, 2, 3]
-  let chars = ['a', 'b', 'c']
-  let routeNums = Route "testMultipleFunctionsNums"
-  let routeChars = Route "testMultipleFunctionsChars"
-  Bridge.serveRPC' bridge routeNums (\() -> return $ Streamly.fromList nums)
-  Bridge.serveRPC' bridge routeChars (\() -> return $ Streamly.fromList chars)
-  resultNums <- Bridge.callRPC' @() @Int bridge routeNums ()
-  resultChars <- Bridge.callRPC' @() @Char bridge routeChars ()
-  resultNumList <- Streamly.toList resultNums
-  resultCharList <- Streamly.toList resultChars
-  when (resultNumList /= nums) $ panic "testMultipleFunctions failed."
-  when (resultCharList /= chars) $ panic "testMultipleFunctions failed."
-  putText "passed testMultipleFunctions"
+echoTest' :: Spec
+echoTest' = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running simple echo RPC" $ do
+      it "returns the original output" $ \b -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        Bridge.serveRPC' b route (\() -> return $ Streamly.fromList xs)
+        results <- Bridge.callRPC' @() @Int b route ()
+        Streamly.toList results `shouldReturn` xs
 
-testMultipleConsumption :: Bridge.T -> IO ()
-testMultipleConsumption bridge = do
-  let xs = [1, 2, 3]
-  let route = Route "testMultipleConsumption'"
-  Bridge.serveRPC' bridge route (\() -> return $ Streamly.fromList xs)
-  results <- Bridge.callRPC' @() @Int bridge route ()
-  resultList <- Streamly.toList results
-  resultList2 <- Streamly.toList results
-  when (resultList /= xs) $ panic "testMultipleConsumption failed."
-  when (resultList2 /= xs) $ panic "testMultipleConsumption failed."
-  putText "passed testMultipleConsumption"
+multipleFnTest :: Spec
+multipleFnTest = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running multiple echo RPCs" $ do
+      it "returns the original output for both" $ \b -> do
+        let (route, xs) = (Route "echoInts", [1, 2, 3] :: [Int])
+        let (routeCh, chars) = (Route "echoChars", ['a', 'b', 'c'])
+        Bridge.serveRPC b route (\() -> return xs)
+        Bridge.serveRPC b routeCh (\() -> return chars)
+        result <- Bridge.callRPC @() @[Int] b route ()
+        resultCh <- Bridge.callRPC @() @[Char] b routeCh ()
+        result `shouldBe` xs
+        resultCh `shouldBe` chars
 
-testConcurrent :: Bridge.T -> IO ()
-testConcurrent bridge = do
-  let route = Route "testConcurrent"
-  Bridge.serveRPC'
-    @Int
-    bridge
-    route
-    (\x ->
-       return $
-       Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
-  results1 <- Bridge.callRPC' @Int @Int bridge route 1
-  results2 <- Bridge.callRPC' @Int @Int bridge route 2
-  resultList1 <- Streamly.toList results1
-  resultList2 <- Streamly.toList results2
-  unless (Data.List.all (\x -> x == 1) resultList1) $
-    panic "testConcurrent failed."
-  unless (Data.List.all (\x -> x == 2) resultList2) $
-    panic "testConcurrent failed."
-  putText "passed testConcurrent"
+multipleFnTest' :: Spec
+multipleFnTest' = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running multiple echo RPCs" $ do
+      it "returns the original output for both" $ \b -> do
+        let (route, xs) = (Route "echoInts", [1, 2, 3] :: [Int])
+        let (routeCh, chars) = (Route "echoChars", ['a', 'b', 'c'])
+        Bridge.serveRPC' b route (\() -> return $ Streamly.fromList xs)
+        Bridge.serveRPC' b routeCh (\() -> return $ Streamly.fromList chars)
+        results <- Bridge.callRPC' @() @Int b route ()
+        resultsCh <- Bridge.callRPC' @() @Char b routeCh ()
+        Streamly.toList results `shouldReturn` xs
+        Streamly.toList resultsCh `shouldReturn` chars
+
+multipleConsumeTest' :: Spec
+multipleConsumeTest' = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running echo with multiple stream consumers" $ do
+      it "returns the original output for both" $ \b -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        Bridge.serveRPC' b route (\() -> return $ Streamly.fromList xs)
+        results <- Bridge.callRPC' @() @Int b route ()
+        Streamly.toList results `shouldReturn` xs
+        Streamly.toList results `shouldReturn` xs
+
+concurrentTest' :: Spec
+concurrentTest' = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running RPCs with concurrent callers" $ do
+      it "returns the correct output for both" $ \b -> do
+        let route = Route "concurrent"
+        Bridge.serveRPC'
+          b
+          route
+          (\(x :: Int) ->
+             return $
+             Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
+        results1 <- Bridge.callRPC' @Int @Int b route 1
+        results2 <- Bridge.callRPC' @Int @Int b route 2
+        resultList1 <- Streamly.toList results1
+        resultList2 <- Streamly.toList results2
+        resultList1 `shouldSatisfy` Data.List.all (\x -> x == 1)
+        resultList2 `shouldSatisfy` Data.List.all (\x -> x == 2)
+
+timeoutTest :: Spec
+timeoutTest = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running RPCs that take too long" $ do
+      it "forces callers to time out" $ \b -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        Bridge.serveRPC b route (\() -> threadDelay 3000000 >> return xs)
+        (Bridge.callRPCTimeout @() @[Int] (secondsToDiffTime 1) b route ()) `shouldThrow`
+          (== Timeout 1000000)
+
+timeoutTest' :: Spec
+timeoutTest' = do
+  around (withBridge localBridgeConfig) $ do
+    context "when running RPCs that take too long" $ do
+      it "forces callers to time out" $ \b -> do
+        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        Bridge.serveRPC'
+          b
+          route
+          (\() ->
+             return $
+             Streamly.fromList xs &
+             Streamly.mapM (\x -> threadDelay (500000 * x) >> return x))
+        (do results <-
+              Bridge.callRPCTimeout' @() @Int (secondsToDiffTime 1) b route ()
+            -- Have to coerce results to actually reach the timeout.
+            resultsList <- Streamly.toList results
+            print resultsList) `shouldThrow`
+          (== Timeout 1000000)
 
 main :: IO ()
 main = do
-  bridge <- Bridge.make bridgeConfig
-  testDirect bridge
-  testBasic bridge
-  testMultipleFunctions bridge
-  testMultipleConsumption bridge
-  testConcurrent bridge
+  hspec $ do
+    describe "direct RPC bridge server" $
+      echoTest >> multipleFnTest >> timeoutTest
+    describe "streaming RPC bridge server" $
+      echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
+      timeoutTest'

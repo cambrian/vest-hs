@@ -16,6 +16,7 @@ dependencies:
 - base              >= 4.10 && < 5
 - containers        >= 0.5  && < 1
 - hashtables        >= 1.2  && < 2
+- hspec             >= 2.5  && < 3
 - hostname          >= 1.0  && < 2
 - stm               >= 2.4  && < 3
 - streamly          >= 0.5  && < 1
