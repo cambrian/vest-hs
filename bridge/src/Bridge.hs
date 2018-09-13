@@ -92,6 +92,10 @@ instance Hashable BridgeException
 amqpMsgToText :: AMQP.Message -> Text
 amqpMsgToText = Text.pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
+toAmqpMsg :: (Show a) => a -> AMQP.Message
+toAmqpMsg x =
+  AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString (show x)}
+
 newQueueName :: IO Text
 newQueueName = do
   uuid <- UUID.nextRandom
@@ -169,16 +173,13 @@ _serveRPC publisher T {chan, killedVar} route handler = do
            Nothing -> return ()
            Just RequestMessage {id = requestId, responseQueue, req} -> do
              let Id _responseQueue = responseQueue
-             let doPublish res = do
-                   let msgBody =
-                         ByteString.Lazy.UTF8.fromString $
-                         show $ ResponseMessage {requestId, res}
+             let doPublish res =
+                   void $
                    AMQP.publishMsg
                      chan
                      "" -- Default exchange just sends message to queue specified by routing key.
                      _responseQueue -- Exchange routing key.
-                     AMQP.newMsg {AMQP.msgBody}
-                   return ()
+                     (toAmqpMsg ResponseMessage {requestId, res})
              case readMaybe req of
                Nothing ->
                  doPublish . Left . BadCall $ Text.append "bad input: " req
@@ -279,15 +280,15 @@ callRPC' ::
 callRPC' = callRPCTimeout' defaultTimeout
 
 -- Publish in the usual pub/sub model.
-publish :: (Show item) => T -> Id -> item -> IO ()
-publish T {chan} route item = do
-  let Id _route = route
+publish :: (Show a) => T -> Route -> Streamly.Serial a -> IO ()
+publish T {chan} route as = do
+  let Route exchangeName = route
   AMQP.declareExchange
     chan
-    AMQP.newExchange {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
-  let msgBody = ByteString.Lazy.UTF8.fromString $ show item
-  AMQP.publishMsg chan _route "" AMQP.newMsg {AMQP.msgBody} -- Queue name blank.
-  return ()
+    AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
+  Streamly.mapM_
+    ((AMQP.publishMsg chan exchangeName "") . toAmqpMsg) -- Queue name blank.
+    as
 
 -- Returns subscriber tag and result stream as tuple (tag, stream).
 subscribe ::
