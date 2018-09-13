@@ -1,12 +1,11 @@
 module VestPrelude.Money
   ( module VestPrelude.Money
   , module Money
-  , module Money.Aeson
   ) where
 
 -- use: import qualified VestPrelude.Money as Money
+import Data.Aeson (FromJSON, ToJSON)
 import Money
-import Money.Aeson ()
 import Protolude
 
 type instance Scale "XTZ" "XTZ" = '(1000000, 1)

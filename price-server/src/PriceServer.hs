@@ -4,7 +4,6 @@ module PriceServer
   ) where
 
 import qualified Bridge
-import qualified Control.Concurrent.STM.TVar as TVar
 import Streamly.Prelude as Streamly
 import VestPrelude
 import qualified VestPrelude.Money as Money
@@ -13,14 +12,15 @@ data Config = Config
   { bridgeConfig :: Bridge.Config
   } deriving (Eq, Show, Read, Generic)
 
-data PriceTezosContractRequest = PriceTezosContractRequest
-  { size :: Money.Dense "XTZ"
+data PriceContractRequest = PriceContractRequest
+  { currency :: Currency
+  , size :: Rational
   , duration :: Time Day
   } deriving (Eq, Show, Read, Generic)
 
-instance FromJSON PriceTezosContractRequest
+instance FromJSON PriceContractRequest
 
-instance ToJSON PriceTezosContractRequest
+instance ToJSON PriceContractRequest
 
 start :: Config -> IO ()
 start Config {bridgeConfig} = do
@@ -32,10 +32,14 @@ start Config {bridgeConfig} = do
     (\bridge ->
        Bridge.serveRPC
          bridge
-         (Route "priceTezosContract")
-         (\PriceTezosContractRequest {size, duration} -> do
-            xtzUsd <- TVar.readTVarIO latestTezosPrice
-            return $ tezosContractPrice xtzUsd size duration))
+         (Route "priceContract")
+         (\PriceContractRequest {currency, size, duration} ->
+            case currency of
+              XTZ -> do
+                xtzUsd <- readTVarIO latestTezosPrice
+                let tezos = Money.dense' size
+                return $ Right $ tezosContractPrice xtzUsd tezos duration
+              x -> return $ Left $ UnsupportedCurrencyException x))
 
 tezosContractPrice ::
      Money.ExchangeRate "XTZ" "USD"

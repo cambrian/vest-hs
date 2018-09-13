@@ -187,7 +187,7 @@ _serveRPC publisher T {chan} (Route queueName) handler = do
            Nothing -> return ()
            Just RequestMessage {id = requestId, responseQueue, req} -> do
              let Id _responseQueue = responseQueue
-             let doPublish res =
+             let pub res =
                    void $
                    AMQP.publishMsg
                      chan
@@ -195,16 +195,15 @@ _serveRPC publisher T {chan} (Route queueName) handler = do
                      _responseQueue -- Exchange routing key.
                      (toAmqpMsg ResponseMessage {requestId, res})
              case readMaybe req of
-               Nothing ->
-                 doPublish . Left . BadCall $ Text.append "bad input: " req
-               Just r -> handler r >>= publisher (doPublish . Right)
+               Nothing -> pub . Left . BadCall $ "bad input: " +++ req
+               Just r -> handler r >>= publisher (pub . Right)
          AMQP.ackEnv env
        return ())
   return ()
 
 -- Direct RPC server.
 serveRPC :: (Read req, Show res) => T -> Route -> (req -> IO res) -> IO ()
-serveRPC = _serveRPC (\doPublish res -> doPublish $ Result (show res))
+serveRPC = _serveRPC (\pub res -> pub $ Result (show res))
 
 -- Streaming RPC server.
 serveRPC' ::
@@ -215,9 +214,9 @@ serveRPC' ::
   -> IO ()
 serveRPC' =
   _serveRPC
-    (\doPublish results -> do
-       Streamly.mapM_ (doPublish . Result . show) results
-       doPublish EndOfResults)
+    (\pub results -> do
+       Streamly.mapM_ (pub . Result . show) results
+       pub EndOfResults)
 
 -- General RPC call.
 -- handler :: IO (responseHandler, result, done) defines how to wrap results
@@ -313,9 +312,8 @@ publish' T {chan} route as = do
   Streamly.mapM_ (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as
 
 -- Returns subscriber ID and result stream as tuple (ID, stream).
--- Subscribe (non streaming version) is deliberately unimplemented because we do not
--- have a persistent messaging system. If we find that we need such functionality,
--- we'll need to add persistence somehow. Candidate solutions are building a separate
+-- Subscribe (non streaming version) is deliberately unimplemented, because rabbitMQ
+-- does not support message history. Candidate solutions are building a separate
 -- pub/sub system on Kafka (or similar), or adding Cassandra to RabbitMQ.
 -- For now, you can use makeStreamVar in conjunction with subscribe'
 -- to get one-off values from a published topic

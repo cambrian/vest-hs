@@ -99,6 +99,25 @@ newtype URI =
 
 instance Hashable URI
 
+data Currency
+  = USD
+  | BTC
+  | ETH
+  | XTZ
+  deriving (Eq, Ord, Show, Read, Enum, Generic, Typeable)
+
+instance Hashable Currency
+
+instance ToJSON Currency
+
+instance FromJSON Currency
+
+newtype UnsupportedCurrencyException =
+  UnsupportedCurrencyException Currency
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Exception UnsupportedCurrencyException
+
 timeoutThrowIO :: IO a -> Time Second -> IO ()
 timeoutThrowIO action _timeout = do
   let micros = toNum @Microsecond _timeout
@@ -159,3 +178,6 @@ readUnsafe text =
 fromJustUnsafe :: Maybe a -> IO a
 fromJustUnsafe Nothing = throwIO NothingException
 fromJustUnsafe (Just a) = return a
+
+(+++) :: Text -> Text -> Text
+(+++) = Text.append
