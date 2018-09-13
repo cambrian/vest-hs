@@ -85,19 +85,49 @@ newtype URI =
 
 newtype DecodeException =
   DecodeException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 data NothingException =
   NothingException
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 newtype ReadException =
   ReadException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 newtype Timeout =
   Timeout (Time Second)
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
 
 instance Exception Timeout where
   fromException = asyncExceptionFromException
@@ -105,7 +135,17 @@ instance Exception Timeout where
 
 newtype UnsupportedCurrencyException =
   UnsupportedCurrencyException Currency
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 blockForever :: IO ()
 blockForever = do

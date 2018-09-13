@@ -120,6 +120,26 @@ timeoutTest' =
         print resultsList) `shouldThrow`
       (== Timeout (sec 0.1))
 
+pubSubTest' :: Spec
+pubSubTest' =
+  around (Bridge.with Bridge.localConfig) $
+  context "when publishing an incrementing stream" $
+  it "functions correctly on the subscribing end" $ \b -> do
+    let route = Route "increment"
+    async $ do
+      let f s = do
+            threadDelay (sec 0.05)
+            return $
+              if s < 5
+                then Just (s, s + 1 :: Int)
+                else Nothing
+      Bridge.publish' b route (Streamly.unfoldrM f 0)
+    (id, results) <- Bridge.subscribe' @Int b route
+    async $ do
+      threadDelay (sec 0.5)
+      Bridge.unsubscribe' b id
+    Streamly.toList results `shouldReturn` [0, 1, 2, 3, 4]
+
 main :: IO ()
 main =
   hspec $ do
@@ -127,3 +147,4 @@ main =
     describe "streaming RPC bridge" $
       echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
       timeoutTest'
+    describe "publish/subscribe bridge" $ pubSubTest'

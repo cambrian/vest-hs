@@ -15,6 +15,7 @@ module Bridge
   , publish'
   , subscribe'
   , unsubscribe
+  , unsubscribe'
   , BridgeException(..)
   ) where
 
@@ -74,14 +75,24 @@ data T = T
   , responseConsumerTag :: AMQP.ConsumerTag
   , serveConsumerTags :: HashTable Route AMQP.ConsumerTag
   , callHandlers :: HashTable Id (Response -> IO ())
-  -- subscriberId -> (consumerTag, close)
+  -- Key: subscriberId to Value: (consumerTag, close)
   , subscribers :: HashTable Id (AMQP.ConsumerTag, IO ())
   }
 
 data BridgeException
   = BadCall Text
   | InternalBridgeException Text -- If you get one of these, file a bug report.
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 newQueueName :: IO Text
 newQueueName = do
@@ -306,7 +317,11 @@ publish' T {chan} route as = do
 -- similar), or adding Cassandra to RabbitMQ. For now, you can use makeStreamVar in conjunction
 -- with subscribe' to get one-off values from a published topic.
 -- Returns subscriber ID and result stream as tuple (ID, stream).
-subscribe' :: (Read a) => T -> Route -> IO (Id, Streamly.Serial a)
+subscribe' ::
+     forall a. (Read a)
+  => T
+  -> Route
+  -> IO (Id, Streamly.Serial a)
 subscribe' T {chan, subscribers} (Route route) = do
   AMQP.declareExchange
     chan
@@ -333,3 +348,6 @@ unsubscribe T {chan, subscribers} subscriberId = do
       AMQP.deleteQueue chan queueName
       close
   HashTable.delete subscribers subscriberId
+
+unsubscribe' :: T -> Id -> IO ()
+unsubscribe' = unsubscribe

@@ -39,31 +39,18 @@ data RequestMessage = RequestMessage
   , route :: Route
     -- Other metadata (time?).
   , req :: Text -- Should be the serialization of a request object, but this is not guaranteed.
-  } deriving (Eq, Show, Read, Generic)
-
-instance FromJSON RequestMessage
-
-instance ToJSON RequestMessage
+  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data Response
   = Result Text -- Should be the serialization of a result object, but this is not guaranteed.
   | EndOfResults
-  | Error Text
-  deriving (Eq, Show, Read, Generic)
-
-instance FromJSON Response
-
-instance ToJSON Response
+  deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data ResponseMessage = ResponseMessage
   { requestId :: Id
     -- Other metadata.
-  , res :: Response
-  } deriving (Eq, Show, Read, Generic)
-
-instance FromJSON ResponseMessage
-
-instance ToJSON ResponseMessage
+  , res :: Either SocketServerException Response
+  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data SocketClientConfig = SocketClientConfig
   { uri :: URI
@@ -83,25 +70,31 @@ data Config = Config
 localConfig :: Config
 localConfig = Config {port = 3000, pingInterval = 30}
 
+type ExcOrResp = Either SocketServerException Response
+
 data T = T
   { serverThread :: Async ()
   , clients :: HashTable Id WS.Connection
-  , directHandlers :: HashTable Route (Text -> IO Response)
-  , streamingHandlers :: HashTable Route (Text -> IO (Streamly.Serial Response))
+  , directHandlers :: HashTable Route (Text -> IO ExcOrResp)
+  , streamingHandlers :: HashTable Route (Text -> IO (Streamly.Serial ExcOrResp))
   }
 
 data SocketServerException
   = BadCall Text
+  | NoSuchRoute Text
   | HandlerAlreadyExists Text
   | InternalSocketServerException Text -- If you get one of these, file a bug report.
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception SocketServerException
-
-instance Hashable SocketServerException
-
-badInput :: Text -> Response
-badInput = Error . (Text.append "bad input: ")
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 decodeSerialText :: (FromJSON a) => Text -> Maybe a
 decodeSerialText = decode . ByteString.Lazy.UTF8.fromString . Text.unpack
@@ -192,11 +185,11 @@ serveClient T {directHandlers, streamingHandlers} conn =
             -- Look for a streaming handler otherwise.
             case streamingMaybe of
               Nothing -> do
-                publish . Error . (Text.append "invalid route: ") $ _route
+                publish . Left . NoSuchRoute $ _route
               Just handler -> do
                 results <- handler req
                 Streamly.runStream $ Streamly.mapM publish results
-                publish EndOfResults
+                publish . Right $ EndOfResults
           Just handler -> do
             result <- handler req
             publish result
@@ -206,15 +199,15 @@ serveRPC T {directHandlers, streamingHandlers} route handler = do
   let Route _route = route
   let serialTextHandler sReq =
         case decodeSerialText sReq of
-          Nothing -> return $ badInput sReq
+          Nothing -> return $ Left . BadCall $ sReq
           Just req -> do
             res <- handler req
-            return $ toResponse res
+            return $ Right . toResponse $ res
   -- Error if a streaming handler has the same route name.
   streamingHandler <- HashTable.lookup streamingHandlers route
   case streamingHandler of
     Nothing -> HashTable.insert directHandlers route serialTextHandler
-    Just _ -> throwIO $ HandlerAlreadyExists _route
+    Just _ -> throw $ HandlerAlreadyExists _route
 
 serveRPC' ::
      (FromJSON req, ToJSON res)
@@ -226,15 +219,15 @@ serveRPC' T {directHandlers, streamingHandlers} route handler = do
   let Route _route = route
   let serialTextHandler sReq = do
         case decodeSerialText sReq of
-          Nothing -> return $ Streamly.yield . badInput $ sReq
+          Nothing -> return $ Streamly.yield . Left . BadCall $ sReq
           Just req -> do
             resStream <- handler req
-            return $ Streamly.map toResponse resStream
+            return $ Streamly.map (Right . toResponse) resStream
   -- Error if a direct handler has the same route name.
   directHandler <- HashTable.lookup directHandlers route
   case directHandler of
     Nothing -> HashTable.insert streamingHandlers route serialTextHandler
-    Just _ -> throwIO $ HandlerAlreadyExists _route
+    Just _ -> throw $ HandlerAlreadyExists _route
 
 _callRPCTimeout ::
      forall req res. (ToJSON req)
@@ -262,7 +255,10 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
                   renewTimeout
                   case decode rawResMsg of
                     Nothing -> return () -- Swallow if entire message is garbled.
-                    Just (ResponseMessage {res}) -> push res
+                    Just (ResponseMessage {res}) ->
+                      case res of
+                        Left ex -> throw ex -- TODO: Throw async?
+                        Right resp -> push resp
                   readLoop
             readLoop
         WS.sendTextData conn rawReqMsg
@@ -282,13 +278,12 @@ callRPCTimeout =
     (do resultVar <- newEmptyMVar
         let push =
               \case
-                Error errorMsg -> throwIO $ BadCall errorMsg
                 Result resText -> do
                   case decodeSerialText resText of
-                    Nothing -> throwIO $ DecodeException resText
+                    Nothing -> throw $ DecodeException resText
                     Just res -> putMVar resultVar res
                 EndOfResults ->
-                  throwIO $
+                  throw $
                   InternalSocketServerException
                     "direct RPC should never get EndOfResults"
         let result = readMVar resultVar
@@ -308,10 +303,9 @@ callRPCTimeout' =
         -- is to be pushed or not, and the inner Maybe indicates stream continuation.
         let push = do
               \case
-                Error errorMsg -> throwIO $ BadCall errorMsg
                 Result resText -> do
                   case decodeSerialText resText of
-                    Nothing -> throwIO $ DecodeException resText
+                    Nothing -> throw $ DecodeException resText
                     Just resActual -> _push resActual
                 EndOfResults -> close
         let waitForDone = Streamly.mapM_ return results
