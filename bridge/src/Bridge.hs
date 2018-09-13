@@ -13,13 +13,13 @@ module Bridge
   , callRPCTimeout
   , callRPCTimeout'
   , publish
+  , publish'
   , subscribe
   , unsubscribe
   ) where
 
 import qualified Control.Concurrent.MVar as MVar
-import qualified Control.Concurrent.STM.TVar as TVar
-import qualified Control.Monad.STM as STM
+import qualified Control.Concurrent.STM as STM
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Data.Text as Text
@@ -30,6 +30,7 @@ import qualified Network.AMQP as AMQP
 import qualified Network.HostName
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
+import qualified Text.Read
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -87,8 +88,8 @@ instance Exception BridgeException
 
 instance Hashable BridgeException
 
-amqpMsgToText :: AMQP.Message -> Text
-amqpMsgToText = Text.pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
+readAmqpMsg :: (Read a) => AMQP.Message -> Maybe a
+readAmqpMsg = Text.Read.readMaybe . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
 toAmqpMsg :: (Show a) => a -> AMQP.Message
 toAmqpMsg x =
@@ -103,13 +104,14 @@ newQueueName = do
 with :: Config -> (T -> IO ()) -> IO ()
 with config = bracket (make config) kill
 
+blockForever :: IO ()
+blockForever = do
+  _ <- myThreadId >>= StablePtr.newStablePtr -- Prevent garbage collection of this thread.
+  STM.atomically STM.retry -- Block forever.
+
 withForever :: Config -> (T -> IO ()) -> IO ()
-withForever config =
-  bracket
-    (do make config
-        myThreadId >>= StablePtr.newStablePtr
-        STM.atomically STM.retry)
-    kill
+withForever config action =
+  bracket (make config) kill (\x -> action x >> blockForever)
 
 -- Connects to bridge, begins listening on RPC queue.
 make :: Config -> IO T
@@ -126,13 +128,13 @@ make Config {hostname, virtualHost, username, password} = do
       queueName
       AMQP.Ack
       (\(msg, env) -> do
-         case readMaybe $ amqpMsgToText msg of
+         case readAmqpMsg msg of
            Nothing -> return () -- Swallow if entire message is garbled.
            Just ResponseMessage {requestId, res} ->
              case res of
                Left exception -> throwIO exception
                Right r ->
-                 (HashTable.lookup callHandlers requestId) >>= mapM_ ($ r)
+                 HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
          AMQP.ackEnv env)
   serveConsumerTags <- HashTable.new
   unsubscribeHandlers <- HashTable.new
@@ -158,12 +160,8 @@ kill T { conn
        } = do
   let Id _responseQueue = responseQueue
   AMQP.cancelConsumer chan responseConsumerTag
-  HashTable.mapM_
-    (\(route, tag) -> AMQP.cancelConsumer chan tag)
-    serveConsumerTags
-  HashTable.mapM_
-    (\(subscriberId, unsubscribe) -> unsubscribe)
-    unsubscribeHandlers
+  HashTable.mapM_ (AMQP.cancelConsumer chan . snd) serveConsumerTags
+  HashTable.mapM_ snd unsubscribeHandlers
   -- callHandlers will automatically time out.
   _ <- AMQP.deleteQueue chan _responseQueue
   AMQP.closeConnection conn -- And chan.
@@ -184,7 +182,7 @@ _serveRPC publisher T {chan} (Route queueName) handler = do
     AMQP.Ack
     (\(msg, env) -> do
        forkIO $ do
-         case readMaybe $ amqpMsgToText msg of
+         case readAmqpMsg msg of
            Nothing -> return ()
            Just RequestMessage {id = requestId, responseQueue, req} -> do
              let Id _responseQueue = responseQueue
@@ -275,11 +273,11 @@ callRPCTimeout' ::
   -> IO (Streamly.Serial res)
 callRPCTimeout' =
   _callRPCTimeout
-    (do (streamPush, results) <- repeatableStream
+    (do (_push, close, results) <- repeatableStream
         let push =
               \case
-                Result res -> readUnsafe @res res >>= streamPush . Just
-                EndOfResults -> streamPush Nothing
+                Result res -> readUnsafe @res res >>= _push
+                EndOfResults -> close
             done = Streamly.mapM_ return results
         return (push, return results, done))
 
@@ -296,30 +294,25 @@ callRPC' ::
 callRPC' = callRPCTimeout' defaultTimeout
 
 -- Publish in the usual pub/sub model.
-publish :: (Show item) => T -> Route -> item -> IO ()
-publish T {chan} route item = do
+publish :: (Show a) => T -> Route -> a -> IO ()
+publish T {chan} route a = do
   let Route exchangeName = route
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
-  AMQP.publishMsg chan exchangeName "" (toAmqpMsg item) -- Queue name blank.
+  AMQP.publishMsg chan exchangeName "" (toAmqpMsg a) -- Queue name blank.
   return ()
 
-publish' :: (Show item) => T -> Route -> Streamly.Serial item -> IO ()
-publish' T {chan} route itemStream = do
+publish' :: (Show a) => T -> Route -> Streamly.Serial a -> IO ()
+publish' T {chan} route as = do
   let Route exchangeName = route
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
-  Streamly.mapM_
-    (\item -> do
-       (AMQP.publishMsg chan exchangeName "") . toAmqpMsg $ item
-       return () -- Queue name blank.
-     )
-    itemStream
+  Streamly.mapM_ (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as
 
 -- Returns subscriber ID and result stream as tuple (ID, stream).
-subscribe :: (Read item) => T -> Id -> IO (Id, Streamly.Serial item)
+subscribe :: (Read a) => T -> Id -> IO (Id, Streamly.Serial a)
 subscribe T {chan, unsubscribeHandlers} route = do
   let Id _route = route
   AMQP.declareExchange
@@ -329,26 +322,19 @@ subscribe T {chan, unsubscribeHandlers} route = do
   queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   AMQP.bindQueue chan queueName _route "" -- Routing key blank.
-  (push, results) <- repeatableStream
+  (push, close, results) <- repeatableStream
   consumerTag <-
-    AMQP.consumeMsgs
-      chan
-      queueName
-      AMQP.NoAck
-      (\(msg, _) -> mapM_ (push . Just) (msg & amqpMsgToText & readMaybe))
+    AMQP.consumeMsgs chan queueName AMQP.NoAck (mapM_ push . readAmqpMsg . fst)
   let subscriberId = Id queueName
   HashTable.insert
     unsubscribeHandlers
     subscriberId
     (do AMQP.cancelConsumer chan consumerTag
         AMQP.deleteQueue chan queueName
-        push Nothing)
+        close)
   return (subscriberId, results)
 
 -- Unsubscribes a consumer (idempotent).
 unsubscribe :: T -> Id -> IO ()
-unsubscribe T {chan, unsubscribeHandlers} subscriberId = do
-  unsubscribeMaybe <- HashTable.lookup unsubscribeHandlers subscriberId
-  case unsubscribeMaybe of
-    Nothing -> return ()
-    Just unsubscribe -> unsubscribe
+unsubscribe T {unsubscribeHandlers} subscriberId =
+  HashTable.lookup unsubscribeHandlers subscriberId >>= fromMaybe (return ())
