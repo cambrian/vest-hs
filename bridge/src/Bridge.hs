@@ -76,7 +76,8 @@ data T = T
   , responseConsumerTag :: AMQP.ConsumerTag
   , serveConsumerTags :: HashTable Route AMQP.ConsumerTag
   , callHandlers :: HashTable Id (Response -> IO ())
-  , unsubscribeHandlers :: HashTable Id (IO ())
+  -- subscriberId -> (consumerTag, close)
+  , subscribers :: HashTable Id (AMQP.ConsumerTag, IO ())
   }
 
 data BridgeException
@@ -137,7 +138,7 @@ make Config {hostname, virtualHost, username, password} = do
                  HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
          AMQP.ackEnv env)
   serveConsumerTags <- HashTable.new
-  unsubscribeHandlers <- HashTable.new
+  subscribers <- HashTable.new
   return
     T
       { conn
@@ -146,22 +147,23 @@ make Config {hostname, virtualHost, username, password} = do
       , responseConsumerTag
       , serveConsumerTags
       , callHandlers
-      , unsubscribeHandlers
+      , subscribers
       }
 
 -- Kills and cleans up bridge.
 kill :: T -> IO ()
-kill T { conn
-       , chan
-       , responseQueue
-       , responseConsumerTag
-       , serveConsumerTags
-       , unsubscribeHandlers
-       } = do
-  let Id _responseQueue = responseQueue
+kill t = do
+  let T { conn
+        , chan
+        , responseQueue
+        , responseConsumerTag
+        , serveConsumerTags
+        , subscribers
+        } = t
+      Id _responseQueue = responseQueue
   AMQP.cancelConsumer chan responseConsumerTag
   HashTable.mapM_ (AMQP.cancelConsumer chan . snd) serveConsumerTags
-  HashTable.mapM_ snd unsubscribeHandlers
+  HashTable.mapM_ (unsubscribe t . fst) subscribers
   -- callHandlers will automatically time out.
   _ <- AMQP.deleteQueue chan _responseQueue
   AMQP.closeConnection conn -- And chan.
@@ -312,29 +314,29 @@ publish' T {chan} route as = do
   Streamly.mapM_ (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as
 
 -- Returns subscriber ID and result stream as tuple (ID, stream).
-subscribe :: (Read a) => T -> Id -> IO (Id, Streamly.Serial a)
-subscribe T {chan, unsubscribeHandlers} route = do
-  let Id _route = route
+subscribe :: (Read a) => T -> Route -> IO (Id, Streamly.Serial a)
+subscribe T {chan, subscribers} (Route route) = do
   AMQP.declareExchange
     chan
-    AMQP.newExchange {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
+    AMQP.newExchange {AMQP.exchangeName = route, AMQP.exchangeType = "fanout"}
   -- Sanity check to make sure the desired pub/sub route is actually a fanout exchange.
   queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-  AMQP.bindQueue chan queueName _route "" -- Routing key blank.
+  AMQP.bindQueue chan queueName route "" -- Routing key blank.
   (push, close, results) <- repeatableStream
   consumerTag <-
     AMQP.consumeMsgs chan queueName AMQP.NoAck (mapM_ push . readAmqpMsg . fst)
   let subscriberId = Id queueName
-  HashTable.insert
-    unsubscribeHandlers
-    subscriberId
-    (do AMQP.cancelConsumer chan consumerTag
-        AMQP.deleteQueue chan queueName
-        close)
+  HashTable.insert subscribers subscriberId (consumerTag, close)
   return (subscriberId, results)
 
 -- Unsubscribes a consumer (idempotent).
 unsubscribe :: T -> Id -> IO ()
-unsubscribe T {unsubscribeHandlers} subscriberId =
-  HashTable.lookup unsubscribeHandlers subscriberId >>= fromMaybe (return ())
+unsubscribe T {chan, subscribers} subscriberId = do
+  let Id queueName = subscriberId
+  HashTable.lookup subscribers subscriberId >>= \case
+    Nothing -> return ()
+    Just (consumerTag, close) -> do
+      AMQP.cancelConsumer chan consumerTag
+      AMQP.deleteQueue chan queueName
+      close
