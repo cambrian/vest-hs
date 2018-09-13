@@ -5,7 +5,6 @@ module VestPrelude
 
 import qualified Control.Concurrent.Killable as Killable
 import qualified Control.Concurrent.STM.TVar as TVar
-import Control.Exception.Safe
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as STM
 import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
@@ -101,6 +100,12 @@ newtype ReadException =
 
 instance Exception ReadException
 
+data NothingException =
+  NothingException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Exception NothingException
+
 newtype URI =
   URI Text
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
@@ -163,3 +168,7 @@ readUnsafe text =
   case readMaybe text of
     Nothing -> throwIO $ ReadException text
     Just x -> return x
+
+fromJustUnsafe :: Maybe a -> IO a
+fromJustUnsafe Nothing = throwIO NothingException
+fromJustUnsafe (Just a) = return a

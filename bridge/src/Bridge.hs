@@ -14,7 +14,7 @@ module Bridge
   , callRPCTimeout'
   , publish
   , publish'
-  , subscribe
+  , subscribe'
   , unsubscribe
   ) where
 
@@ -314,8 +314,14 @@ publish' T {chan} route as = do
   Streamly.mapM_ (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as
 
 -- Returns subscriber ID and result stream as tuple (ID, stream).
-subscribe :: (Read a) => T -> Route -> IO (Id, Streamly.Serial a)
-subscribe T {chan, subscribers} (Route route) = do
+-- Subscribe (non streaming version) is deliberately unimplemented because we do not
+-- have a persistent messaging system. If we find that we need such functionality,
+-- we'll need to add persistence somehow. Candidate solutions are building a separate
+-- pub/sub system on Kafka (or similar), or adding Cassandra to RabbitMQ.
+-- For now, you can use makeStreamVar in conjunction with subscribe'
+-- to get one-off values from a published topic
+subscribe' :: (Read a) => T -> Route -> IO (Id, Streamly.Serial a)
+subscribe' T {chan, subscribers} (Route route) = do
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName = route, AMQP.exchangeType = "fanout"}

@@ -25,7 +25,7 @@ instance ToJSON PriceTezosContractRequest
 
 start :: Config -> IO ()
 start Config {bridgeConfig} = do
-  let Just dummyTezosExchangeRate = Money.exchangeRate 1
+  dummyTezosExchangeRate <- fromJustUnsafe $ Money.exchangeRate 1
   let dummyTezosPrice = Streamly.fromList [dummyTezosExchangeRate]
   latestTezosPrice <- makeStreamVar' dummyTezosPrice dummyTezosExchangeRate
   Bridge.withForever
@@ -36,7 +36,7 @@ start Config {bridgeConfig} = do
          (Route "priceTezosContract")
          (\PriceTezosContractRequest {size, duration} -> do
             xtzUsd <- TVar.readTVarIO latestTezosPrice
-            return $ tezosContractPrice xtzUsd size duration))
+            return $ (tezosContractPrice xtzUsd size duration)))
 
 tezosContractPrice ::
      Money.ExchangeRate "XTZ" "USD"
