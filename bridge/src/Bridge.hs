@@ -160,8 +160,7 @@ _serveRPC ::
   -> Route
   -> (req -> IO res)
   -> IO ()
-_serveRPC publisher T {chan, killedVar} route handler = do
-  let Route queueName = route
+_serveRPC publisher T {chan, killedVar} (Route queueName) handler = do
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   AMQP.consumeMsgs
     chan
@@ -219,15 +218,13 @@ _callRPCTimeout ::
   -> Route
   -> req
   -> IO res
-_callRPCTimeout handler _timeout T {chan, responseQueue, waitingCalls} route req = do
-  let Route queueName = route
+_callRPCTimeout handler _timeout T {chan, responseQueue, waitingCalls} (Route queueName) req = do
   id <- fmap (Id . UUID.toText) UUID.nextRandom
-  let reqMsg = RequestMessage {id, responseQueue, req = show req}
-  let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
+  let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrowIO' waitForDone _timeout
   HashTable.insert waitingCalls id (\x -> renewTimeout >> push x)
-  _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
+  _ <- AMQP.publishMsg chan "" queueName request
   forkIO $ waitForDone >> HashTable.delete waitingCalls id
   result
 
@@ -267,8 +264,8 @@ callRPCTimeout' =
               \case
                 Result res -> readUnsafe @res res >>= streamPush . Just
                 EndOfResults -> streamPush Nothing
-            waitForDone = void (Streamly.mapM_ return results)
-        return (push, return results, waitForDone))
+            done = Streamly.mapM_ return results
+        return (push, return results, done))
 
 -- Direct RPC call with default timeout.
 callRPC :: (Show req, Read res) => T -> Route -> req -> IO res
@@ -281,8 +278,7 @@ callRPC' = callRPCTimeout' defaultTimeout
 
 -- Publish in the usual pub/sub model.
 publish :: (Show a) => T -> Route -> Streamly.Serial a -> IO ()
-publish T {chan} route as = do
-  let Route exchangeName = route
+publish T {chan} (Route exchangeName) as = do
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}

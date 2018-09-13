@@ -4,6 +4,7 @@ module VestPrelude.Money
   , module Money.Aeson
   ) where
 
+-- use: import qualified VestPrelude.Money as Money
 import Money
 import Money.Aeson ()
 import Protolude
