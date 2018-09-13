@@ -2,9 +2,10 @@ module Bridge
   ( Config(..)
   , T(..)
   , BridgeException(..)
+  , localConfig
   , defaultTimeout
   , make
-  , kill
+  , withTemp
   , serveRPC
   , serveRPC'
   , callRPC
@@ -20,7 +21,6 @@ import qualified Control.Concurrent.STM.TVar as TVar
 import qualified Control.Monad.STM as STM
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
-import qualified Data.String as String
 import qualified Data.Text as Text
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
@@ -32,8 +32,8 @@ import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
 
-defaultTimeout :: DiffTime
-defaultTimeout = secondsToDiffTime 10
+defaultTimeout :: Time Second
+defaultTimeout = sec 10
 
 data RequestMessage = RequestMessage
   { id :: Id
@@ -60,6 +60,15 @@ data Config = Config
   , password :: Text
   } deriving (Eq, Show, Read)
 
+localConfig :: Bridge.Config
+localConfig =
+  Bridge.Config
+    { hostname = "localhost"
+    , virtualHost = "/"
+    , username = "guest"
+    , password = "guest"
+    }
+
 data T = T
   { conn :: AMQP.Connection
   , chan :: AMQP.Channel
@@ -72,7 +81,6 @@ data T = T
 
 data BridgeException
   = BadCall Text
-  | DeadBridge
   | InternalBridgeException Text -- If you get one of these, file a bug report.
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
@@ -80,8 +88,8 @@ instance Exception BridgeException
 
 instance Hashable BridgeException
 
-amqpMsgToString :: AMQP.Message -> String.String
-amqpMsgToString = ByteString.Lazy.UTF8.toString . AMQP.msgBody
+amqpMsgToText :: AMQP.Message -> Text
+amqpMsgToText = Text.pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
 generateNewQueueName :: IO Text
 generateNewQueueName = do
@@ -99,15 +107,13 @@ make Config {hostname, virtualHost, username, password} = do
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   waitingCalls <- HashTable.new
   subscribedTags <- HashTable.new
-  killedVar <- TVar.newTVarIO False
   responseConsumerTag <-
     AMQP.consumeMsgs
       chan
       queueName
       AMQP.Ack
       (\(msg, env) -> do
-         let rawMsg = msg & AMQP.msgBody & ByteString.Lazy.UTF8.toString
-         case readMaybe rawMsg of
+         case readMaybe $ amqpMsgToText msg of
            Nothing -> return ()
            Just ResponseMessage {requestId, res} ->
              case res of
@@ -123,19 +129,20 @@ make Config {hostname, virtualHost, username, password} = do
       , responseConsumerTag
       , subscribedTags
       , waitingCalls
-      , killedVar
       }
 
--- Kills and cleans up bridge (idempotent).
-kill :: T -> IO ()
-kill T {conn, chan, responseQueue, responseConsumerTag, killedVar} =
-  unlessM (TVar.readTVarIO killedVar) $ do
-    STM.atomically $ TVar.writeTVar killedVar True
-    let Id _responseQueue = responseQueue
-    AMQP.cancelConsumer chan responseConsumerTag
-    _ <- AMQP.deleteQueue chan _responseQueue
-    -- Closing connection implicitly closes chan.
-    AMQP.closeConnection conn
+-- Kills and cleans up bridge.
+-- Should be unnecessary for regular use
+_kill :: T -> IO ()
+_kill T {conn, chan, responseQueue, responseConsumerTag} = do
+  let Id _responseQueue = responseQueue
+  AMQP.cancelConsumer chan responseConsumerTag
+  _ <- AMQP.deleteQueue chan _responseQueue
+  -- Closing connection implicitly closes chan.
+  AMQP.closeConnection conn
+
+withTemp :: Config -> (T -> IO ()) -> IO ()
+withTemp config = bracket (make config) _kill
 
 -- RPC server.
 _serveRPC ::
@@ -145,41 +152,36 @@ _serveRPC ::
   -> Route
   -> (req -> IO res)
   -> IO ()
-_serveRPC publisher T {chan, killedVar} route handler =
-  ifM
-    (TVar.readTVarIO killedVar)
-    (throwIO DeadBridge)
-    (do let Route queueName = route
-        AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-        AMQP.consumeMsgs
-          chan
-          queueName
-          AMQP.Ack
-          (\(msg, env) -> do
-             forkIO $ do
-               let rawReqMsg = amqpMsgToString msg
-               case readMaybe rawReqMsg of
-                 Nothing -> return ()
-                 Just RequestMessage {id = requestId, responseQueue, req} -> do
-                   let Id _responseQueue = responseQueue
-                   let doPublish res = do
-                         let msgBody =
-                               ByteString.Lazy.UTF8.fromString $
-                               show $ ResponseMessage {requestId, res}
-                         AMQP.publishMsg
-                           chan
-                           "" -- Default exchange just sends message to queue specified by routing key.
-                           _responseQueue -- Exchange routing key.
-                           AMQP.newMsg {AMQP.msgBody}
-                         return ()
-                   case readMaybe $ Text.unpack req of
-                     Nothing ->
-                       doPublish . Left . BadCall $
-                       Text.append "bad input: " req
-                     Just r -> handler r >>= publisher (doPublish . Right)
-               AMQP.ackEnv env
-             return ())
-        return ())
+_serveRPC publisher T {chan, killedVar} route handler = do
+  let Route queueName = route
+  AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
+  AMQP.consumeMsgs
+    chan
+    queueName
+    AMQP.Ack
+    (\(msg, env) -> do
+       forkIO $ do
+         case readMaybe $ amqpMsgToText msg of
+           Nothing -> return ()
+           Just RequestMessage {id = requestId, responseQueue, req} -> do
+             let Id _responseQueue = responseQueue
+             let doPublish res = do
+                   let msgBody =
+                         ByteString.Lazy.UTF8.fromString $
+                         show $ ResponseMessage {requestId, res}
+                   AMQP.publishMsg
+                     chan
+                     "" -- Default exchange just sends message to queue specified by routing key.
+                     _responseQueue -- Exchange routing key.
+                     AMQP.newMsg {AMQP.msgBody}
+                   return ()
+             case readMaybe req of
+               Nothing ->
+                 doPublish . Left . BadCall $ Text.append "bad input: " req
+               Just r -> handler r >>= publisher (doPublish . Right)
+         AMQP.ackEnv env
+       return ())
+  return ()
 
 -- Direct RPC server.
 serveRPC :: (Read req, Show res) => T -> Route -> (req -> IO res) -> IO ()
@@ -207,7 +209,7 @@ _callRPCTimeout ::
      (Show req)
   => IO (Response -> IO (), IO res, IO ())
   -- Response handler, result, done.
-  -> DiffTime
+  -> Time Second
   -> T
   -> Route
   -> req
@@ -216,25 +218,22 @@ _callRPCTimeout handler _timeout T { chan
                                    , responseQueue
                                    , waitingCalls
                                    , killedVar
-                                   } route req =
-  ifM
-    (TVar.readTVarIO killedVar)
-    (throwIO DeadBridge)
-    (do let Route queueName = route
-        id <- fmap (Id . UUID.toText) UUID.nextRandom
-        let reqMsg = RequestMessage {id, responseQueue, req = show req}
-        let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
-        (push, result, waitForDone) <- handler
-        renewTimeout <- timeoutThrowIO' waitForDone _timeout
-        HashTable.insert waitingCalls id (\x -> renewTimeout >> push x)
-        _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
-        forkIO $ waitForDone >> HashTable.delete waitingCalls id
-        result)
+                                   } route req = do
+  let Route queueName = route
+  id <- fmap (Id . UUID.toText) UUID.nextRandom
+  let reqMsg = RequestMessage {id, responseQueue, req = show req}
+  let msgBody = ByteString.Lazy.UTF8.fromString $ show reqMsg
+  (push, result, waitForDone) <- handler
+  renewTimeout <- timeoutThrowIO' waitForDone _timeout
+  HashTable.insert waitingCalls id (\x -> renewTimeout >> push x)
+  _ <- AMQP.publishMsg chan "" queueName AMQP.newMsg {AMQP.msgBody}
+  forkIO $ waitForDone >> HashTable.delete waitingCalls id
+  result
 
 -- Direct RPC call
 callRPCTimeout ::
      forall req res. (Show req, Read res)
-  => DiffTime
+  => Time Second
   -> T
   -> Route
   -> req
@@ -244,19 +243,18 @@ callRPCTimeout =
     (do resultVar <- MVar.newEmptyMVar
         let push =
               \case
-                Result res ->
-                  MVar.putMVar resultVar (read @res (Text.unpack res))
+                Result res -> readUnsafe @res res >>= MVar.putMVar resultVar
                 EndOfResults ->
                   throwIO $
                   InternalBridgeException
                     "Direct RPC should never get EndOfResults"
-        let result = MVar.readMVar resultVar
+            result = MVar.readMVar resultVar
         return (push, result, void result))
 
 -- Streaming RPC call
 callRPCTimeout' ::
      forall req res. (Show req, Read res)
-  => DiffTime
+  => Time Second
   -> T
   -> Route
   -> req
@@ -266,9 +264,9 @@ callRPCTimeout' =
     (do (streamPush, results) <- repeatableStream
         let push =
               \case
-                Result res -> streamPush (Just (read @res (Text.unpack res)))
+                Result res -> readUnsafe @res res >>= streamPush . Just
                 EndOfResults -> streamPush Nothing
-        let waitForDone = void (Streamly.mapM_ return results)
+            waitForDone = void (Streamly.mapM_ return results)
         return (push, return results, waitForDone))
 
 -- Direct RPC call with default timeout.
@@ -282,44 +280,35 @@ callRPC' = callRPCTimeout' defaultTimeout
 
 -- Publish in the usual pub/sub model.
 publish :: (Show item) => T -> Id -> item -> IO ()
-publish T {chan, killedVar} route item =
-  ifM
-    (TVar.readTVarIO killedVar)
-    (throwIO DeadBridge)
-    (do let Id _route = route
-        AMQP.declareExchange
-          chan
-          AMQP.newExchange
-            {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
-        let msgBody = ByteString.Lazy.UTF8.fromString $ show item
-        AMQP.publishMsg chan _route "" AMQP.newMsg {AMQP.msgBody} -- Queue name blank.
-        return ())
+publish T {chan, killedVar} route item = do
+  let Id _route = route
+  AMQP.declareExchange
+    chan
+    AMQP.newExchange {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
+  let msgBody = ByteString.Lazy.UTF8.fromString $ show item
+  AMQP.publishMsg chan _route "" AMQP.newMsg {AMQP.msgBody} -- Queue name blank.
+  return ()
 
 -- Returns subscriber tag and result stream as tuple (tag, stream).
 subscribe ::
      (Read item) => T -> Id -> IO (AMQP.ConsumerTag, Streamly.Serial item)
-subscribe T {chan, subscribedTags, killedVar} route =
-  ifM
-    (TVar.readTVarIO killedVar)
-    (throwIO DeadBridge)
-    (do let Id _route = route
-        AMQP.declareExchange
-          chan
-          AMQP.newExchange
-            {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
-        -- Sanity check to make sure the desired pub/sub route is actually a fanout exchange.
-        queueName <- generateNewQueueName
-        AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-        AMQP.bindQueue chan queueName _route "" -- Routing key blank.
-        (push, results) <- repeatableStream
-        consumerTag <-
-          AMQP.consumeMsgs
-            chan
-            queueName
-            AMQP.NoAck
-            (\(msg, _) ->
-               mapM_ (push . Just) (msg & amqpMsgToString & readMaybe))
-        HashTable.insert subscribedTags consumerTag (Id queueName)
-        return (consumerTag, results))
+subscribe T {chan, subscribedTags, killedVar} route = do
+  let Id _route = route
+  AMQP.declareExchange
+    chan
+    AMQP.newExchange {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
+  -- Sanity check to make sure the desired pub/sub route is actually a fanout exchange.
+  queueName <- generateNewQueueName
+  AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
+  AMQP.bindQueue chan queueName _route "" -- Routing key blank.
+  (push, results) <- repeatableStream
+  consumerTag <-
+    AMQP.consumeMsgs
+      chan
+      queueName
+      AMQP.NoAck
+      (\(msg, _) -> mapM_ (push . Just) (msg & amqpMsgToText & readMaybe))
+  HashTable.insert subscribedTags consumerTag (Id queueName)
+  return (consumerTag, results)
 -- unsubscribe :: T -> AMQP.ConsumerTag -> IO ()
 -- unsubscribe T {subscribedTags} consumerTag = do

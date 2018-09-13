@@ -14,3 +14,8 @@ extra-deps:
 - safe-money-aeson-0.1
 - streamly-0.5.0
 - timers-updatable-0.2.0.2
+
+flags:
+  o-clock:
+    aeson: true
+    hashable: true

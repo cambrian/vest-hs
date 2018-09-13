@@ -16,15 +16,16 @@ import Data.Aeson as Reexports
   , parseJSON
   , toJSON
   )
-import Data.Hashable (Hashable)
-import Data.Time.Clock as Reexports hiding (secondsToDiffTime)
+import Data.Hashable as Reexports (Hashable)
+import qualified Data.Text as Text
 import qualified Data.Vector as Vector
-import Protolude as VestPrelude
+import Protolude as VestPrelude hiding (readMaybe, threadDelay)
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import System.Timeout as Reexports (timeout)
 import qualified System.Timer.Updatable as UpdatableTimer
-import Text.Read as Reexports (read, readMaybe)
+import qualified Text.Read
+import Time.Timestamp as Reexports
+import Time.Units as Reexports
 
 -- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
@@ -55,14 +56,19 @@ newtype Port =
 
 instance Hashable Port
 
--- Timeouts are in micros.
 newtype Timeout =
-  Timeout Int64
+  Timeout (Time Second)
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
 instance Exception Timeout
 
 instance Hashable Timeout
+
+newtype ReadException =
+  ReadException Text
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Exception ReadException
 
 newtype URI =
   URI Text
@@ -70,25 +76,19 @@ newtype URI =
 
 instance Hashable URI
 
-diffTimeToMicros :: (Integral num) => DiffTime -> num
-diffTimeToMicros x = fromIntegral (diffTimeToPicoseconds x) `quot` 1000000
-
-secondsToDiffTime :: (RealFrac num) => num -> DiffTime
-secondsToDiffTime = picosecondsToDiffTime . toInteger . round . (* 1e12)
-
-timeoutThrowIO :: IO a -> DiffTime -> IO ()
+timeoutThrowIO :: IO a -> Time Second -> IO ()
 timeoutThrowIO action _timeout = do
-  let micros = diffTimeToMicros _timeout
-  timer <- UpdatableTimer.replacer (throwIO (Timeout micros) :: IO ()) micros
+  let micros = toNum @Microsecond _timeout
+  timer <- UpdatableTimer.replacer (throwIO (Timeout _timeout) :: IO ()) micros
   action >> Killable.kill timer
 
 -- Returns timeout renewer.
-timeoutThrowIO' :: IO a -> DiffTime -> IO (IO ())
+timeoutThrowIO' :: IO a -> Time Second -> IO (IO ())
 timeoutThrowIO' action _timeout = do
   outerThreadId <- myThreadId
-  let micros = diffTimeToMicros _timeout
+  let micros = toNum @Microsecond _timeout
   timer <-
-    UpdatableTimer.replacer (throwTo outerThreadId (Timeout micros)) micros
+    UpdatableTimer.replacer (throwTo outerThreadId (Timeout _timeout)) micros
   forkIO $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
 
@@ -123,3 +123,12 @@ makeStreamVar' as init = do
   var <- TVar.newTVarIO init
   forkIO $ Streamly.mapM_ (STM.atomically . TVar.writeTVar var) as
   return var
+
+readMaybe :: (Read a) => Text -> Maybe a
+readMaybe = Text.Read.readMaybe . Text.unpack
+
+readUnsafe :: (Read a) => Text -> IO a
+readUnsafe text =
+  case readMaybe text of
+    Nothing -> throwIO $ ReadException text
+    Just x -> return x

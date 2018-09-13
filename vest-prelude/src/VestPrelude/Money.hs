@@ -1,9 +1,11 @@
 module VestPrelude.Money
   ( module VestPrelude.Money
   , module Money
+  , module Money.Aeson
   ) where
 
 import Money
+import Money.Aeson ()
 import Protolude
 
 type instance Scale "XTZ" "XTZ" = '(1000000, 1)
