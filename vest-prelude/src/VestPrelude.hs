@@ -52,13 +52,17 @@ data Currency
   | BTC
   | ETH
   | XTZ
-  deriving (Eq, Ord, Show, Read, Enum, Generic, Typeable)
-
-instance Hashable Currency
-
-instance ToJSON Currency
-
-instance FromJSON Currency
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Enum
+           , Generic
+           , Typeable
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 -- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
@@ -69,7 +73,7 @@ newtype Id =
 
 newtype Port =
   Port Int
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, ToJSON, FromJSON)
 
 newtype Route =
   Route Text
@@ -81,15 +85,15 @@ newtype URI =
 
 newtype DecodeException =
   DecodeException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
 
 data NothingException =
   NothingException
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
 
 newtype ReadException =
   ReadException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
 
 newtype Timeout =
   Timeout (Time Second)
@@ -101,7 +105,7 @@ instance Exception Timeout where
 
 newtype UnsupportedCurrencyException =
   UnsupportedCurrencyException Currency
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
 
 blockForever :: IO ()
 blockForever = do
