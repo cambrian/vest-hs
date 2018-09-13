@@ -1,21 +1,21 @@
 module Bridge
   ( T(..)
   , Config(..)
-  , BridgeException(..)
   , localConfig
-  , defaultTimeout
   , with
   , withForever
   , serveRPC
   , serveRPC'
   , callRPC
   , callRPC'
+  , defaultTimeout
   , callRPCTimeout
   , callRPCTimeout'
   , publish
   , publish'
   , subscribe'
   , unsubscribe
+  , BridgeException(..)
   ) where
 
 import qualified Control.Concurrent.MVar as MVar
@@ -24,7 +24,6 @@ import qualified Data.HashTable.IO as HashTable
 import qualified Data.Text as Text
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
-import qualified Foreign.StablePtr as StablePtr
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
 import qualified Streamly
@@ -88,6 +87,12 @@ instance Exception BridgeException
 
 instance Hashable BridgeException
 
+newQueueName :: IO Text
+newQueueName = do
+  uuid <- UUID.nextRandom
+  myHostName <- Network.HostName.getHostName
+  return $ Text.pack (myHostName ++ "." ++ UUID.toString uuid)
+
 readAmqpMsg :: (Read a) => AMQP.Message -> Maybe a
 readAmqpMsg = Text.Read.readMaybe . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
@@ -95,21 +100,8 @@ toAmqpMsg :: (Show a) => a -> AMQP.Message
 toAmqpMsg x =
   AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString (show x)}
 
-newQueueName :: IO Text
-newQueueName = do
-  uuid <- UUID.nextRandom
-  myHostName <- Network.HostName.getHostName
-  return $ Text.pack (myHostName ++ "." ++ UUID.toString uuid)
-
 with :: Config -> (T -> IO ()) -> IO ()
 with config = bracket (make config) kill
-
-blockForever :: IO ()
-blockForever = do
-  _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
-                                             -- is blocked forever by creating a stable reference
-                                             -- to this thread that could conceivably be thrown to.
-  atomically retry -- Block forever.
 
 withForever :: Config -> (T -> IO ()) -> IO ()
 withForever config action =
@@ -134,7 +126,7 @@ make Config {hostname, virtualHost, username, password} = do
            Nothing -> return () -- Swallow if entire message is garbled.
            Just ResponseMessage {requestId, res} ->
              case res of
-               Left exception -> throwIO exception
+               Left exception -> throw exception
                Right r ->
                  HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
          AMQP.ackEnv env)
@@ -238,7 +230,7 @@ _callRPCTimeout handler _timeout T {chan, responseQueue, callHandlers} (Route qu
   id <- fmap (Id . UUID.toText) UUID.nextRandom
   let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
   (push, result, waitForDone) <- handler
-  renewTimeout <- timeoutThrowIO' waitForDone _timeout
+  renewTimeout <- timeoutThrow' waitForDone _timeout
   HashTable.insert callHandlers id (\x -> renewTimeout >> push x)
   _ <- AMQP.publishMsg chan "" queueName request
   async $ waitForDone >> HashTable.delete callHandlers id
@@ -259,7 +251,7 @@ callRPCTimeout =
               \case
                 Result res -> readUnsafe @res res >>= MVar.putMVar resultVar
                 EndOfResults ->
-                  throwIO $
+                  throw $
                   InternalBridgeException
                     "direct RPC should never get EndOfResults"
             result = MVar.readMVar resultVar

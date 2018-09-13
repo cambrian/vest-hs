@@ -115,16 +115,14 @@ timeoutTest' =
          Streamly.fromList xs &
          Streamly.mapM (\x -> threadDelay (sec 0.2) >> return x))
     (do results <- Bridge.callRPCTimeout' @() @Int (sec 0.1) b route ()
-            -- Have to coerce results to actually reach the timeout.
+        -- Have to coerce results to actually reach the timeout.
         resultsList <- Streamly.toList results
         print resultsList) `shouldThrow`
       (== Timeout (sec 0.1))
 
 main :: IO ()
 main =
-  hspec $
-    -- describe "bridge server library" $ killTest
-   do
+  hspec $ do
     describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
     describe "streaming RPC bridge" $
       echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>

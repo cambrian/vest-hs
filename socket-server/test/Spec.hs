@@ -4,85 +4,81 @@ import qualified Streamly.Prelude as Streamly
 import Test.Hspec
 import VestPrelude
 
-localTestConfig :: Int -> SocketServer.SocketClientConfig
--- For some sus reason, this won't connect with "localhost" as the URI.
-localTestConfig port = SocketServer.makeClientConfig "127.0.0.1" port "/"
-
-withServerOnPort :: Int -> (SocketServer.T -> IO ()) -> IO ()
-withServerOnPort port = bracket (SocketServer.make port 30) SocketServer.kill_
+clientConfig :: SocketServer.SocketClientConfig
+clientConfig = SocketServer.localClientConfig
 
 echoTest :: Spec
 echoTest = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running simple echo RPC" $ do
       it "returns the original output" $ \s -> do
-        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        let route = Route "echo"
+            xs = [1, 2, 3]
         SocketServer.serveRPC s route (\() -> return xs)
-        result <-
-          SocketServer.callRPC @() @[Int] (localTestConfig 3000) route ()
+        result <- SocketServer.callRPC @() @[Int] clientConfig route ()
         result `shouldBe` xs
 
 echoTest' :: Spec
 echoTest' = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running simple echo RPC" $ do
       it "returns the original output" $ \s -> do
-        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        let route = Route "echo"
+            xs = [1, 2, 3]
         SocketServer.serveRPC' s route (\() -> return $ Streamly.fromList xs)
-        results <-
-          SocketServer.callRPC' @() @Int (localTestConfig 3000) route ()
+        results <- SocketServer.callRPC' @() @Int clientConfig route ()
         Streamly.toList results `shouldReturn` xs
 
 multipleFnTest :: Spec
 multipleFnTest = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running multiple echo RPCs" $ do
       it "returns the original output for both" $ \s -> do
-        let (route, xs) = (Route "echoInts", [1, 2, 3] :: [Int])
-        let (routeCh, chars) = (Route "echoChars", ['a', 'b', 'c'])
+        let route = Route "echoInts"
+            routeCh = Route "echoChars"
+            xs = [1, 2, 3]
+            chars = ['a', 'b', 'c']
         SocketServer.serveRPC s route (\() -> return xs)
         SocketServer.serveRPC s routeCh (\() -> return chars)
-        result <-
-          SocketServer.callRPC @() @[Int] (localTestConfig 3000) route ()
-        resultCh <-
-          SocketServer.callRPC @() @[Char] (localTestConfig 3000) routeCh ()
+        result <- SocketServer.callRPC @() @[Int] clientConfig route ()
+        resultCh <- SocketServer.callRPC @() @[Char] clientConfig routeCh ()
         result `shouldBe` xs
         resultCh `shouldBe` chars
 
 multipleFnTest' :: Spec
 multipleFnTest' = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running multiple echo RPCs" $ do
       it "returns the original output for both" $ \s -> do
-        let (route, xs) = (Route "echoInts", [1, 2, 3] :: [Int])
-        let (routeCh, chars) = (Route "echoChars", ['a', 'b', 'c'])
+        let route = Route "echoInts"
+            routeCh = Route "echoChars"
+            xs = [1, 2, 3]
+            chars = ['a', 'b', 'c']
         SocketServer.serveRPC' s route (\() -> return $ Streamly.fromList xs)
         SocketServer.serveRPC'
           s
           routeCh
           (\() -> return $ Streamly.fromList chars)
-        results <-
-          SocketServer.callRPC' @() @Int (localTestConfig 3000) route ()
-        resultsCh <-
-          SocketServer.callRPC' @() @Char (localTestConfig 3000) routeCh ()
+        results <- SocketServer.callRPC' @() @Int clientConfig route ()
+        resultsCh <- SocketServer.callRPC' @() @Char clientConfig routeCh ()
         Streamly.toList results `shouldReturn` xs
         Streamly.toList resultsCh `shouldReturn` chars
 
 multipleConsumeTest' :: Spec
 multipleConsumeTest' = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running echo with multiple stream consumers" $ do
       it "returns the original output for both" $ \s -> do
-        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        let route = Route "echo"
+            xs = [1, 2, 3]
         SocketServer.serveRPC' s route (\() -> return $ Streamly.fromList xs)
-        results <-
-          SocketServer.callRPC' @() @Int (localTestConfig 3000) route ()
+        results <- SocketServer.callRPC' @() @Int clientConfig route ()
         Streamly.toList results `shouldReturn` xs
         Streamly.toList results `shouldReturn` xs
 
 concurrentTest' :: Spec
 concurrentTest' = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running RPCs with concurrent callers" $ do
       it "returns the correct output for both" $ \s -> do
         let route = Route "concurrent"
@@ -91,11 +87,10 @@ concurrentTest' = do
           route
           (\(x :: Int) ->
              return $
-             Streamly.repeatM (threadDelay 100000 >> return x) & Streamly.take 3)
-        results1 <-
-          SocketServer.callRPC' @Int @Int (localTestConfig 3000) route 1
-        results2 <-
-          SocketServer.callRPC' @Int @Int (localTestConfig 3000) route 2
+             Streamly.repeatM (threadDelay (sec 0.1) >> return x) &
+             Streamly.take 3)
+        results1 <- SocketServer.callRPC' @Int @Int clientConfig route 1
+        results2 <- SocketServer.callRPC' @Int @Int clientConfig route 2
         resultList1 <- Streamly.toList results1
         resultList2 <- Streamly.toList results2
         resultList1 `shouldSatisfy` Data.List.all (\x -> x == 1)
@@ -103,45 +98,44 @@ concurrentTest' = do
 
 timeoutTest :: Spec
 timeoutTest = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running RPCs that take too long" $ do
       it "forces callers to time out" $ \s -> do
-        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
-        SocketServer.serveRPC s route (\() -> threadDelay 3000000 >> return xs)
-        (SocketServer.callRPCTimeout
-           @()
-           @[Int]
-           (secondsToDiffTime 1)
-           (localTestConfig 3000)
-           route
-           ()) `shouldThrow`
-          (== Timeout 1000000)
+        let route = Route "echo"
+            xs = [1, 2, 3] :: [Int]
+        SocketServer.serveRPC
+          s
+          route
+          (\() -> threadDelay (sec 0.2) >> return xs)
+        (SocketServer.callRPCTimeout @() @[Int] (sec 0.1) clientConfig route ()) `shouldThrow`
+          (== Timeout (sec 0.1))
 
 timeoutTest' :: Spec
 timeoutTest' = do
-  around (withServerOnPort 3000) $ do
+  around (SocketServer.with SocketServer.localConfig) $ do
     context "when running RPCs that take too long" $ do
       it "forces callers to time out" $ \s -> do
-        let (route, xs) = (Route "echo", [1, 2, 3] :: [Int])
+        let route = Route "echo"
+            xs = [1, 2, 3] :: [Int]
         SocketServer.serveRPC'
           s
           route
           (\() ->
              return $
              Streamly.fromList xs &
-             Streamly.mapM (\x -> threadDelay (500000 * x) >> return x))
+             Streamly.mapM (\x -> threadDelay (sec 0.2) >> return x))
         (do results <-
               SocketServer.callRPCTimeout'
                 @()
                 @Int
-                (secondsToDiffTime 1)
-                (localTestConfig 3000)
+                (sec 0.1)
+                clientConfig
                 route
                 ()
             -- Have to coerce results to actually reach the timeout.
             resultsList <- Streamly.toList results
             print resultsList) `shouldThrow`
-          (== Timeout 1000000)
+          (== Timeout (sec 0.1))
 
 main :: IO ()
 main = do

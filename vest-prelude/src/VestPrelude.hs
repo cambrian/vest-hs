@@ -6,6 +6,7 @@ module VestPrelude
 import Control.Concurrent.Async
 import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
+import Control.Concurrent.MVar as REexports
 import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
@@ -13,6 +14,7 @@ import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
 import Data.Hashable as Reexports (Hashable)
 import qualified Data.Text as Text
 import qualified Data.Vector as Vector
+import qualified Foreign.StablePtr as StablePtr
 import Protolude as VestPrelude hiding
   ( Exception
   , bracket
@@ -71,6 +73,12 @@ instance FromJSON Id
 
 instance ToJSON Id
 
+newtype Port =
+  Port Int
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Hashable Port
+
 newtype Route =
   Route Text
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
@@ -81,11 +89,29 @@ instance FromJSON Route
 
 instance ToJSON Route
 
-newtype Port =
-  Port Int
+newtype URI =
+  URI Text
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
-instance Hashable Port
+instance Hashable URI
+
+newtype DecodeException =
+  DecodeException Text
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Exception DecodeException
+
+data NothingException =
+  NothingException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Exception NothingException
+
+newtype ReadException =
+  ReadException Text
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+
+instance Exception ReadException
 
 newtype Timeout =
   Timeout (Time Second)
@@ -97,18 +123,6 @@ instance Exception Timeout where
 
 instance Hashable Timeout
 
-newtype ReadException =
-  ReadException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception ReadException
-
-data NothingException =
-  NothingException
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception NothingException
-
 newtype UnsupportedCurrencyException =
   UnsupportedCurrencyException Currency
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
@@ -119,7 +133,12 @@ newtype URI =
   URI Text
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
-instance Hashable URI
+blockForever :: IO ()
+blockForever = do
+  _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
+                                             -- is blocked forever by creating a stable reference
+                                             -- to this thread that could conceivably be thrown to.
+  atomically retry -- Block forever.
 
 (+++) :: Text -> Text -> Text
 (+++) = Text.append
@@ -169,15 +188,15 @@ repeatableStream = do
           0
   return (push . Just, push Nothing, stream)
 
-timeoutThrowIO :: IO a -> Time Second -> IO ()
-timeoutThrowIO action _timeout = do
+timeoutThrow :: IO a -> Time Second -> IO ()
+timeoutThrow action _timeout = do
   let micros = toNum @Microsecond _timeout
-  timer <- UpdatableTimer.replacer (throwIO (Timeout _timeout) :: IO ()) micros
+  timer <- UpdatableTimer.replacer (throw (Timeout _timeout) :: IO ()) micros
   action >> Killable.kill timer
 
 -- Returns timeout renewer.
-timeoutThrowIO' :: IO a -> Time Second -> IO (IO ())
-timeoutThrowIO' action _timeout = do
+timeoutThrow' :: IO a -> Time Second -> IO (IO ())
+timeoutThrow' action _timeout = do
   outerThreadId <- myThreadId
   let micros = toNum @Microsecond _timeout
   timer <-
