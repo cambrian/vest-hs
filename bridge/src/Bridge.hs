@@ -5,7 +5,8 @@ module Bridge
   , localConfig
   , defaultTimeout
   , make
-  , withTemp
+  , with
+  , withForever
   , serveRPC
   , serveRPC'
   , callRPC
@@ -91,8 +92,8 @@ instance Hashable BridgeException
 amqpMsgToText :: AMQP.Message -> Text
 amqpMsgToText = Text.pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
-generateNewQueueName :: IO Text
-generateNewQueueName = do
+newQueueName :: IO Text
+newQueueName = do
   uuid <- UUID.nextRandom
   myHostName <- Network.HostName.getHostName
   return $ Text.pack (myHostName ++ "." ++ UUID.toString uuid)
@@ -103,7 +104,7 @@ make Config {hostname, virtualHost, username, password} = do
   conn <-
     AMQP.openConnection (Text.unpack hostname) virtualHost username password
   chan <- AMQP.openChannel conn
-  queueName <- generateNewQueueName
+  queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   waitingCalls <- HashTable.new
   subscribedTags <- HashTable.new
@@ -141,8 +142,11 @@ _kill T {conn, chan, responseQueue, responseConsumerTag} = do
   -- Closing connection implicitly closes chan.
   AMQP.closeConnection conn
 
-withTemp :: Config -> (T -> IO ()) -> IO ()
-withTemp config = bracket (make config) _kill
+with :: Config -> (T -> IO ()) -> IO ()
+with config = bracket (make config) _kill
+
+withForever :: Config -> (T -> IO ()) -> IO ()
+withForever config = bracket (make config) _kill
 
 -- RPC server.
 _serveRPC ::
@@ -214,11 +218,7 @@ _callRPCTimeout ::
   -> Route
   -> req
   -> IO res
-_callRPCTimeout handler _timeout T { chan
-                                   , responseQueue
-                                   , waitingCalls
-                                   , killedVar
-                                   } route req = do
+_callRPCTimeout handler _timeout T {chan, responseQueue, waitingCalls} route req = do
   let Route queueName = route
   id <- fmap (Id . UUID.toText) UUID.nextRandom
   let reqMsg = RequestMessage {id, responseQueue, req = show req}
@@ -280,7 +280,7 @@ callRPC' = callRPCTimeout' defaultTimeout
 
 -- Publish in the usual pub/sub model.
 publish :: (Show item) => T -> Id -> item -> IO ()
-publish T {chan, killedVar} route item = do
+publish T {chan} route item = do
   let Id _route = route
   AMQP.declareExchange
     chan
@@ -292,13 +292,13 @@ publish T {chan, killedVar} route item = do
 -- Returns subscriber tag and result stream as tuple (tag, stream).
 subscribe ::
      (Read item) => T -> Id -> IO (AMQP.ConsumerTag, Streamly.Serial item)
-subscribe T {chan, subscribedTags, killedVar} route = do
+subscribe T {chan, subscribedTags} route = do
   let Id _route = route
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName = _route, AMQP.exchangeType = "fanout"}
   -- Sanity check to make sure the desired pub/sub route is actually a fanout exchange.
-  queueName <- generateNewQueueName
+  queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   AMQP.bindQueue chan queueName _route "" -- Routing key blank.
   (push, results) <- repeatableStream

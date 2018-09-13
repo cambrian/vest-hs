@@ -7,7 +7,7 @@ import VestPrelude
 
 echoTest :: Spec
 echoTest = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running simple echo RPC" $ do
       it "returns the original output" $ \b -> do
         let route = Route "echo"
@@ -18,7 +18,7 @@ echoTest = do
 
 echoTest' :: Spec
 echoTest' = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running simple echo RPC" $ do
       it "returns the original output" $ \b -> do
         let route = Route "echo"
@@ -29,7 +29,7 @@ echoTest' = do
 
 multipleFnTest :: Spec
 multipleFnTest = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running multiple echo RPCs" $ do
       it "returns the original output for both" $ \b -> do
         let route = Route "echoInts"
@@ -45,7 +45,7 @@ multipleFnTest = do
 
 multipleFnTest' :: Spec
 multipleFnTest' = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running multiple echo RPCs" $ do
       it "returns the original output for both" $ \b -> do
         let route = Route "echoInts"
@@ -61,7 +61,7 @@ multipleFnTest' = do
 
 multipleConsumeTest' :: Spec
 multipleConsumeTest' = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running echo with multiple stream consumers" $ do
       it "returns the original output for both" $ \b -> do
         let route = Route "echo"
@@ -73,7 +73,7 @@ multipleConsumeTest' = do
 
 concurrentTest' :: Spec
 concurrentTest' = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running RPCs with concurrent callers" $ do
       it "returns the correct output for both" $ \b -> do
         let route = Route "concurrent"
@@ -93,7 +93,7 @@ concurrentTest' = do
 
 timeoutTest :: Spec
 timeoutTest = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running RPCs that take too long" $ do
       it "forces callers to time out" $ \b -> do
         let route = Route "echo"
@@ -104,7 +104,7 @@ timeoutTest = do
 
 timeoutTest' :: Spec
 timeoutTest' = do
-  around (Bridge.withTemp Bridge.localConfig) $ do
+  around (Bridge.with Bridge.localConfig) $ do
     context "when running RPCs that take too long" $ do
       it "forces callers to time out" $ \b -> do
         let route = Route "echo"
