@@ -129,10 +129,6 @@ newtype UnsupportedCurrencyException =
 
 instance Exception UnsupportedCurrencyException
 
-newtype URI =
-  URI Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
 blockForever :: IO ()
 blockForever = do
   _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread

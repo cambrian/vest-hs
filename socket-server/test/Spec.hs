@@ -102,7 +102,7 @@ timeoutTest = do
     context "when running RPCs that take too long" $ do
       it "forces callers to time out" $ \s -> do
         let route = Route "echo"
-            xs = [1, 2, 3] :: [Int]
+            xs = [1, 2, 3] :: [Int] -- Annotation to shut up GHC.
         SocketServer.serveRPC
           s
           route

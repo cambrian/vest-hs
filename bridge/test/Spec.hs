@@ -95,7 +95,7 @@ timeoutTest =
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \b -> do
     let route = Route "echo"
-        xs = [1, 2, 3]
+        xs = [1, 2, 3] :: [Int] -- Annotation to shut up GHC.
     Bridge.serveRPC b route (\() -> threadDelay (sec 0.2) >> return xs)
     Bridge.callRPCTimeout @() @[Int] (sec 0.1) b route () `shouldThrow`
       (== Timeout (sec 0.1))
@@ -106,7 +106,7 @@ timeoutTest' =
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \b -> do
     let route = Route "echo"
-        xs = [1, 2, 3]
+        xs = [1, 2, 3] :: [Int]
     Bridge.serveRPC'
       b
       route
