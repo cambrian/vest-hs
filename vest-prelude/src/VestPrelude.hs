@@ -20,12 +20,15 @@ import Protolude as VestPrelude hiding
   , bracket_
   , catch
   , catchAny
+  , catchAsync
   , catchJust
   , catches
   , finally
   , handle
   , handleAny
+  , handleAsync
   , handleJust
+  , impureThrow
   , impureThrow
   , mask
   , mask_
@@ -36,8 +39,10 @@ import Protolude as VestPrelude hiding
   , throwIO
   , throwM
   , throwTo
+  , throwTo
   , try
   , tryAny
+  , tryAsync
   , tryIO
   , tryJust
   , uninterruptibleMask
@@ -84,7 +89,9 @@ newtype Timeout =
   Timeout (Time Second)
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
-instance Exception Timeout
+instance Exception Timeout where
+  fromException = asyncExceptionFromException
+  toException = asyncExceptionToException
 
 instance Hashable Timeout
 
