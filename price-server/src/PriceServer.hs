@@ -16,20 +16,17 @@ data PriceContractRequest = PriceContractRequest
   { currency :: Currency
   , size :: Rational
   , duration :: Time Day
-  } deriving (Eq, Show, Read, Generic)
-
-instance FromJSON PriceContractRequest
-
-instance ToJSON PriceContractRequest
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 start :: Config -> IO ()
 start Config {bridgeConfig} = do
   dummyTezosExchangeRate <- fromJustUnsafe $ Money.exchangeRate 1
-  let dummyTezosPrice = Streamly.fromList [dummyTezosExchangeRate]
-  latestTezosPrice <- makeStreamVar' dummyTezosPrice dummyTezosExchangeRate
   Bridge.withForever
     bridgeConfig
-    (\bridge ->
+    (\bridge -> do
+       latestTezosPrice <-
+         Bridge.subscribe' bridge (Route "tezosPrice") >>=
+         (makeStreamVar' dummyTezosExchangeRate . snd)
        Bridge.serveRPC
          bridge
          (Route "priceContract")

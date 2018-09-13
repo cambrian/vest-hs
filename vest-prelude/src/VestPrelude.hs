@@ -65,69 +65,43 @@ instance FromJSON Currency
 -- let Id text = (Id "x") -> text == "x"
 newtype Id =
   Id Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Hashable Id
-
-instance FromJSON Id
-
-instance ToJSON Id
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Port =
   Port Int
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Hashable Port
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable)
 
 newtype Route =
   Route Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Hashable Route
-
-instance FromJSON Route
-
-instance ToJSON Route
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, ToJSON, FromJSON)
 
 newtype URI =
   URI Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Hashable URI
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, ToJSON, FromJSON)
 
 newtype DecodeException =
   DecodeException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception DecodeException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
 
 data NothingException =
   NothingException
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception NothingException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
 
 newtype ReadException =
   ReadException Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception ReadException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
 
 newtype Timeout =
   Timeout (Time Second)
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable)
 
 instance Exception Timeout where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
 
-instance Hashable Timeout
-
 newtype UnsupportedCurrencyException =
   UnsupportedCurrencyException Currency
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception UnsupportedCurrencyException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception)
 
 blockForever :: IO ()
 blockForever = do
@@ -153,8 +127,8 @@ makeStreamVar as = do
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar has an explicit initial value.
-makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar a)
-makeStreamVar' as init = do
+makeStreamVar' :: a -> Streamly.Serial a -> IO (TVar a)
+makeStreamVar' init as = do
   var <- newTVarIO init
   async $ Streamly.mapM_ (atomically . writeTVar var) as
   return var

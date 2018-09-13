@@ -81,11 +81,7 @@ data T = T
 data BridgeException
   = BadCall Text
   | InternalBridgeException Text -- If you get one of these, file a bug report.
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Exception BridgeException
-
-instance Hashable BridgeException
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Exception, Hashable)
 
 newQueueName :: IO Text
 newQueueName = do
