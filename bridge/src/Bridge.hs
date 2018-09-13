@@ -340,3 +340,4 @@ unsubscribe T {chan, subscribers} subscriberId = do
       AMQP.cancelConsumer chan consumerTag
       AMQP.deleteQueue chan queueName
       close
+  HashTable.delete subscribers subscriberId
