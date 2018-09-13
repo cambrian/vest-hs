@@ -13,10 +13,14 @@ data Config = Config
   } deriving (Eq, Show, Read, Generic)
 
 data PriceContractRequest = PriceContractRequest
-  { currency :: Currency
+  { currency :: ContractCurrency
   , size :: Rational
   , duration :: Time Day
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
+data ContractCurrency =
+  Xtz
+  deriving (Eq, Ord, Show, Read, Enum, Generic, Hashable, ToJSON, FromJSON)
 
 start :: Config -> IO ()
 start Config {bridgeConfig} = do
@@ -32,11 +36,10 @@ start Config {bridgeConfig} = do
          (Route "priceContract")
          (\PriceContractRequest {currency, size, duration} ->
             case currency of
-              XTZ -> do
+              Xtz -> do
                 xtzUsd <- readTVarIO latestTezosPrice
                 let tezos = Money.dense' size
-                return $ Right $ tezosContractPrice xtzUsd tezos duration
-              x -> return $ Left $ UnsupportedCurrencyException x))
+                return $ tezosContractPrice xtzUsd tezos duration))
 
 tezosContractPrice ::
      Money.ExchangeRate "XTZ" "USD"

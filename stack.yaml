@@ -2,13 +2,14 @@ resolver: lts-12.9
 
 packages:
 - bridge
-- core
+# - core
 - price-server
 - socket-server
 - vest-prelude
 
 extra-deps:
 - aeson-1.4.0.0
+- beam-postgres-0.3.2.2
 - network-2.7.0.2
 - safe-money-0.7
 - safe-money-aeson-0.1

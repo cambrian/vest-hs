@@ -47,23 +47,6 @@ import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
 
-data Currency
-  = USD
-  | BTC
-  | ETH
-  | XTZ
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Enum
-           , Generic
-           , Typeable
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
-
 -- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
@@ -132,20 +115,6 @@ newtype Timeout =
 instance Exception Timeout where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
-
-newtype UnsupportedCurrencyException =
-  UnsupportedCurrencyException Currency
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Typeable
-           , Generic
-           , Exception
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
 
 blockForever :: IO ()
 blockForever = do
