@@ -116,21 +116,21 @@ timeoutThrowIO' action _timeout = do
   forkIO $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
 
-repeatableStream :: IO (Maybe a -> IO (), Streamly.Serial a)
+-- Returns (push, close, stream).
+-- Push does nothing after close is bound.
+repeatableStream :: IO (a -> IO (), IO (), Streamly.Serial a)
 repeatableStream = do
   resultsVar <- TVar.newTVarIO Vector.empty
   let push a = STM.atomically $ TVar.modifyTVar resultsVar (`Vector.snoc` a)
-  let stream =
+      stream =
         Streamly.unfoldrM
           (\idx ->
              STM.atomically $ do
                results <- TVar.readTVar resultsVar
                unless (idx < Vector.length results) STM.retry
-               case Vector.unsafeIndex results idx of
-                 Nothing -> return Nothing
-                 Just x -> return $ Just (x, idx + 1))
+               return $ fmap (, idx + 1) (Vector.unsafeIndex results idx))
           0
-  return (push, stream)
+  return (push . Just, push Nothing, stream)
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar is Nothing until the first value is received.
