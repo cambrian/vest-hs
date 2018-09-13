@@ -4,7 +4,7 @@ packages:
 - bridge
 - core
 - price-server
-# - socket-server
+- socket-server
 - vest-prelude
 
 extra-deps:

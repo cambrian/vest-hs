@@ -6,7 +6,7 @@ module SocketServer
   , serveRPC'
   , SocketServerException(..)
   , SocketClientConfig(..) -- Purely for testing purposes.
-  , makeClientConfig -- Purely for testing purposes.
+  , localClientConfig -- Purely for testing purposes.
   , callRPC -- Purely for testing purposes.
   , callRPC' -- Purely for testing purposes.
   , callRPCTimeout -- Purely for testing purposes.
@@ -34,9 +34,6 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
-
-defaultTimeout :: DiffTime
-defaultTimeout = (secondsToDiffTime 10)
 
 data RequestMessage = RequestMessage
   { id :: Id
@@ -69,17 +66,21 @@ instance FromJSON ResponseMessage
 
 instance ToJSON ResponseMessage
 
-data T = T
-  { threadId :: ThreadId
-  , clients :: HashTable Id WS.Connection
-  , directHandlers :: HashTable Route (Text -> IO Response)
-  , streamingHandlers :: HashTable Route (Text -> IO (Streamly.Serial Response))
-  }
-
 data SocketClientConfig = SocketClientConfig
   { uri :: URI
   , port :: Port
   , path :: Route
+  }
+
+localClientConfig :: SocketClientConfig
+localClientConfig =
+  SocketClientConfig {uri = URI "127.0.0.1", port = Port 3000, path = Route "/"}
+
+data T = T
+  { serverThread :: Async ()
+  , clients :: HashTable Id WS.Connection
+  , directHandlers :: HashTable Route (Text -> IO Response)
+  , streamingHandlers :: HashTable Route (Text -> IO (Streamly.Serial Response))
   }
 
 data SocketServerException
@@ -100,8 +101,8 @@ make port pingInterval = do
   streamingHandlers <- HashTable.new
   socketServerVar <- MVar.newEmptyMVar
   -- Warp runs forever on its own thread.
-  threadId <-
-    forkIO $ do
+  serverThread <-
+    async $ do
       socketServer <- MVar.readMVar socketServerVar
       -- Wait for thread ID to be added to server state.
       Warp.run port $
@@ -109,14 +110,15 @@ make port pingInterval = do
           WS.defaultConnectionOptions
           (wsApp socketServer pingInterval)
           httpApp
-  let socketServer = T {threadId, clients, directHandlers, streamingHandlers}
+  let socketServer =
+        T {serverThread, clients, directHandlers, streamingHandlers}
   MVar.putMVar socketServerVar socketServer
   -- Wait for init to avoid race conditions.
   threadDelay 100000 -- TODO: Make less jank.
   return socketServer
 
-kill_ :: T -> IO ()
-kill_ T {threadId} = killThread threadId
+kill :: T -> IO ()
+kill T {serverThread} = killThread threadId
 
 httpApp :: Wai.Application
 httpApp _ respond =
@@ -223,18 +225,10 @@ serveRPC' T {directHandlers, streamingHandlers} route handler = do
     Nothing -> HashTable.insert streamingHandlers route serialTextHandler
     Just _ -> throwIO $ HandlerAlreadyExists _route
 
--- Creates config for a socket client.
-makeClientConfig :: Text -> Int -> Text -> SocketClientConfig
-makeClientConfig _uri _port _path =
-  let uri = URI _uri
-      port = Port _port
-      path = Route _path
-   in SocketClientConfig {uri, port, path}
-
 _callRPCTimeout ::
      forall req res. (ToJSON req)
   => IO (Response -> IO (), IO res, IO ())
-  -> DiffTime
+  -> Time Second
   -> SocketClientConfig
   -> Route
   -> req
@@ -275,7 +269,7 @@ _callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req 
 
 callRPCTimeout ::
      forall req res. (ToJSON req, FromJSON res)
-  => DiffTime
+  => Time Second
   -> SocketClientConfig
   -> Route
   -> req
@@ -299,7 +293,7 @@ callRPCTimeout =
 
 callRPCTimeout' ::
      forall req res. (ToJSON req, FromJSON res)
-  => DiffTime
+  => Time Second
   -> SocketClientConfig
   -> Route
   -> req
@@ -323,6 +317,9 @@ callRPCTimeout' =
                 Just maybeResult -> streamPush maybeResult
         let waitForDone = Streamly.mapM_ return results
         return (push, return results, waitForDone))
+
+defaultTimeout :: Time Second
+defaultTimeout = sec 10
 
 -- Direct RPC call with default timeout.
 callRPC ::

@@ -12,6 +12,7 @@ description:         See README.md.
 
 dependencies:
 - aeson            >= 1.4  && < 2
+- async            >= 2.2  && < 3
 - base             >= 4.10 && < 5
 - hashable         >= 1.2  && < 2
 - o-clock          >= 1.0  && < 2

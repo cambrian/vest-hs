@@ -59,9 +59,9 @@ data Config = Config
   , password :: Text
   } deriving (Eq, Show, Read)
 
-localConfig :: Bridge.Config
+localConfig :: Config
 localConfig =
-  Bridge.Config
+  Config
     { hostname = "localhost"
     , virtualHost = "/"
     , username = "guest"
@@ -106,7 +106,9 @@ with config = bracket (make config) kill
 
 blockForever :: IO ()
 blockForever = do
-  _ <- myThreadId >>= StablePtr.newStablePtr -- Prevent garbage collection of this thread.
+  _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
+                                             -- is blocked forever by creating a stable reference
+                                             -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
 
 withForever :: Config -> (T -> IO ()) -> IO ()
@@ -182,7 +184,7 @@ _serveRPC publisher T {chan} (Route queueName) handler = do
     queueName
     AMQP.Ack
     (\(msg, env) -> do
-       forkIO $ do
+       async $ do
          case readAmqpMsg msg of
            Nothing -> return ()
            Just RequestMessage {id = requestId, responseQueue, req} -> do
@@ -239,7 +241,7 @@ _callRPCTimeout handler _timeout T {chan, responseQueue, callHandlers} (Route qu
   renewTimeout <- timeoutThrowIO' waitForDone _timeout
   HashTable.insert callHandlers id (\x -> renewTimeout >> push x)
   _ <- AMQP.publishMsg chan "" queueName request
-  forkIO $ waitForDone >> HashTable.delete callHandlers id
+  async $ waitForDone >> HashTable.delete callHandlers id
   result
 
 -- Direct RPC call
@@ -259,7 +261,7 @@ callRPCTimeout =
                 EndOfResults ->
                   throwIO $
                   InternalBridgeException
-                    "Direct RPC should never get EndOfResults"
+                    "direct RPC should never get EndOfResults"
             result = MVar.readMVar resultVar
         return (push, result, void result))
 
@@ -311,12 +313,11 @@ publish' T {chan} route as = do
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
   Streamly.mapM_ (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as
 
+-- Subscribe (non streaming version) is deliberately unimplemented, because RabbitMQ does not
+-- support message history. Candidate solutions are building a separate pub/sub system on Kafka (or
+-- similar), or adding Cassandra to RabbitMQ. For now, you can use makeStreamVar in conjunction
+-- with subscribe' to get one-off values from a published topic.
 -- Returns subscriber ID and result stream as tuple (ID, stream).
--- Subscribe (non streaming version) is deliberately unimplemented, because rabbitMQ
--- does not support message history. Candidate solutions are building a separate
--- pub/sub system on Kafka (or similar), or adding Cassandra to RabbitMQ.
--- For now, you can use makeStreamVar in conjunction with subscribe'
--- to get one-off values from a published topic
 subscribe' :: (Read a) => T -> Route -> IO (Id, Streamly.Serial a)
 subscribe' T {chan, subscribers} (Route route) = do
   AMQP.declareExchange

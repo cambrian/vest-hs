@@ -3,6 +3,8 @@ module VestPrelude
   , module Reexports
   ) where
 
+import Control.Concurrent.Async
+import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
 import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
@@ -20,6 +22,7 @@ import Protolude as VestPrelude hiding
   , catchJust
   , catches
   , finally
+  , forkIO
   , handle
   , handleJust
   , mask
@@ -41,6 +44,19 @@ import qualified System.Timer.Updatable as UpdatableTimer
 import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
+
+data Currency
+  = USD
+  | BTC
+  | ETH
+  | XTZ
+  deriving (Eq, Ord, Show, Read, Enum, Generic, Typeable)
+
+instance Hashable Currency
+
+instance ToJSON Currency
+
+instance FromJSON Currency
 
 -- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
@@ -93,46 +109,49 @@ data NothingException =
 
 instance Exception NothingException
 
-newtype URI =
-  URI Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic)
-
-instance Hashable URI
-
-data Currency
-  = USD
-  | BTC
-  | ETH
-  | XTZ
-  deriving (Eq, Ord, Show, Read, Enum, Generic, Typeable)
-
-instance Hashable Currency
-
-instance ToJSON Currency
-
-instance FromJSON Currency
-
 newtype UnsupportedCurrencyException =
   UnsupportedCurrencyException Currency
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
 instance Exception UnsupportedCurrencyException
 
-timeoutThrowIO :: IO a -> Time Second -> IO ()
-timeoutThrowIO action _timeout = do
-  let micros = toNum @Microsecond _timeout
-  timer <- UpdatableTimer.replacer (throwIO (Timeout _timeout) :: IO ()) micros
-  action >> Killable.kill timer
+newtype URI =
+  URI Text
+  deriving (Eq, Ord, Show, Read, Typeable, Generic)
 
--- Returns timeout renewer.
-timeoutThrowIO' :: IO a -> Time Second -> IO (IO ())
-timeoutThrowIO' action _timeout = do
-  outerThreadId <- myThreadId
-  let micros = toNum @Microsecond _timeout
-  timer <-
-    UpdatableTimer.replacer (throwTo outerThreadId (Timeout _timeout)) micros
-  forkIO $ action >> Killable.kill timer
-  return (UpdatableTimer.renewIO timer micros)
+instance Hashable URI
+
+(+++) :: Text -> Text -> Text
+(+++) = Text.append
+
+fromJustUnsafe :: Maybe a -> IO a
+fromJustUnsafe Nothing = throwIO NothingException
+fromJustUnsafe (Just a) = return a
+
+-- Creates a TVar that is updated with the latest value from as.
+-- The TVar is Nothing until the first value is received.
+makeStreamVar :: Streamly.Serial a -> IO (TVar (Maybe a))
+makeStreamVar as = do
+  var <- newTVarIO Nothing
+  async $ Streamly.mapM_ (atomically . writeTVar var . Just) as
+  return var
+
+-- Creates a TVar that is updated with the latest value from as.
+-- The TVar has an explicit initial value.
+makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar a)
+makeStreamVar' as init = do
+  var <- newTVarIO init
+  async $ Streamly.mapM_ (atomically . writeTVar var) as
+  return var
+
+readMaybe :: (Read a) => Text -> Maybe a
+readMaybe = Text.Read.readMaybe . Text.unpack
+
+readUnsafe :: (Read a) => Text -> IO a
+readUnsafe text =
+  case readMaybe text of
+    Nothing -> throwIO $ ReadException text
+    Just x -> return x
 
 -- Returns (push, close, stream).
 -- Push does nothing after close is bound.
@@ -150,34 +169,18 @@ repeatableStream = do
           0
   return (push . Just, push Nothing, stream)
 
--- Creates a TVar that is updated with the latest value from as.
--- The TVar is Nothing until the first value is received.
-makeStreamVar :: Streamly.Serial a -> IO (TVar (Maybe a))
-makeStreamVar as = do
-  var <- newTVarIO Nothing
-  forkIO $ Streamly.mapM_ (atomically . writeTVar var . Just) as
-  return var
+timeoutThrowIO :: IO a -> Time Second -> IO ()
+timeoutThrowIO action _timeout = do
+  let micros = toNum @Microsecond _timeout
+  timer <- UpdatableTimer.replacer (throwIO (Timeout _timeout) :: IO ()) micros
+  action >> Killable.kill timer
 
--- Creates a TVar that is updated with the latest value from as.
--- The TVar has an explicit initial value.
-makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar a)
-makeStreamVar' as init = do
-  var <- newTVarIO init
-  forkIO $ Streamly.mapM_ (atomically . writeTVar var) as
-  return var
-
-readMaybe :: (Read a) => Text -> Maybe a
-readMaybe = Text.Read.readMaybe . Text.unpack
-
-readUnsafe :: (Read a) => Text -> IO a
-readUnsafe text =
-  case readMaybe text of
-    Nothing -> throwIO $ ReadException text
-    Just x -> return x
-
-fromJustUnsafe :: Maybe a -> IO a
-fromJustUnsafe Nothing = throwIO NothingException
-fromJustUnsafe (Just a) = return a
-
-(+++) :: Text -> Text -> Text
-(+++) = Text.append
+-- Returns timeout renewer.
+timeoutThrowIO' :: IO a -> Time Second -> IO (IO ())
+timeoutThrowIO' action _timeout = do
+  outerThreadId <- myThreadId
+  let micros = toNum @Microsecond _timeout
+  timer <-
+    UpdatableTimer.replacer (throwTo outerThreadId (Timeout _timeout)) micros
+  async $ action >> Killable.kill timer
+  return (UpdatableTimer.renewIO timer micros)
