@@ -1,7 +1,7 @@
 module SocketServer
   ( T(..)
   , make
-  , kill
+  , kill_
   , serveRPC
   , serveRPC'
   , SocketServerException(..)
@@ -74,7 +74,6 @@ data T = T
   , clients :: HashTable Id WS.Connection
   , directHandlers :: HashTable Route (Text -> IO Response)
   , streamingHandlers :: HashTable Route (Text -> IO (Streamly.Serial Response))
-  , killedVar :: TVar.TVar Bool
   }
 
 data SocketClientConfig = SocketClientConfig
@@ -85,7 +84,6 @@ data SocketClientConfig = SocketClientConfig
 
 data SocketServerException
   = BadCall Text
-  | DeadSocketServer
   | HandlerAlreadyExists Text
   | InternalSocketServerException Text -- If you get one of these, file a bug report.
   deriving (Eq, Ord, Show, Read, Typeable, Generic)
@@ -100,7 +98,6 @@ make port pingInterval = do
   clients <- HashTable.new
   directHandlers <- HashTable.new
   streamingHandlers <- HashTable.new
-  killedVar <- TVar.newTVarIO False
   socketServerVar <- MVar.newEmptyMVar
   -- Warp runs forever on its own thread.
   threadId <-
@@ -112,18 +109,14 @@ make port pingInterval = do
           WS.defaultConnectionOptions
           (wsApp socketServer pingInterval)
           httpApp
-  let socketServer =
-        T {threadId, clients, directHandlers, streamingHandlers, killedVar}
+  let socketServer = T {threadId, clients, directHandlers, streamingHandlers}
   MVar.putMVar socketServerVar socketServer
   -- Wait for init to avoid race conditions.
   threadDelay 100000 -- TODO: Make less jank.
   return socketServer
 
-kill :: T -> IO ()
-kill T {threadId, killedVar} =
-  unlessM (TVar.readTVarIO killedVar) $ do
-    STM.atomically $ TVar.writeTVar killedVar True
-    killThread threadId
+kill_ :: T -> IO ()
+kill_ T {threadId} = killThread threadId
 
 httpApp :: Wai.Application
 httpApp _ respond =
@@ -196,22 +189,19 @@ toResponse :: (ToJSON res) => res -> Response
 toResponse = Result . encodeSerialText
 
 serveRPC :: (FromJSON req, ToJSON res) => T -> Route -> (req -> IO res) -> IO ()
-serveRPC T {directHandlers, streamingHandlers, killedVar} route handler =
-  ifM
-    (TVar.readTVarIO killedVar)
-    (throwIO DeadSocketServer)
-    (do let Route _route = route
-        let serialTextHandler sReq =
-              case decodeSerialText sReq of
-                Nothing -> return $ badInput sReq
-                Just req -> do
-                  res <- handler req
-                  return $ toResponse res
-        -- Error if a streaming handler has the same route name.
-        streamingHandler <- HashTable.lookup streamingHandlers route
-        case streamingHandler of
-          Nothing -> HashTable.insert directHandlers route serialTextHandler
-          Just _ -> throwIO $ HandlerAlreadyExists _route)
+serveRPC T {directHandlers, streamingHandlers} route handler = do
+  let Route _route = route
+  let serialTextHandler sReq =
+        case decodeSerialText sReq of
+          Nothing -> return $ badInput sReq
+          Just req -> do
+            res <- handler req
+            return $ toResponse res
+  -- Error if a streaming handler has the same route name.
+  streamingHandler <- HashTable.lookup streamingHandlers route
+  case streamingHandler of
+    Nothing -> HashTable.insert directHandlers route serialTextHandler
+    Just _ -> throwIO $ HandlerAlreadyExists _route
 
 serveRPC' ::
      (FromJSON req, ToJSON res)
@@ -219,22 +209,19 @@ serveRPC' ::
   -> Route
   -> (req -> IO (Streamly.Serial res))
   -> IO ()
-serveRPC' T {directHandlers, streamingHandlers, killedVar} route handler =
-  ifM
-    (TVar.readTVarIO killedVar)
-    (throwIO DeadSocketServer)
-    (do let Route _route = route
-        let serialTextHandler sReq = do
-              case decodeSerialText sReq of
-                Nothing -> return $ Streamly.yield . badInput $ sReq
-                Just req -> do
-                  resStream <- handler req
-                  return $ Streamly.map toResponse resStream
-        -- Error if a direct handler has the same route name.
-        directHandler <- HashTable.lookup directHandlers route
-        case directHandler of
-          Nothing -> HashTable.insert streamingHandlers route serialTextHandler
-          Just _ -> throwIO $ HandlerAlreadyExists _route)
+serveRPC' T {directHandlers, streamingHandlers} route handler = do
+  let Route _route = route
+  let serialTextHandler sReq = do
+        case decodeSerialText sReq of
+          Nothing -> return $ Streamly.yield . badInput $ sReq
+          Just req -> do
+            resStream <- handler req
+            return $ Streamly.map toResponse resStream
+  -- Error if a direct handler has the same route name.
+  directHandler <- HashTable.lookup directHandlers route
+  case directHandler of
+    Nothing -> HashTable.insert streamingHandlers route serialTextHandler
+    Just _ -> throwIO $ HandlerAlreadyExists _route
 
 -- Creates config for a socket client.
 makeClientConfig :: Text -> Int -> Text -> SocketClientConfig

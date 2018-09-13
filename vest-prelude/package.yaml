@@ -16,6 +16,7 @@ dependencies:
 - hashable         >= 1.2  && < 2
 - o-clock          >= 1.0  && < 2
 - protolude        >= 0.2  && < 1
+- safe-exceptions  >= 0.1  && < 1
 - safe-money       >= 0.7  && < 1
 - safe-money-aeson >= 0.1  && < 1
 - singletons       >= 2.4  && < 3

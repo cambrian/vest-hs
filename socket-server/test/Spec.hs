@@ -1,6 +1,5 @@
 import qualified Data.List
 import qualified SocketServer
-import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Test.Hspec
 import VestPrelude
@@ -10,21 +9,7 @@ localTestConfig :: Int -> SocketServer.SocketClientConfig
 localTestConfig port = SocketServer.makeClientConfig "127.0.0.1" port "/"
 
 withServerOnPort :: Int -> (SocketServer.T -> IO ()) -> IO ()
-withServerOnPort port = bracket (SocketServer.make port 30) SocketServer.kill
-
-killTest :: Spec
-killTest = do
-  context "when registering RPCs after server was killed" $ do
-    it "correctly throws an exception" $ do
-      socketServer <- SocketServer.make 3000 30
-      SocketServer.kill socketServer
-      (SocketServer.serveRPC socketServer (Route "unit") (\() -> return ())) `shouldThrow`
-        (== SocketServer.DeadSocketServer)
-      (SocketServer.serveRPC'
-         socketServer
-         (Route "nil")
-         (\() -> return (Streamly.nil :: Streamly.Serial ()))) `shouldThrow`
-        (== SocketServer.DeadSocketServer)
+withServerOnPort port = bracket (SocketServer.make port 30) SocketServer.kill_
 
 echoTest :: Spec
 echoTest = do
@@ -161,7 +146,6 @@ timeoutTest' = do
 main :: IO ()
 main = do
   hspec $ do
-    describe "socket server library" $ killTest
     describe "direct RPC socket server" $
       echoTest >> multipleFnTest >> timeoutTest
     describe "streaming RPC socket server" $

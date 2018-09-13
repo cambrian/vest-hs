@@ -5,21 +5,45 @@ module VestPrelude
 
 import qualified Control.Concurrent.Killable as Killable
 import qualified Control.Concurrent.STM.TVar as TVar
+import Control.Exception.Safe
+import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as STM
-import Data.Aeson as Reexports
-  ( FromJSON
-  , ToJSON
-  , (.=)
-  , decode
-  , encode
-  , object
-  , parseJSON
-  , toJSON
-  )
+import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
 import Data.Hashable as Reexports (Hashable)
 import qualified Data.Text as Text
 import qualified Data.Vector as Vector
-import Protolude as VestPrelude hiding (readMaybe, threadDelay)
+import Protolude as VestPrelude hiding
+  ( Exception
+  , bracket
+  , bracketOnError
+  , bracketOnError_
+  , bracket_
+  , catch
+  , catchAny
+  , catchJust
+  , catches
+  , finally
+  , handle
+  , handleAny
+  , handleJust
+  , impureThrow
+  , mask
+  , mask_
+  , onException
+  , readMaybe
+  , threadDelay
+  , throw
+  , throwIO
+  , throwM
+  , throwTo
+  , try
+  , tryAny
+  , tryIO
+  , tryJust
+  , uninterruptibleMask
+  , uninterruptibleMask_
+  , withException
+  )
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import qualified System.Timer.Updatable as UpdatableTimer
