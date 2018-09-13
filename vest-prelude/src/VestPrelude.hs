@@ -4,9 +4,9 @@ module VestPrelude
   ) where
 
 import qualified Control.Concurrent.Killable as Killable
-import qualified Control.Concurrent.STM.TVar as TVar
+import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
-import qualified Control.Monad.STM as STM
+import qualified Control.Monad.STM as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
 import Data.Hashable as Reexports (Hashable)
 import qualified Data.Text as Text
@@ -15,38 +15,25 @@ import Protolude as VestPrelude hiding
   ( Exception
   , bracket
   , bracketOnError
-  , bracketOnError_
   , bracket_
   , catch
-  , catchAny
-  , catchAsync
   , catchJust
   , catches
   , finally
   , handle
-  , handleAny
-  , handleAsync
   , handleJust
-  , impureThrow
-  , impureThrow
   , mask
   , mask_
   , onException
   , readMaybe
   , threadDelay
-  , throw
   , throwIO
-  , throwM
-  , throwTo
   , throwTo
   , try
-  , tryAny
-  , tryAsync
   , tryIO
   , tryJust
   , uninterruptibleMask
   , uninterruptibleMask_
-  , withException
   )
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -132,32 +119,32 @@ timeoutThrowIO' action _timeout = do
 -- Push does nothing after close is bound.
 repeatableStream :: IO (a -> IO (), IO (), Streamly.Serial a)
 repeatableStream = do
-  resultsVar <- TVar.newTVarIO Vector.empty
-  let push a = STM.atomically $ TVar.modifyTVar resultsVar (`Vector.snoc` a)
+  resultsVar <- newTVarIO Vector.empty
+  let push a = atomically $ modifyTVar resultsVar (`Vector.snoc` a)
       stream =
         Streamly.unfoldrM
           (\idx ->
-             STM.atomically $ do
-               results <- TVar.readTVar resultsVar
-               unless (idx < Vector.length results) STM.retry
+             atomically $ do
+               results <- readTVar resultsVar
+               unless (idx < Vector.length results) retry
                return $ fmap (, idx + 1) (Vector.unsafeIndex results idx))
           0
   return (push . Just, push Nothing, stream)
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar is Nothing until the first value is received.
-makeStreamVar :: Streamly.Serial a -> IO (TVar.TVar (Maybe a))
+makeStreamVar :: Streamly.Serial a -> IO (TVar (Maybe a))
 makeStreamVar as = do
-  var <- TVar.newTVarIO Nothing
-  forkIO $ Streamly.mapM_ (STM.atomically . TVar.writeTVar var . Just) as
+  var <- newTVarIO Nothing
+  forkIO $ Streamly.mapM_ (atomically . writeTVar var . Just) as
   return var
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar has an explicit initial value.
-makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar.TVar a)
+makeStreamVar' :: Streamly.Serial a -> a -> IO (TVar a)
 makeStreamVar' as init = do
-  var <- TVar.newTVarIO init
-  forkIO $ Streamly.mapM_ (STM.atomically . TVar.writeTVar var) as
+  var <- newTVarIO init
+  forkIO $ Streamly.mapM_ (atomically . writeTVar var) as
   return var
 
 readMaybe :: (Read a) => Text -> Maybe a

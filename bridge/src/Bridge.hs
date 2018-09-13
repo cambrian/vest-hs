@@ -19,7 +19,6 @@ module Bridge
   ) where
 
 import qualified Control.Concurrent.MVar as MVar
-import qualified Control.Concurrent.STM as STM
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Data.Text as Text
@@ -108,7 +107,7 @@ with config = bracket (make config) kill
 blockForever :: IO ()
 blockForever = do
   _ <- myThreadId >>= StablePtr.newStablePtr -- Prevent garbage collection of this thread.
-  STM.atomically STM.retry -- Block forever.
+  atomically retry -- Block forever.
 
 withForever :: Config -> (T -> IO ()) -> IO ()
 withForever config action =

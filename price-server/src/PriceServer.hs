@@ -5,7 +5,6 @@ module PriceServer
 
 import qualified Bridge
 import qualified Control.Concurrent.STM.TVar as TVar
-import qualified Control.Monad.STM as STM
 import Streamly.Prelude as Streamly
 import VestPrelude
 import qualified VestPrelude.Money as Money
@@ -36,7 +35,7 @@ start Config {bridgeConfig} = do
          (Route "priceTezosContract")
          (\PriceTezosContractRequest {size, duration} -> do
             xtzUsd <- TVar.readTVarIO latestTezosPrice
-            return $ (tezosContractPrice xtzUsd size duration)))
+            return $ tezosContractPrice xtzUsd size duration))
 
 tezosContractPrice ::
      Money.ExchangeRate "XTZ" "USD"
