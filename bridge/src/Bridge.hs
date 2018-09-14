@@ -97,8 +97,8 @@ data BridgeException
 newQueueName :: IO Text
 newQueueName = do
   uuid <- UUID.nextRandom
-  myHostName <- Network.HostName.getHostName
-  return $ Text.pack (myHostName ++ "." ++ UUID.toString uuid)
+  myHostName <- Network.HostName.getHostName >>- Text.pack
+  return $ myHostName <> "." <> UUID.toText uuid
 
 readAmqpMsg :: (Read a) => AMQP.Message -> Maybe a
 readAmqpMsg = Text.Read.readMaybe . ByteString.Lazy.UTF8.toString . AMQP.msgBody
@@ -171,35 +171,33 @@ kill t = do
 -- RPC server.
 _serveRPC ::
      (Read req)
-  => ((Response -> IO ()) -> res -> IO ())
+  => ((Response -> IO ()) -> res' -> IO ())
   -> T
   -> Route
-  -> (req -> IO res)
+  -> (req -> IO res')
   -> IO ()
 _serveRPC publisher T {chan} (Route queueName) handler = do
+  let handleMsg RequestMessage {id = requestId, responseQueue, req} = do
+        let Id _responseQueue = responseQueue
+        let pub res =
+              void $
+              AMQP.publishMsg
+                chan
+                "" -- Default exchange just sends message to queue specified by routing key.
+                _responseQueue -- Exchange routing key.
+                (toAmqpMsg ResponseMessage {requestId, res})
+        case readMaybe req of
+          Nothing -> pub . Left . BadCall $ "bad input: " <> req
+          Just r -> handler r >>= publisher (pub . Right)
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   AMQP.consumeMsgs
     chan
     queueName
     AMQP.Ack
-    (\(msg, env) -> do
-       async $ do
-         case readAmqpMsg msg of
-           Nothing -> return ()
-           Just RequestMessage {id = requestId, responseQueue, req} -> do
-             let Id _responseQueue = responseQueue
-             let pub res =
-                   void $
-                   AMQP.publishMsg
-                     chan
-                     "" -- Default exchange just sends message to queue specified by routing key.
-                     _responseQueue -- Exchange routing key.
-                     (toAmqpMsg ResponseMessage {requestId, res})
-             case readMaybe req of
-               Nothing -> pub . Left . BadCall $ "bad input: " +++ req
-               Just r -> handler r >>= publisher (pub . Right)
-         AMQP.ackEnv env
-       return ())
+    (\(msg, env) ->
+       void . async $ do
+         readAmqpMsg msg >|>| handleMsg
+         AMQP.ackEnv env)
   return ()
 
 -- Direct RPC server.
@@ -234,7 +232,7 @@ _callRPCTimeout ::
   -> req
   -> IO res
 _callRPCTimeout handler _timeout T {chan, responseQueue, callHandlers} (Route queueName) req = do
-  id <- fmap (Id . UUID.toText) UUID.nextRandom
+  id <- UUID.nextRandom >>- Id . UUID.toText
   let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrow' waitForDone _timeout

@@ -2,6 +2,7 @@ module Core
   (
   ) where
 
+import Database.Beam
 import VestPrelude
 import qualified VestPrelude.Money as Money
 

@@ -2,7 +2,7 @@ resolver: lts-12.9
 
 packages:
 - bridge
-# - core
+- core
 - price-server
 - socket-server
 - vest-prelude

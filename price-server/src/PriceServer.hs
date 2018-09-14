@@ -12,15 +12,10 @@ data Config = Config
   { bridgeConfig :: Bridge.Config
   } deriving (Eq, Show, Read, Generic)
 
-data PriceContractRequest = PriceContractRequest
-  { currency :: ContractCurrency
-  , size :: Rational
+data PriceTezosContractRequest a = PriceTezosContractRequest
+  { size :: Money.Dense "XTZ"
   , duration :: Time Day
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
-
-data ContractCurrency =
-  Xtz
-  deriving (Eq, Ord, Show, Read, Enum, Generic, Hashable, ToJSON, FromJSON)
 
 start :: Config -> IO ()
 start Config {bridgeConfig} = do
@@ -34,12 +29,9 @@ start Config {bridgeConfig} = do
        Bridge.serveRPC
          bridge
          (Route "priceContract")
-         (\PriceContractRequest {currency, size, duration} ->
-            case currency of
-              Xtz -> do
-                xtzUsd <- readTVarIO latestTezosPrice
-                let tezos = Money.dense' size
-                return $ tezosContractPrice xtzUsd tezos duration))
+         (\PriceTezosContractRequest {size, duration} -> do
+            xtzUsd <- readTVarIO latestTezosPrice
+            return $ tezosContractPrice xtzUsd size duration))
 
 tezosContractPrice ::
      Money.ExchangeRate "XTZ" "USD"

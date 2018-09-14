@@ -3,7 +3,6 @@ module VestPrelude
   , module Reexports
   ) where
 
-import Control.Concurrent.Async
 import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
 import Control.Concurrent.MVar as REexports
@@ -46,6 +45,24 @@ import qualified System.Timer.Updatable as UpdatableTimer
 import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
+
+data Currency
+  = Usd
+  | Btc
+  | Eth
+  | Xtz
+  deriving ( Eq
+           , Ord
+           , Show
+           , Read
+           , Enum
+           , Typeable
+           , Generic
+           , Exception
+           , Hashable
+           , FromJSON
+           , ToJSON
+           )
 
 -- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
@@ -123,8 +140,23 @@ blockForever = do
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
 
-(+++) :: Text -> Text -> Text
-(+++) = Text.append
+infixl 1 >>-
+
+-- Infix map with arguments flipped. Like (>>=), but the chained function is pure.
+(>>-) :: (Functor f) => f a -> (a -> b) -> f b
+(>>-) ma f = map f ma
+
+infixl 1 >|>
+
+-- Infix forM
+(>|>) :: (Traversable t, Monad m) => t a -> (a -> m b) -> m (t b)
+(>|>) = forM
+
+infixl 1 >|>|
+
+-- Infix forM_
+(>|>|) :: (Foldable t, Monad m) => t a -> (a -> m b) -> m ()
+(>|>|) = forM_
 
 fromJustUnsafe :: Maybe a -> IO a
 fromJustUnsafe Nothing = throwIO NothingException
