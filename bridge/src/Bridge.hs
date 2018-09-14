@@ -123,19 +123,17 @@ make Config {hostname, virtualHost, username, password} = do
   queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   callHandlers <- HashTable.new
+  let handleResponse ResponseMessage {requestId, res} =
+        case res of
+          Left exception -> throw exception
+          Right r -> HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
   responseConsumerTag <-
     AMQP.consumeMsgs
       chan
       queueName
       AMQP.Ack
       (\(msg, env) -> do
-         case readAmqpMsg msg of
-           Nothing -> return () -- Swallow if entire message is garbled.
-           Just ResponseMessage {requestId, res} ->
-             case res of
-               Left exception -> throw exception
-               Right r ->
-                 HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
+         readAmqpMsg msg >|>| handleResponse -- Do nothing if response message is malformed.
          AMQP.ackEnv env)
   serveConsumerTags <- HashTable.new
   subscribers <- HashTable.new
@@ -177,7 +175,7 @@ _serveRPC ::
   -> (req -> IO res')
   -> IO ()
 _serveRPC publisher T {chan} (Route queueName) handler = do
-  let handleMsg RequestMessage {id = requestId, responseQueue, req} = do
+  let handleCall RequestMessage {id = requestId, responseQueue, req} = do
         let Id _responseQueue = responseQueue
         let pub res =
               void $
@@ -196,7 +194,7 @@ _serveRPC publisher T {chan} (Route queueName) handler = do
     AMQP.Ack
     (\(msg, env) ->
        void . async $ do
-         readAmqpMsg msg >|>| handleMsg
+         readAmqpMsg msg >|>| handleCall -- Do nothing if request message is malformed.
          AMQP.ackEnv env)
   return ()
 
