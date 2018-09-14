@@ -3,7 +3,7 @@ import qualified PriceServer
 import VestPrelude
 
 priceServerConfig :: PriceServer.Config
-priceServerConfig = PriceServer.Config {bridgeConfig = Bridge.localConfig}
+priceServerConfig = PriceServer.Config {}
 
 main :: IO ()
-main = PriceServer.start priceServerConfig
+main = PriceServer.start Bridge.localConfig priceServerConfig
