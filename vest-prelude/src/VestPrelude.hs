@@ -46,24 +46,6 @@ import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
 
-data Currency
-  = Usd
-  | Btc
-  | Eth
-  | Xtz
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Enum
-           , Typeable
-           , Generic
-           , Exception
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
-
 -- If you want the Id or Route string you should destructure instead of using show:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
