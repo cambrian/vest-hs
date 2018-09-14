@@ -10,15 +10,6 @@ import Streamly.Prelude as Streamly
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data Config = Config
-  {
-  } deriving (Eq, Show, Read, Generic)
-
--- T should contain any data used in pricing functions as TVars
-data T = T
-  { tezosPrice :: TVar (Money.ExchangeRate "XTZ" "USD")
-  }
-
 data (Priceable a) =>
      PriceContractRequest a = PriceContractRequest
   { size :: Money.Dense a
@@ -33,13 +24,13 @@ class (KnownSymbol a) =>
   priceContract' t PriceContractRequest {size, duration} =
     priceContract t size duration
 
-instance Priceable "XTZ" where
-  priceContract T {tezosPrice} size duration = do
-    xtzUsd <- readTVarIO tezosPrice
-    let mutez = toRational size
-        xtzUsdRaw = Money.exchangeRateToRational xtzUsd
-        price = mutez * xtzUsdRaw
-    return $ Money.dense' price
+data Config = Config
+  {
+  } deriving (Eq, Show, Read, Generic)
+
+data T = T
+  { tezosPrice :: TVar (Money.ExchangeRate "XTZ" "USD")
+  }
 
 make :: Config -> Bridge.T -> IO T
 make Config {} bridge = do
@@ -48,6 +39,14 @@ make Config {} bridge = do
     Bridge.subscribe' bridge (Route "tezosPrice") >>=
     (makeStreamVar' dummyTezosExchangeRate . snd)
   return $ T {tezosPrice}
+
+instance Priceable "XTZ" where
+  priceContract T {tezosPrice} size duration = do
+    xtzUsd <- readTVarIO tezosPrice
+    let mutez = toRational size
+        xtzUsdRaw = Money.exchangeRateToRational xtzUsd
+        price = mutez * xtzUsdRaw
+    return $ Money.dense' price
 
 start :: Bridge.Config -> Config -> IO ()
 start bridgeConfig config =
