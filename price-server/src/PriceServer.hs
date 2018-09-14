@@ -1,5 +1,7 @@
 module PriceServer
   ( Config(..)
+  , PriceTezosContractRequest(..)
+  , Priceable(..)
   , start
   ) where
 
@@ -12,10 +14,26 @@ data Config = Config
   { bridgeConfig :: Bridge.Config
   } deriving (Eq, Show, Read, Generic)
 
-data PriceTezosContractRequest a = PriceTezosContractRequest
+class (KnownSymbol a) =>
+      Priceable a
+  where
+  price ::
+       Money.ExchangeRate a "USD"
+    -> Money.Dense a
+    -> Time Day
+    -> Money.Dense "USD"
+
+data PriceTezosContractRequest = PriceTezosContractRequest
   { size :: Money.Dense "XTZ"
   , duration :: Time Day
-  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+instance Priceable "XTZ" where
+  price xtzUsd size duration =
+    let mutez = toRational size
+        xtzUsdRaw = Money.exchangeRateToRational xtzUsd
+        price = mutez * xtzUsdRaw
+     in Money.dense' price
 
 start :: Config -> IO ()
 start Config {bridgeConfig} = do
@@ -28,18 +46,7 @@ start Config {bridgeConfig} = do
          (makeStreamVar' dummyTezosExchangeRate . snd)
        Bridge.serveRPC
          bridge
-         (Route "priceContract")
+         (Route "priceTezosContract")
          (\PriceTezosContractRequest {size, duration} -> do
             xtzUsd <- readTVarIO latestTezosPrice
-            return $ tezosContractPrice xtzUsd size duration))
-
-tezosContractPrice ::
-     Money.ExchangeRate "XTZ" "USD"
-  -> Money.Dense "XTZ"
-  -> Time Day
-  -> Money.Dense "USD"
-tezosContractPrice xtzUsd size duration =
-  let mutez = toRational size
-      xtzUsdRaw = Money.exchangeRateToRational xtzUsd
-      price = mutez * xtzUsdRaw
-   in Money.dense' price
+            return $ price xtzUsd size duration))
