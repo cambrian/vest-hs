@@ -74,7 +74,7 @@ data T = T
   , responseQueue :: Id
   , responseConsumerTag :: AMQP.ConsumerTag
   , serveConsumerTags :: HashTable Route AMQP.ConsumerTag
-  , callHandlers :: HashTable Id (Response -> IO ())
+  , responseHandlers :: HashTable Id (Response -> IO ())
   -- Key: subscriberId to Value: (consumerTag, close)
   , subscribers :: HashTable Id (AMQP.ConsumerTag, IO ())
   }
@@ -122,11 +122,11 @@ make Config {hostname, virtualHost, username, password} = do
   chan <- AMQP.openChannel conn
   queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-  callHandlers <- HashTable.new
+  responseHandlers <- HashTable.new
   let handleResponse ResponseMessage {requestId, res} =
         case res of
           Left exception -> throw exception
-          Right r -> HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
+          Right r -> HashTable.lookup responseHandlers requestId >>= mapM_ ($ r)
   responseConsumerTag <-
     AMQP.consumeMsgs
       chan
@@ -144,7 +144,7 @@ make Config {hostname, virtualHost, username, password} = do
       , responseQueue = Id queueName
       , responseConsumerTag
       , serveConsumerTags
-      , callHandlers
+      , responseHandlers
       , subscribers
       }
 
@@ -162,7 +162,7 @@ kill t = do
   AMQP.cancelConsumer chan responseConsumerTag
   HashTable.mapM_ (AMQP.cancelConsumer chan . snd) serveConsumerTags
   HashTable.mapM_ (unsubscribe t . fst) subscribers
-  -- callHandlers will automatically time out.
+  -- responseHandlers will automatically time out.
   _ <- AMQP.deleteQueue chan _responseQueue
   AMQP.closeConnection conn -- And chan.
 
@@ -177,7 +177,7 @@ _serveRPC ::
 _serveRPC publisher T {chan} (Route queueName) handler = do
   let handleCall RequestMessage {id = requestId, responseQueue, req} = do
         let Id _responseQueue = responseQueue
-        let pub res =
+            pub res =
               void $
               AMQP.publishMsg
                 chan
@@ -229,14 +229,14 @@ _callRPCTimeout ::
   -> Route
   -> req
   -> IO res
-_callRPCTimeout handler _timeout T {chan, responseQueue, callHandlers} (Route queueName) req = do
+_callRPCTimeout handler _timeout T {chan, responseQueue, responseHandlers} (Route queueName) req = do
   id <- UUID.nextRandom >>- Id . UUID.toText
   let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrow' waitForDone _timeout
-  HashTable.insert callHandlers id (\x -> renewTimeout >> push x)
+  HashTable.insert responseHandlers id (\x -> renewTimeout >> push x)
   _ <- AMQP.publishMsg chan "" queueName request
-  async $ waitForDone >> HashTable.delete callHandlers id
+  async $ waitForDone >> HashTable.delete responseHandlers id
   result
 
 -- Direct RPC call
