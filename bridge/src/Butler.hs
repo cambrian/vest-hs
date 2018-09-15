@@ -1,4 +1,13 @@
-module Butler where
+module Butler
+  ( Format(..)
+  , Protocol
+  , ProtocolJSON
+  , (:<|>)
+  , serve
+  , serve'
+  , makeClient
+  , makeClient'
+  ) where
 
 import qualified Data.Text as Text
 import GHC.TypeLits
@@ -36,12 +45,6 @@ serve' proxy api send path x =
       send result
 
 -- API specification DSL.
-data Request (a :: *)
-
-data Response (a :: *)
-
-data Publish (a :: *)
-
 data a :<|> b =
   a :<|> b
 
@@ -62,15 +65,11 @@ type family API spec :: *
 
 type family API' spec :: *
 
-type instance
-     API
-       (ProtocolAs (f :: Format) (s :: Symbol) (Request a) (Response b))
-     = a -> IO b
+type instance API (ProtocolAs (f :: Format) (s :: Symbol) a b) =
+     a -> IO b
 
-type instance
-     API'
-       (ProtocolAs (f :: Format) (s :: Symbol) (Request a) (Response b))
-     = a -> IO (Streamly.Serial b)
+type instance API' (ProtocolAs (f :: Format) (s :: Symbol) a b) =
+     a -> IO (Streamly.Serial b)
 
 type instance API (a :<|> b) = API a :<|> API b
 
@@ -79,9 +78,8 @@ type instance API' (a :<|> b) = API' a :<|> API' b
 -- Used to route requests to the right handler.
 -- Apostrophe versions are streaming, and direct routes must be served separately from streaming
 -- routes (for clarity in implementation).
-class HasServer spec
-  -- Params are route path and request.
-  where
+-- Params are route path and request.
+class HasServer spec where
   route :: Proxy spec -> API spec -> Route -> Text -> Maybe (IO Text)
   route' ::
        Proxy spec
@@ -111,13 +109,9 @@ instance (HasServer a, HasServer b) => HasServer (a :<|> b) where
     route' (Proxy :: Proxy b) handlerB path request
 
 instance (KnownSymbol s, Read a, Show b) =>
-         HasServer (Protocol (s :: Symbol) (Request a) (Response b)) where
+         HasServer (Protocol (s :: Symbol) a b) where
   route ::
-       Proxy (Protocol s (Request a) (Response b))
-    -> (a -> IO b)
-    -> Route
-    -> Text
-    -> Maybe (IO Text)
+       Proxy (Protocol s a b) -> (a -> IO b) -> Route -> Text -> Maybe (IO Text)
   route _ handler (Route _path) request
     | symbolVal (Proxy :: Proxy s) == Text.unpack _path =
       Just $ do
@@ -126,7 +120,7 @@ instance (KnownSymbol s, Read a, Show b) =>
         return $ show result
   route _ _ _ _ = Nothing
   route' ::
-       Proxy (Protocol s (Request a) (Response b))
+       Proxy (Protocol s a b)
     -> (a -> IO (Streamly.Serial b))
     -> Route
     -> Text
@@ -140,9 +134,9 @@ instance (KnownSymbol s, Read a, Show b) =>
   route' _ _ _ _ = Nothing
 
 instance (KnownSymbol s, FromJSON a, ToJSON b) =>
-         HasServer (ProtocolJSON (s :: Symbol) (Request a) (Response b)) where
+         HasServer (ProtocolJSON (s :: Symbol) a b) where
   route ::
-       Proxy (ProtocolJSON s (Request a) (Response b))
+       Proxy (ProtocolJSON s a b)
     -> (a -> IO b)
     -> Route
     -> Text
@@ -155,7 +149,7 @@ instance (KnownSymbol s, FromJSON a, ToJSON b) =>
         return $ encodeToText result
   route _ _ _ _ = Nothing
   route' ::
-       Proxy (ProtocolJSON s (Request a) (Response b))
+       Proxy (ProtocolJSON s a b)
     -> (a -> IO (Streamly.Serial b))
     -> Route
     -> Text
@@ -173,14 +167,10 @@ type family Client spec :: *
 
 type family Client' spec :: *
 
-type instance
-     Client
-       (ProtocolAs (f :: Format) (s :: Symbol) (Request a) (Response b))
-     = a -> IO b
+type instance Client (ProtocolAs (f :: Format) (s :: Symbol) a b) =
+     a -> IO b
 
-type instance
-     Client'
-       (ProtocolAs (f :: Format) (s :: Symbol) (Request a) (Response b))
+type instance Client' (ProtocolAs (f :: Format) (s :: Symbol) a b)
      = a -> IO (Streamly.Serial b)
 
 type instance Client (a :<|> b) = Client a :<|> Client b
@@ -188,7 +178,79 @@ type instance Client (a :<|> b) = Client a :<|> Client b
 type instance Client' (a :<|> b) = Client' a :<|> Client' b
 
 -- Used to generate client functions for an API (direct and streaming versions).
+-- Params are request publisher and acquired result.
 class HasClient spec where
-  makeClient :: Proxy spec -> (Text -> IO ()) -> IO Text -> Client spec
-  makeClient' :: Proxy spec -> (Text -> IO ()) -> IO Text -> Client' spec-- Params are request publisher and acquired result.
--- instance (HasClient a, HasClient b) => HasServer (a :<|> b)
+  makeClient ::
+       Proxy spec -> API spec -> (Text -> IO ()) -> IO Text -> Client spec
+  makeClient' ::
+       Proxy spec
+    -> API spec
+    -> (Text -> IO ())
+    -> IO (Streamly.Serial Text)
+    -> Client' spec
+
+instance (HasClient a, HasClient b) => HasClient (a :<|> b) where
+  makeClient ::
+       Proxy (a :<|> b)
+    -> (API a :<|> API b)
+    -> (Text -> IO ())
+    -> IO Text
+    -> Client a :<|> Client b
+  makeClient _ (handlerA :<|> handlerB) publish resultIO =
+    makeClient (Proxy :: Proxy a) handlerA publish resultIO :<|>
+    makeClient (Proxy :: Proxy b) handlerB publish resultIO
+  makeClient' ::
+       Proxy (a :<|> b)
+    -> (API a :<|> API b)
+    -> (Text -> IO ())
+    -> IO (Streamly.Serial Text)
+    -> Client' a :<|> Client' b
+  makeClient' _ (handlerA :<|> handlerB) publish resultsIO =
+    makeClient' (Proxy :: Proxy a) handlerA publish resultsIO :<|>
+    makeClient' (Proxy :: Proxy b) handlerB publish resultsIO
+
+instance (KnownSymbol s, Show a, Read b) =>
+         HasClient (Protocol (s :: Symbol) a b) where
+  makeClient ::
+       Proxy (Protocol s a b)
+    -> (a -> IO b)
+    -> (Text -> IO ())
+    -> IO Text
+    -> (a -> IO b)
+  makeClient _ _ publish resultIO req = do
+    publish . show $ req
+    result <- resultIO
+    readUnsafe result
+  makeClient' ::
+       Proxy (Protocol s a b)
+    -> (a -> IO b)
+    -> (Text -> IO ())
+    -> IO (Streamly.Serial Text)
+    -> (a -> IO (Streamly.Serial b))
+  makeClient' _ _ publish resultsIO req = do
+    publish . show $ req
+    results <- resultsIO
+    return $ Streamly.mapM readUnsafe results
+
+instance (KnownSymbol s, ToJSON a, FromJSON b) =>
+         HasClient (ProtocolJSON (s :: Symbol) a b) where
+  makeClient ::
+       Proxy (ProtocolJSON s a b)
+    -> (a -> IO b)
+    -> (Text -> IO ())
+    -> IO Text
+    -> (a -> IO b)
+  makeClient _ _ publish resultIO req = do
+    publish . encodeToText $ req
+    result <- resultIO
+    decodeUnsafe result
+  makeClient' ::
+       Proxy (ProtocolJSON s a b)
+    -> (a -> IO b)
+    -> (Text -> IO ())
+    -> IO (Streamly.Serial Text)
+    -> (a -> IO (Streamly.Serial b))
+  makeClient' _ _ publish resultsIO req = do
+    publish . encodeToText $ req
+    results <- resultsIO
+    return $ Streamly.mapM decodeUnsafe results
