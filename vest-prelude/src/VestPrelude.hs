@@ -11,6 +11,7 @@ import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
+import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
 import qualified Data.Text as Text
 import qualified Data.Vector as Vector
@@ -147,6 +148,9 @@ newtype UnsupportedCurrencyException =
            , ToJSON
            )
 
+(+++) :: Text -> Text -> Text
+(+++) = Text.append
+
 blockForever :: IO ()
 blockForever = do
   _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
@@ -154,8 +158,15 @@ blockForever = do
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
 
-(+++) :: Text -> Text -> Text
-(+++) = Text.append
+decodeUnsafe :: (FromJSON a) => Text -> IO a
+-- TODO: Clean this up.
+decodeUnsafe text =
+  case decode . ByteString.Lazy.UTF8.fromString . Text.unpack $ text of
+    Nothing -> throwIO $ DecodeException text
+    Just x -> return x
+
+encodeToText :: (ToJSON a) => a -> Text
+encodeToText = Text.pack . ByteString.Lazy.UTF8.toString . encode
 
 fromJustUnsafe :: Maybe a -> IO a
 fromJustUnsafe Nothing = throwIO NothingException
