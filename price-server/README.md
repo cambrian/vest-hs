@@ -1,3 +1,3 @@
-# vest-prelude
+# price-server
 
-Vest custom prelude (uses Protolude for standard prelude stuff).
+Pricing server for Vest derivatives.

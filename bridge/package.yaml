@@ -5,7 +5,6 @@ copyright:           "2018 Vest"
 
 extra-source-files:
 - README.md
-- src/RPCServant.hs
 
 synopsis:            High-level library for streaming and RPCs over AMQP.
 category:            Network
