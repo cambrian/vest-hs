@@ -142,7 +142,6 @@ pubSubTest' =
 
 main :: IO ()
 main = do
-  return ()
   hspec $ do
     describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
     describe "streaming RPC bridge" $

@@ -5,7 +5,7 @@ module VestPrelude
 
 import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
-import Control.Concurrent.MVar as REexports
+import Control.Concurrent.MVar as Reexports
 import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports

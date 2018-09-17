@@ -13,6 +13,7 @@ description:         See README.md.
 dependencies:
 - base              >= 4.10 && < 5
 - hspec             >= 2.5  && < 3
+- random            >= 1.1  && < 2
 - streamly          >= 0.5  && < 1
 - text              >= 1.2  && < 2
 - vest-prelude
@@ -40,7 +41,7 @@ default-extensions:
 - FlexibleInstances
 - FunctionalDependencies
 - GADTs
-- GeneralizedNewtypeDeriving
+# - GeneralizedNewtypeDeriving
 - InstanceSigs
 - KindSignatures
 - LambdaCase
@@ -81,4 +82,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - bridge
+    - butler

@@ -37,7 +37,7 @@ default-extensions:
 - FlexibleInstances
 - FunctionalDependencies
 - GADTs
-- GeneralizedNewtypeDeriving
+# - GeneralizedNewtypeDeriving
 - InstanceSigs
 - KindSignatures
 - LambdaCase
