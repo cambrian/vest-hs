@@ -2,9 +2,10 @@ resolver: lts-12.9
 
 packages:
 - bridge
-# - core
-# - price-server
-# - socket-server
+- butler
+- core
+- price-server
+- socket-server
 - vest-prelude
 
 extra-deps:

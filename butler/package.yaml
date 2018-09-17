@@ -1,4 +1,4 @@
-name:                core
+name:                butler
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -6,14 +6,15 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            Internal coordination server for Vest derivatives.
+synopsis:            Servant-style DSL to define RPCs and streaming APIs with swappable back-ends.
+category:            Network
 description:         See README.md.
 
 dependencies:
-- base               >= 4.10 && < 5
-- beam-core          >= 0.7  && < 1
-# - beam-postgres      >= 0.3  && < 1
-- bridge
+- base              >= 4.10 && < 5
+- hspec             >= 2.5  && < 3
+- streamly          >= 0.5  && < 1
+- text              >= 1.2  && < 2
 - vest-prelude
 
 # The default-extensions and ghc-options have been taken from here:
@@ -49,6 +50,7 @@ default-extensions:
 - NoImplicitPrelude
 - OverloadedStrings
 - PatternSynonyms
+- PolyKinds
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving
@@ -70,14 +72,8 @@ ghc-options:
 library:
   source-dirs: src
 
-executable:
-  main:                Main.hs
-  source-dirs:         bin
-  dependencies:
-  - core
-
 tests:
-  core-test:
+  butler-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -85,4 +81,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - core
+    - bridge

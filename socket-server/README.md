@@ -1,3 +1,3 @@
 # socket-server
 
-High-level Haskell abstraction for WebSocket RPCs.
+High-level library for streaming and RPCs over WebSockets.

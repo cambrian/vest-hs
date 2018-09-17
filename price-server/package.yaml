@@ -6,7 +6,7 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            Vest price server
+synopsis:            Pricing server for Vest derivatives.
 description:         See README.md.
 
 dependencies:
