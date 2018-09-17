@@ -8,6 +8,10 @@ module Butler
   , makeServe'
   , makeClient
   , makeClient'
+  , makePublish
+  , makePublish'
+  , makeSubscribe
+  , makeSubscribe'
   ) where
 
 import qualified Data.Text as Text
@@ -16,6 +20,7 @@ import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
+-- This library can also throw ReadExceptions and DecodeExceptions.
 newtype ButlerException =
   NoSuchRoute Text
   deriving ( Eq
@@ -295,3 +300,68 @@ instance (KnownSymbol s, ToJSON a) =>
     -> (Text -> IO ())
     -> ((Streamly.Serial a) -> IO ())
   makePublish' _ publish = Streamly.mapM_ (publish . encodeToText)
+
+-- The Subscriber type families.
+type family Subscriber spec :: *
+
+type family Subscriber' spec :: *
+
+type instance
+     Subscriber (PublishingAs (f :: Format) (s :: Symbol) a) = IO a
+
+type instance
+     Subscriber' (PublishingAs (f :: Format) (s :: Symbol) a) =
+     IO (Streamly.Serial a)
+
+type instance Subscriber (a :<|> b) =
+     Subscriber a :<|> Subscriber b
+
+type instance Subscriber' (a :<|> b) =
+     Subscriber' a :<|> Subscriber' b
+
+-- Used to generate client functions for an API (direct and streaming versions).
+-- Param is result or result stream.
+class HasSubscriber spec where
+  makeSubscribe :: Proxy spec -> IO Text -> Subscriber spec
+  makeSubscribe' :: Proxy spec -> IO (Streamly.Serial Text) -> Subscriber' spec
+
+instance (HasSubscriber a, HasSubscriber b) => HasSubscriber (a :<|> b) where
+  makeSubscribe :: Proxy (a :<|> b) -> IO Text -> Subscriber a :<|> Subscriber b
+  makeSubscribe _ result =
+    makeSubscribe (Proxy :: Proxy a) result :<|>
+    makeSubscribe (Proxy :: Proxy b) result
+  makeSubscribe' ::
+       Proxy (a :<|> b)
+    -> IO (Streamly.Serial Text)
+    -> Subscriber' a :<|> Subscriber' b
+  makeSubscribe' _ result =
+    makeSubscribe' (Proxy :: Proxy a) result :<|>
+    makeSubscribe' (Proxy :: Proxy b) result
+
+instance (KnownSymbol s, Read a) =>
+         HasSubscriber (Publishing (s :: Symbol) a) where
+  makeSubscribe :: Proxy (Publishing s a) -> IO Text -> IO a
+  makeSubscribe _ resultIO = do
+    result <- resultIO
+    readUnsafe result
+  makeSubscribe' ::
+       Proxy (Publishing s a)
+    -> IO (Streamly.Serial Text)
+    -> IO (Streamly.Serial a)
+  makeSubscribe' _ resultsIO = do
+    results <- resultsIO
+    return $ Streamly.mapM readUnsafe results
+
+instance (KnownSymbol s, FromJSON a) =>
+         HasSubscriber (PublishingJSON (s :: Symbol) a) where
+  makeSubscribe :: Proxy (PublishingJSON s a) -> IO Text -> IO a
+  makeSubscribe _ resultIO = do
+    result <- resultIO
+    decodeUnsafe result
+  makeSubscribe' ::
+       Proxy (PublishingJSON s a)
+    -> IO (Streamly.Serial Text)
+    -> IO (Streamly.Serial a)
+  makeSubscribe' _ resultsIO = do
+    results <- resultsIO
+    return $ Streamly.mapM decodeUnsafe results
