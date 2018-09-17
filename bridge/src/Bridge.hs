@@ -23,8 +23,6 @@ import qualified Control.Concurrent.MVar as MVar
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Data.Text as Text
-import qualified Data.UUID as UUID
-import qualified Data.UUID.V4 as UUID
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
 import qualified Streamly
@@ -74,7 +72,7 @@ data T = T
   , responseQueue :: Id
   , responseConsumerTag :: AMQP.ConsumerTag
   , serveConsumerTags :: HashTable Route AMQP.ConsumerTag
-  , callHandlers :: HashTable Id (Response -> IO ())
+  , responseHandlers :: HashTable Id (Response -> IO ())
   -- Key: subscriberId to Value: (consumerTag, close)
   , subscribers :: HashTable Id (AMQP.ConsumerTag, IO ())
   }
@@ -96,9 +94,9 @@ data BridgeException
 
 newQueueName :: IO Text
 newQueueName = do
-  uuid <- UUID.nextRandom
+  (Id id) <- newUuid
   myHostName <- Network.HostName.getHostName >>- Text.pack
-  return $ myHostName <> "." <> UUID.toText uuid
+  return $ myHostName <> "." <> id
 
 readAmqpMsg :: (Read a) => AMQP.Message -> Maybe a
 readAmqpMsg = Text.Read.readMaybe . ByteString.Lazy.UTF8.toString . AMQP.msgBody
@@ -122,20 +120,18 @@ make Config {hostname, virtualHost, username, password} = do
   chan <- AMQP.openChannel conn
   queueName <- newQueueName
   AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-  callHandlers <- HashTable.new
+  responseHandlers <- HashTable.new
+  let handleResponse ResponseMessage {requestId, res} =
+        case res of
+          Left exception -> throw exception
+          Right r -> HashTable.lookup responseHandlers requestId >>= mapM_ ($ r)
   responseConsumerTag <-
     AMQP.consumeMsgs
       chan
       queueName
       AMQP.Ack
       (\(msg, env) -> do
-         case readAmqpMsg msg of
-           Nothing -> return () -- Swallow if entire message is garbled.
-           Just ResponseMessage {requestId, res} ->
-             case res of
-               Left exception -> throw exception
-               Right r ->
-                 HashTable.lookup callHandlers requestId >>= mapM_ ($ r)
+         readAmqpMsg msg >|>| handleResponse -- Do nothing if response message is malformed.
          AMQP.ackEnv env)
   serveConsumerTags <- HashTable.new
   subscribers <- HashTable.new
@@ -146,7 +142,7 @@ make Config {hostname, virtualHost, username, password} = do
       , responseQueue = Id queueName
       , responseConsumerTag
       , serveConsumerTags
-      , callHandlers
+      , responseHandlers
       , subscribers
       }
 
@@ -164,7 +160,7 @@ kill t = do
   AMQP.cancelConsumer chan responseConsumerTag
   HashTable.mapM_ (AMQP.cancelConsumer chan . snd) serveConsumerTags
   HashTable.mapM_ (unsubscribe t . fst) subscribers
-  -- callHandlers will automatically time out.
+  -- responseHandlers will automatically time out.
   _ <- AMQP.deleteQueue chan _responseQueue
   AMQP.closeConnection conn -- And chan.
 
@@ -177,9 +173,9 @@ _serveRPC ::
   -> (req -> IO res')
   -> IO ()
 _serveRPC publisher T {chan} (Route queueName) handler = do
-  let handleMsg RequestMessage {id = requestId, responseQueue, req} = do
+  let handleCall RequestMessage {id = requestId, responseQueue, req} = do
         let Id _responseQueue = responseQueue
-        let pub res =
+            pub res =
               void $
               AMQP.publishMsg
                 chan
@@ -196,7 +192,7 @@ _serveRPC publisher T {chan} (Route queueName) handler = do
     AMQP.Ack
     (\(msg, env) ->
        void . async $ do
-         readAmqpMsg msg >|>| handleMsg
+         readAmqpMsg msg >|>| handleCall -- Do nothing if request message is malformed.
          AMQP.ackEnv env)
   return ()
 
@@ -231,14 +227,14 @@ _callRPCTimeout ::
   -> Route
   -> req
   -> IO res
-_callRPCTimeout handler _timeout T {chan, responseQueue, callHandlers} (Route queueName) req = do
-  id <- UUID.nextRandom >>- Id . UUID.toText
+_callRPCTimeout handler _timeout T {chan, responseQueue, responseHandlers} (Route queueName) req = do
+  id <- newUuid
   let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrow' waitForDone _timeout
-  HashTable.insert callHandlers id (\x -> renewTimeout >> push x)
+  HashTable.insert responseHandlers id (\x -> renewTimeout >> push x)
   _ <- AMQP.publishMsg chan "" queueName request
-  async $ waitForDone >> HashTable.delete callHandlers id
+  async $ waitForDone >> HashTable.delete responseHandlers id
   result
 
 -- Direct RPC call

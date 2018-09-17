@@ -13,6 +13,8 @@ import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
 import qualified Data.Text as Text
+import qualified Data.UUID as UUID
+import qualified Data.UUID.V4 as UUID
 import qualified Data.Vector as Vector
 import qualified Foreign.StablePtr as StablePtr
 import Protolude as VestPrelude hiding
@@ -173,6 +175,9 @@ makeStreamVar' init as = do
   var <- newTVarIO init
   async $ Streamly.mapM_ (atomically . writeTVar var) as
   return var
+
+newUuid :: IO Id
+newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
 readMaybe :: (Read a) => Text -> Maybe a
 readMaybe = Text.Read.readMaybe . Text.unpack
