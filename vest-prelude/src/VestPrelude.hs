@@ -119,6 +119,8 @@ instance Exception Timeout where
 (+++) :: Text -> Text -> Text
 (+++) = Text.append
 
+infixl 1 >>-
+
 -- Infix map with arguments flipped. Like (>>=), but the chained function is pure.
 (>>-) :: (Functor f) => f a -> (a -> b) -> f b
 (>>-) ma f = map f ma
@@ -141,8 +143,6 @@ blockForever = do
                                              -- is blocked forever by creating a stable reference
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
-
-infixl 1 >>-
 
 decodeUnsafe :: (FromJSON a) => Text -> IO a
 -- TODO: Clean this up.
