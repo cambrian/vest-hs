@@ -1,3 +1,3 @@
 # bridge
 
-High-level Haskell abstraction for AMQP message brokers.
+High-level library for streaming and RPCs over AMQP.

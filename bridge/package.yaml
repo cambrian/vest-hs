@@ -50,7 +50,7 @@ default-extensions:
 - FlexibleInstances
 - FunctionalDependencies
 - GADTs
-- GeneralizedNewtypeDeriving
+# - GeneralizedNewtypeDeriving
 - InstanceSigs
 - KindSignatures
 - LambdaCase
@@ -60,6 +60,7 @@ default-extensions:
 - NoImplicitPrelude
 - OverloadedStrings
 - PatternSynonyms
+- PolyKinds
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving

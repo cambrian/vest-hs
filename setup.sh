@@ -9,4 +9,4 @@ if [ ! -f ~/.vest_haskell ]; then
   touch ~/.vest_haskell
 fi
 
-brew install rabbitmq
+brew install rabbitmq libpq postgres

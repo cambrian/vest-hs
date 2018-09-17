@@ -5,11 +5,12 @@ module VestPrelude
 
 import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
-import Control.Concurrent.MVar as REexports
+import Control.Concurrent.MVar as Reexports
 import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
+import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
 import qualified Data.Text as Text
 import qualified Data.UUID as UUID
@@ -117,12 +118,8 @@ instance Exception Timeout where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
 
-blockForever :: IO ()
-blockForever = do
-  _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
-                                             -- is blocked forever by creating a stable reference
-                                             -- to this thread that could conceivably be thrown to.
-  atomically retry -- Block forever.
+(+++) :: Text -> Text -> Text
+(+++) = Text.append
 
 infixl 1 >>-
 
@@ -132,15 +129,32 @@ infixl 1 >>-
 
 infixl 1 >|>
 
--- Infix forM
+-- Infix forM.
 (>|>) :: (Traversable t, Monad m) => t a -> (a -> m b) -> m (t b)
 (>|>) = forM
 
 infixl 1 >|>|
 
--- Infix forM_
+-- Infix forM_.
 (>|>|) :: (Foldable t, Monad m) => t a -> (a -> m b) -> m ()
 (>|>|) = forM_
+
+blockForever :: IO ()
+blockForever = do
+  _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
+                                             -- is blocked forever by creating a stable reference
+                                             -- to this thread that could conceivably be thrown to.
+  atomically retry -- Block forever.
+
+decodeUnsafe :: (FromJSON a) => Text -> IO a
+-- TODO: Clean this up.
+decodeUnsafe text =
+  case decode . ByteString.Lazy.UTF8.fromString . Text.unpack $ text of
+    Nothing -> throwIO $ DecodeException text
+    Just x -> return x
+
+encodeToText :: (ToJSON a) => a -> Text
+encodeToText = Text.pack . ByteString.Lazy.UTF8.toString . encode
 
 fromJustUnsafe :: Maybe a -> IO a
 fromJustUnsafe Nothing = throwIO NothingException

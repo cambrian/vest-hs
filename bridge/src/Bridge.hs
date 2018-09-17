@@ -306,7 +306,7 @@ publish' T {chan} route as = do
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
   Streamly.mapM_ (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as
 
--- Subscribe (non streaming version) is deliberately unimplemented, because RabbitMQ does not
+-- Subscribe (non-streaming version) is deliberately unimplemented, because RabbitMQ does not
 -- support message history. Candidate solutions are building a separate pub/sub system on Kafka (or
 -- similar), or adding Cassandra to RabbitMQ. For now, you can use makeStreamVar in conjunction
 -- with subscribe' to get one-off values from a published topic.

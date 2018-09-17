@@ -141,7 +141,7 @@ pubSubTest' =
     Streamly.toList results `shouldReturn` [0, 1, 2, 3, 4]
 
 main :: IO ()
-main =
+main = do
   hspec $ do
     describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
     describe "streaming RPC bridge" $

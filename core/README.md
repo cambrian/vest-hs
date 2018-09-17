@@ -1,3 +1,3 @@
 # core
 
-Vest core.
+Internal coordination server for Vest derivatives.

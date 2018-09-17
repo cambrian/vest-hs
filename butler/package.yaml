@@ -1,4 +1,4 @@
-name:                socket-server
+name:                butler
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -6,31 +6,17 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            High-level library for streaming and RPCs over Websockets.
+synopsis:            Servant-style DSL to define RPCs and streaming APIs with swappable back-ends.
 category:            Network
 description:         See README.md.
 
 dependencies:
-- aeson             >= 1.4  && < 2
-- async             >= 2.2  && < 3
-- base              >= 4.7  && < 5
-- containers        >= 0.5  && < 0.6
-- hashtables        >= 1.2  && < 2
+- base              >= 4.10 && < 5
 - hspec             >= 2.5  && < 3
-- hostname          >= 1.0  && < 2
-- http-types        >= 0.12 && < 1
-- network           >= 2.7  && < 3
-- protolude         >= 0.2  && < 1
-- stm               >= 2.4  && < 3
+- random            >= 1.1  && < 2
 - streamly          >= 0.5  && < 1
 - text              >= 1.2  && < 2
-- utf8-string       >= 1.0  && < 2
-- uuid              >= 1.3  && < 2
 - vest-prelude
-- wai               >= 3.2  && < 4
-- wai-websockets    >= 3.0  && < 4
-- warp              >= 3.2  && < 4
-- websockets        >= 0.12 && < 1
 
 # The default-extensions and ghc-options have been taken from here:
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
@@ -41,7 +27,7 @@ default-extensions:
 - ConstraintKinds
 - DataKinds
 - DefaultSignatures
-- DeriveAnyClass # Added.
+- DeriveAnyClass
 - DeriveFoldable
 - DeriveFunctor
 - DeriveGeneric
@@ -65,6 +51,7 @@ default-extensions:
 - NoImplicitPrelude
 - OverloadedStrings
 - PatternSynonyms
+- PolyKinds
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving
@@ -87,7 +74,7 @@ library:
   source-dirs: src
 
 tests:
-  socket-server-test:
+  butler-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -95,4 +82,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - socket-server
+    - butler
