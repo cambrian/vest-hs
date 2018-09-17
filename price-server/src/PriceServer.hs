@@ -8,6 +8,7 @@ module PriceServer
 import qualified Bridge
 import Streamly.Prelude as Streamly
 import VestPrelude
+import qualified VestPrelude.DB as DB
 import qualified VestPrelude.Money as Money
 
 data (Priceable a) =>

@@ -11,8 +11,6 @@ description:         See README.md.
 
 dependencies:
 - base               >= 4.10 && < 5
-- beam-core          >= 0.7  && < 1
-# - beam-postgres      >= 0.3  && < 1
 - bridge
 - vest-prelude
 

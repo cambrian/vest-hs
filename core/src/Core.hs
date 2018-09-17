@@ -2,10 +2,11 @@ module Core
   (
   ) where
 
-import Database.Beam
 import VestPrelude
+import qualified VestPrelude.DB as DB
 import qualified VestPrelude.Money as Money
-
-data ContractT f = Contract
-  { _contractOwner :: Columnar f Text
-  } deriving (Generic)
+-- data StakingContract = StakingContract
+--   { id :: ID
+--   , owner :: Columnar f Text
+--   , size :: Columnar f Rational
+--   } deriving (Generic)

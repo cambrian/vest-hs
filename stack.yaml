@@ -9,11 +9,12 @@ packages:
 
 extra-deps:
 - aeson-1.4.0.0
-- beam-postgres-0.3.2.2
 - network-2.7.0.2
 - safe-money-0.7
 - safe-money-aeson-0.1
-- streamly-0.5.0
+- selda-0.3.3.1
+- selda-postgresql-0.1.7.3
+- streamly-0.5.1
 - timers-updatable-0.2.0.2
 
 flags:

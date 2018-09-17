@@ -23,8 +23,6 @@ import qualified Control.Concurrent.MVar as MVar
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Data.Text as Text
-import qualified Data.UUID as UUID
-import qualified Data.UUID.V4 as UUID
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
 import qualified Streamly
@@ -96,9 +94,9 @@ data BridgeException
 
 newQueueName :: IO Text
 newQueueName = do
-  uuid <- UUID.nextRandom
+  (Id id) <- newUuid
   myHostName <- Network.HostName.getHostName >>- Text.pack
-  return $ myHostName <> "." <> UUID.toText uuid
+  return $ myHostName <> "." <> id
 
 readAmqpMsg :: (Read a) => AMQP.Message -> Maybe a
 readAmqpMsg = Text.Read.readMaybe . ByteString.Lazy.UTF8.toString . AMQP.msgBody
@@ -230,7 +228,7 @@ _callRPCTimeout ::
   -> req
   -> IO res
 _callRPCTimeout handler _timeout T {chan, responseQueue, responseHandlers} (Route queueName) req = do
-  id <- UUID.nextRandom >>- Id . UUID.toText
+  id <- newUuid
   let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrow' waitForDone _timeout
