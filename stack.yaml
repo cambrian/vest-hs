@@ -4,7 +4,7 @@ packages:
 - bridge
 - butler
 - core
-- price-server
+# - price-server
 - socket-server
 - vest-prelude
 
