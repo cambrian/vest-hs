@@ -207,230 +207,279 @@ instance (KnownSymbol s, FromJSON a, ToJSON b) =>
     return [tag]
 
 -- The Client type families.
-type family Client spec :: *
+type family Client backend spec :: *
 
-type family Client' spec :: *
+type family Client' backend spec :: *
 
-type instance Client (ProtocolAs (f :: Format) (s :: Symbol) a b) =
-     Time Second -> a -> IO b
+type instance
+     Client backend (ProtocolAs (f :: Format) (s :: Symbol) a b) =
+     Time Second -> backend -> a -> IO b
 
-type instance Client' (ProtocolAs (f :: Format) (s :: Symbol) a b)
-     = Time Second -> a -> IO (Streamly.Serial b)
+type instance
+     Client' backend (ProtocolAs (f :: Format) (s :: Symbol) a b) =
+     Time Second -> backend -> a -> IO (Streamly.Serial b)
 
-type instance Client (a :<|> b) = Client a :<|> Client b
+type instance Client backend (a :<|> b) =
+     Client backend a :<|> Client backend b
 
-type instance Client' (a :<|> b) = Client' a :<|> Client' b
+type instance Client' backend (a :<|> b) =
+     Client' backend a :<|> Client' backend b
 
 -- Used to generate client functions for an API (direct and streaming versions).
 -- Param is request publisher.
-class HasClient spec where
+class HasClient backend spec where
   makeClient ::
-       Proxy spec -> (Time Second -> Route -> Text -> IO Text) -> Client spec
+       Proxy spec
+    -> (Time Second -> backend -> Route -> Text -> IO Text)
+    -> Client backend spec
   makeClient' ::
        Proxy spec
-    -> (Time Second -> Route -> Text -> IO (Streamly.Serial Text))
-    -> Client' spec
+    -> (Time Second -> backend -> Route -> Text -> IO (Streamly.Serial Text))
+    -> Client' backend spec
 
-instance (HasClient a, HasClient b) => HasClient (a :<|> b) where
+instance (HasClient backend a, HasClient backend b) =>
+         HasClient backend (a :<|> b) where
   makeClient ::
        Proxy (a :<|> b)
-    -> (Time Second -> Route -> Text -> IO Text)
-    -> Client a :<|> Client b
+    -> (Time Second -> backend -> Route -> Text -> IO Text)
+    -> Client backend a :<|> Client backend b
   makeClient _ publish =
     makeClient (Proxy :: Proxy a) publish :<|>
     makeClient (Proxy :: Proxy b) publish
   makeClient' ::
        Proxy (a :<|> b)
-    -> (Time Second -> Route -> Text -> IO (Streamly.Serial Text))
-    -> Client' a :<|> Client' b
+    -> (Time Second -> backend -> Route -> Text -> IO (Streamly.Serial Text))
+    -> Client' backend a :<|> Client' backend b
   makeClient' _ publish =
     makeClient' (Proxy :: Proxy a) publish :<|>
     makeClient' (Proxy :: Proxy b) publish
 
 instance (KnownSymbol s, Show a, Read b) =>
-         HasClient (Protocol (s :: Symbol) a b) where
+         HasClient backend (Protocol (s :: Symbol) a b) where
   makeClient ::
        Proxy (Protocol s a b)
-    -> (Time Second -> Route -> Text -> IO Text)
-    -> (Time Second -> a -> IO b)
+    -> (Time Second -> backend -> Route -> Text -> IO Text)
+    -> (Time Second -> backend -> a -> IO b)
   makeClient _ publish =
-    \_timeout req -> do
-      result <- publish _timeout (symbolToRoute (Proxy :: Proxy s)) (show req)
+    \_timeout backend req -> do
+      result <-
+        publish _timeout backend (symbolToRoute (Proxy :: Proxy s)) (show req)
       readUnsafe result
   makeClient' ::
        Proxy (Protocol s a b)
-    -> (Time Second -> Route -> Text -> IO (Streamly.Serial Text))
-    -> (Time Second -> a -> IO (Streamly.Serial b))
+    -> (Time Second -> backend -> Route -> Text -> IO (Streamly.Serial Text))
+    -> (Time Second -> backend -> a -> IO (Streamly.Serial b))
   makeClient' _ publish =
-    \_timeout req -> do
-      results <-
-        publish _timeout (symbolToStreamRoute (Proxy :: Proxy s)) (show req)
-      return $ Streamly.mapM readUnsafe results
-
-instance (KnownSymbol s, ToJSON a, FromJSON b) =>
-         HasClient (ProtocolJSON (s :: Symbol) a b) where
-  makeClient ::
-       Proxy (ProtocolJSON s a b)
-    -> (Time Second -> Route -> Text -> IO Text)
-    -> (Time Second -> a -> IO b)
-  makeClient _ publish =
-    \_timeout req -> do
-      result <-
-        publish _timeout (symbolToRoute (Proxy :: Proxy s)) (encodeToText req)
-      decodeUnsafe result
-  makeClient' ::
-       Proxy (ProtocolJSON s a b)
-    -> (Time Second -> Route -> Text -> IO (Streamly.Serial Text))
-    -> (Time Second -> a -> IO (Streamly.Serial b))
-  makeClient' _ publish =
-    \_timeout req -> do
+    \_timeout backend req -> do
       results <-
         publish
           _timeout
+          backend
+          (symbolToStreamRoute (Proxy :: Proxy s))
+          (show req)
+      return $ Streamly.mapM readUnsafe results
+
+instance (KnownSymbol s, ToJSON a, FromJSON b) =>
+         HasClient backend (ProtocolJSON (s :: Symbol) a b) where
+  makeClient ::
+       Proxy (ProtocolJSON s a b)
+    -> (Time Second -> backend -> Route -> Text -> IO Text)
+    -> (Time Second -> backend -> a -> IO b)
+  makeClient _ publish =
+    \_timeout backend req -> do
+      result <-
+        publish
+          _timeout
+          backend
+          (symbolToRoute (Proxy :: Proxy s))
+          (encodeToText req)
+      decodeUnsafe result
+  makeClient' ::
+       Proxy (ProtocolJSON s a b)
+    -> (Time Second -> backend -> Route -> Text -> IO (Streamly.Serial Text))
+    -> (Time Second -> backend -> a -> IO (Streamly.Serial b))
+  makeClient' _ publish =
+    \_timeout backend req -> do
+      results <-
+        publish
+          _timeout
+          backend
           (symbolToStreamRoute (Proxy :: Proxy s))
           (encodeToText req)
       return $ Streamly.mapM decodeUnsafe results
 
 -- The Publisher type families.
-type family Publisher spec :: *
+type family Publisher backend spec :: *
 
-type family Publisher' spec :: *
-
-type instance
-     Publisher (PublishingAs (f :: Format) (s :: Symbol) a) = a -> IO ()
+type family Publisher' backend spec :: *
 
 type instance
-     Publisher' (PublishingAs (f :: Format) (s :: Symbol) a) =
-     (Streamly.Serial a) -> IO ()
+     Publisher backend (PublishingAs (f :: Format) (s :: Symbol) a) =
+     backend -> a -> IO ()
 
-type instance Publisher (a :<|> b) = Publisher a :<|> Publisher b
+type instance
+     Publisher' backend (PublishingAs (f :: Format) (s :: Symbol) a) =
+     backend -> (Streamly.Serial a) -> IO ()
 
-type instance Publisher' (a :<|> b) =
-     Publisher' a :<|> Publisher' b
+type instance Publisher backend (a :<|> b) =
+     Publisher backend a :<|> Publisher backend b
+
+type instance Publisher' backend (a :<|> b) =
+     Publisher' backend a :<|> Publisher' backend b
 
 -- Used to generate publish functions for an API (direct and streaming versions).
 -- Param is request publisher.
-class HasPublisher spec where
-  makePublisher :: Proxy spec -> (Route -> Text -> IO ()) -> Publisher spec
-  makePublisher' :: Proxy spec -> (Route -> Text -> IO ()) -> Publisher' spec
+class HasPublisher backend spec where
+  makePublisher ::
+       Proxy spec
+    -> (backend -> Route -> Text -> IO ())
+    -> Publisher backend spec
+  makePublisher' ::
+       Proxy spec
+    -> (backend -> Route -> Text -> IO ())
+    -> Publisher' backend spec
 
-instance (HasPublisher a, HasPublisher b) => HasPublisher (a :<|> b) where
+instance (HasPublisher backend a, HasPublisher backend b) =>
+         HasPublisher backend (a :<|> b) where
   makePublisher ::
        Proxy (a :<|> b)
-    -> (Route -> Text -> IO ())
-    -> Publisher a :<|> Publisher b
+    -> (backend -> Route -> Text -> IO ())
+    -> Publisher backend a :<|> Publisher backend b
   makePublisher _ publish =
     makePublisher (Proxy :: Proxy a) publish :<|>
     makePublisher (Proxy :: Proxy b) publish
   makePublisher' ::
        Proxy (a :<|> b)
-    -> (Route -> Text -> IO ())
-    -> Publisher' a :<|> Publisher' b
+    -> (backend -> Route -> Text -> IO ())
+    -> Publisher' backend a :<|> Publisher' backend b
   makePublisher' _ publish =
     makePublisher' (Proxy :: Proxy a) publish :<|>
     makePublisher' (Proxy :: Proxy b) publish
 
 instance (KnownSymbol s, Show a) =>
-         HasPublisher (Publishing (s :: Symbol) a) where
+         HasPublisher backend (Publishing (s :: Symbol) a) where
   makePublisher ::
-       Proxy (Publishing s a) -> (Route -> Text -> IO ()) -> (a -> IO ())
+       Proxy (Publishing s a)
+    -> (backend -> Route -> Text -> IO ())
+    -> (backend -> a -> IO ())
   makePublisher _ publish =
-    let path = (symbolToRoute (Proxy :: Proxy s))
-     in publish path . show
+    \backend req -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      publish backend path (show req)
   makePublisher' ::
        Proxy (Publishing s a)
-    -> (Route -> Text -> IO ())
-    -> ((Streamly.Serial a) -> IO ())
+    -> (backend -> Route -> Text -> IO ())
+    -> (backend -> Streamly.Serial a -> IO ())
   makePublisher' _ publish =
-    let path = (symbolToRoute (Proxy :: Proxy s))
-     in Streamly.mapM_ (publish path . show)
+    \backend req -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      Streamly.mapM_ (publish backend path . show) req
 
 instance (KnownSymbol s, ToJSON a) =>
-         HasPublisher (PublishingJSON (s :: Symbol) a) where
+         HasPublisher backend (PublishingJSON (s :: Symbol) a) where
   makePublisher ::
-       Proxy (PublishingJSON s a) -> (Route -> Text -> IO ()) -> (a -> IO ())
+       Proxy (PublishingJSON s a)
+    -> (backend -> Route -> Text -> IO ())
+    -> (backend -> a -> IO ())
   makePublisher _ publish =
-    let path = (symbolToRoute (Proxy :: Proxy s))
-     in publish path . encodeToText
+    \backend req -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      publish backend path (encodeToText req)
   makePublisher' ::
        Proxy (PublishingJSON s a)
-    -> (Route -> Text -> IO ())
-    -> ((Streamly.Serial a) -> IO ())
+    -> (backend -> Route -> Text -> IO ())
+    -> (backend -> Streamly.Serial a -> IO ())
   makePublisher' _ publish =
-    let path = (symbolToRoute (Proxy :: Proxy s))
-     in Streamly.mapM_ (publish path . encodeToText)
+    \backend req -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      Streamly.mapM_ (publish backend path . encodeToText) req
 
 -- The Subscriber type families.
-type family Subscriber spec :: *
+type family Subscriber backend spec :: *
 
-type family Subscriber' spec :: *
-
-type instance
-     Subscriber (PublishingAs (f :: Format) (s :: Symbol) a) = IO a
+type family Subscriber' backend spec :: *
 
 type instance
-     Subscriber' (PublishingAs (f :: Format) (s :: Symbol) a) =
-     IO (Id, Streamly.Serial a)
+     Subscriber backend (PublishingAs (f :: Format) (s :: Symbol) a) =
+     backend -> IO a
 
-type instance Subscriber (a :<|> b) =
-     Subscriber a :<|> Subscriber b
+type instance
+     Subscriber' backend (PublishingAs (f :: Format) (s :: Symbol) a) =
+     backend -> IO (Id, Streamly.Serial a)
 
-type instance Subscriber' (a :<|> b) =
-     Subscriber' a :<|> Subscriber' b
+type instance Subscriber backend (a :<|> b) =
+     Subscriber backend a :<|> Subscriber backend b
+
+type instance Subscriber' backend (a :<|> b) =
+     Subscriber' backend a :<|> Subscriber' backend b
 
 -- Used to generate client functions for an API (direct and streaming versions).
 -- Param is function of route that returns (subscriber ID, result or result stream).
-class HasSubscriber spec where
-  makeSubscriber :: Proxy spec -> (Route -> IO Text) -> Subscriber spec
+class HasSubscriber backend spec where
+  makeSubscriber ::
+       Proxy spec -> (backend -> Route -> IO Text) -> Subscriber backend spec
   makeSubscriber' ::
        Proxy spec
-    -> (Route -> IO (Id, Streamly.Serial Text))
-    -> Subscriber' spec
+    -> (backend -> Route -> IO (Id, Streamly.Serial Text))
+    -> Subscriber' backend spec
 
-instance (HasSubscriber a, HasSubscriber b) => HasSubscriber (a :<|> b) where
+instance (HasSubscriber backend a, HasSubscriber backend b) =>
+         HasSubscriber backend (a :<|> b) where
   makeSubscriber ::
-       Proxy (a :<|> b) -> (Route -> IO Text) -> Subscriber a :<|> Subscriber b
+       Proxy (a :<|> b)
+    -> (backend -> Route -> IO Text)
+    -> Subscriber backend a :<|> Subscriber backend b
   makeSubscriber _ receive =
     makeSubscriber (Proxy :: Proxy a) receive :<|>
     makeSubscriber (Proxy :: Proxy b) receive
   makeSubscriber' ::
        Proxy (a :<|> b)
-    -> (Route -> IO (Id, Streamly.Serial Text))
-    -> Subscriber' a :<|> Subscriber' b
+    -> (backend -> Route -> IO (Id, Streamly.Serial Text))
+    -> Subscriber' backend a :<|> Subscriber' backend b
   makeSubscriber' _ receive =
     makeSubscriber' (Proxy :: Proxy a) receive :<|>
     makeSubscriber' (Proxy :: Proxy b) receive
 
 instance (KnownSymbol s, Read a) =>
-         HasSubscriber (Publishing (s :: Symbol) a) where
-  makeSubscriber :: Proxy (Publishing s a) -> (Route -> IO Text) -> IO a
-  makeSubscriber _ receiveIO = do
-    let path = (symbolToRoute (Proxy :: Proxy s))
-    result <- receiveIO path
-    res <- readUnsafe result
-    return res
+         HasSubscriber backend (Publishing (s :: Symbol) a) where
+  makeSubscriber ::
+       Proxy (Publishing s a)
+    -> (backend -> Route -> IO Text)
+    -> (backend -> IO a)
+  makeSubscriber _ receiveIO =
+    \backend -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      result <- receiveIO backend path
+      res <- readUnsafe result
+      return res
   makeSubscriber' ::
        Proxy (Publishing s a)
-    -> (Route -> IO (Id, Streamly.Serial Text))
-    -> IO (Id, Streamly.Serial a)
-  makeSubscriber' _ receiveIO = do
-    let path = (symbolToRoute (Proxy :: Proxy s))
-    (id, results) <- receiveIO path
-    return $ (id, Streamly.mapM readUnsafe results)
+    -> (backend -> Route -> IO (Id, Streamly.Serial Text))
+    -> (backend -> IO (Id, Streamly.Serial a))
+  makeSubscriber' _ receiveIO =
+    \backend -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      (id, results) <- receiveIO backend path
+      return $ (id, Streamly.mapM readUnsafe results)
 
 instance (KnownSymbol s, FromJSON a) =>
-         HasSubscriber (PublishingJSON (s :: Symbol) a) where
-  makeSubscriber :: Proxy (PublishingJSON s a) -> (Route -> IO Text) -> IO a
-  makeSubscriber _ receiveIO = do
-    let path = (symbolToRoute (Proxy :: Proxy s))
-    result <- receiveIO path
-    res <- decodeUnsafe result
-    return res
+         HasSubscriber backend (PublishingJSON (s :: Symbol) a) where
+  makeSubscriber ::
+       Proxy (PublishingJSON s a)
+    -> (backend -> Route -> IO Text)
+    -> (backend -> IO a)
+  makeSubscriber _ receiveIO =
+    \backend -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      result <- receiveIO backend path
+      res <- decodeUnsafe result
+      return res
   makeSubscriber' ::
        Proxy (PublishingJSON s a)
-    -> (Route -> IO (Id, Streamly.Serial Text))
-    -> IO (Id, Streamly.Serial a)
-  makeSubscriber' _ receiveIO = do
-    let path = (symbolToRoute (Proxy :: Proxy s))
-    (id, results) <- receiveIO path
-    return $ (id, Streamly.mapM decodeUnsafe results)
+    -> (backend -> Route -> IO (Id, Streamly.Serial Text))
+    -> (backend -> IO (Id, Streamly.Serial a))
+  makeSubscriber' _ receiveIO =
+    \backend -> do
+      let path = (symbolToRoute (Proxy :: Proxy s))
+      (id, results) <- receiveIO backend path
+      return $ (id, Streamly.mapM decodeUnsafe results)

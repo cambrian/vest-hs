@@ -60,7 +60,7 @@ _testSimpleAPI = do
   let callDouble :<|> callEcho :<|> callDoubleSum =
         Butler.makeClient
           proxySimpleAPI
-          (\_ route request -> do
+          (\_ _ route request -> do
              requestVarMaybe <- HashTable.lookup requestTable route
              resultVarMaybe <- HashTable.lookup resultTable route
              case (requestVarMaybe, resultVarMaybe) of
@@ -68,9 +68,9 @@ _testSimpleAPI = do
                  MVar.putMVar requestVar request
                  MVar.takeMVar resultVar
                _ -> panic "this is a bug")
-  a <- callDouble defaultTimeout 3
-  b <- callEcho defaultTimeout "test"
-  c <- callDoubleSum defaultTimeout [1, 2, 3, 4]
+  a <- callDouble defaultTimeout () 3
+  b <- callEcho defaultTimeout () "test"
+  c <- callDoubleSum defaultTimeout () [1, 2, 3, 4]
   mapM_ cancel serverThreads
   return . describe "simple API" $
     it "should compute results correctly" $ (a, b, c) `shouldBe` (6, "test", 20)
@@ -122,7 +122,7 @@ _testStreamAPI = do
   let callDouble' :<|> callEcho' =
         Butler.makeClient'
           proxyStreamAPI
-          (\_ route request -> do
+          (\_ _ route request -> do
              requestVarMaybe <- HashTable.lookup requestTable route
              resultsVarMaybe <- HashTable.lookup resultTable route
              case (requestVarMaybe, resultsVarMaybe) of
@@ -133,8 +133,8 @@ _testStreamAPI = do
                  MVar.putMVar resultsVar rp
                  return stream
                _ -> panic "this is a bug")
-  a <- callDouble' defaultTimeout 3
-  b <- callEcho' defaultTimeout "test"
+  a <- callDouble' defaultTimeout () 3
+  b <- callEcho' defaultTimeout () "test"
   as <- Streamly.toList a
   bs <- Streamly.toList b
   mapM_ cancel serverThreads
@@ -154,7 +154,7 @@ _testPublishAPI = do
   let publishIncrement' :<|> publishRepeat' =
         Butler.makePublisher'
           proxyPublishAPI
-          (\route message ->
+          (\_ route message ->
              case route of
                Route "increment" -> pushInc message
                Route "repeat" -> pushRep message
@@ -162,7 +162,7 @@ _testPublishAPI = do
   let subscribeIncrement' :<|> subscribeRepeat' =
         Butler.makeSubscriber'
           proxyPublishAPI
-          (\route -> do
+          (\_ route -> do
              idInt <- Random.randomRIO (1, 10000)
              let id = Id . show $ (idInt :: Int)
              return $
@@ -170,13 +170,13 @@ _testPublishAPI = do
                  Route "increment" -> (id, streamInc)
                  Route "repeat" -> (id, streamRep)
                  _ -> (id, Streamly.nil))
-  (_, resultsInc) <- subscribeIncrement'
-  (_, resultsRep) <- subscribeRepeat'
+  (_, resultsInc) <- subscribeIncrement' ()
+  (_, resultsRep) <- subscribeRepeat' ()
   async $ do
-    publishIncrement' (Streamly.fromList [1, 2, 3, 4])
+    publishIncrement' () (Streamly.fromList [1, 2, 3, 4])
     closeInc
   async $ do
-    publishRepeat' (Streamly.fromList ["test", "test", "test"])
+    publishRepeat' () (Streamly.fromList ["test", "test", "test"])
     closeRep
   resultListInc <- Streamly.toList resultsInc
   resultListRep <- Streamly.toList resultsRep

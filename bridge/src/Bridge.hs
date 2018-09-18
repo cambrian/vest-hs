@@ -1,10 +1,15 @@
 module Bridge
   ( T(..)
   , Config(..)
+  , makeConfig
   , localConfig
   , with
   , withForever
+  , callUnsafe
+  , callUnsafe'
   , defaultTimeout
+  , publishUnsafe
+  , subscribeUnsafe'
   , unsubscribe
   , unsubscribe'
   , BridgeException(..)
@@ -42,16 +47,15 @@ data ResponseMessage = ResponseMessage
   , res :: Either BridgeException Response
   } deriving (Eq, Show, Read)
 
-data Config a b c = Config
+data Config a b = Config
   { hostname :: Text
   , virtualHost :: Text
   , username :: Text
   , password :: Text
-  , publishAPI :: Proxy a
-  , serveAPI :: Proxy b
-  , handlers :: Butler.Server b
-  , serveAPI' :: Proxy c
-  , handlers' :: Butler.Server' c
+  , serveAPI :: Proxy a
+  , handlers :: Butler.Server a
+  , serveAPI' :: Proxy b
+  , handlers' :: Butler.Server' b
   }
 
 makeConfig ::
@@ -60,18 +64,16 @@ makeConfig ::
   -> Text
   -> Text
   -> Proxy a
+  -> Butler.Server a
   -> Proxy b
-  -> Butler.Server b
-  -> Proxy c
-  -> Butler.Server' c
-  -> Config a b c
-makeConfig hostname virtualHost username password publishAPI serveAPI handlers serveAPI' handlers' =
+  -> Butler.Server' b
+  -> Config a b
+makeConfig hostname virtualHost username password serveAPI handlers serveAPI' handlers' =
   Config
     { hostname
     , virtualHost
     , username
     , password
-    , publishAPI
     , serveAPI
     , handlers
     , serveAPI'
@@ -79,15 +81,10 @@ makeConfig hostname virtualHost username password publishAPI serveAPI handlers s
     }
 
 localConfig ::
-     Proxy a
-  -> Proxy b
-  -> Butler.Server b
-  -> Proxy c
-  -> Butler.Server' c
-  -> Config a b c
+     Proxy a -> Butler.Server a -> Proxy b -> Butler.Server' b -> Config a b
 localConfig = makeConfig "localhost" "/" "guest" "guest"
 
-data T a b c = T
+data T = T
   { conn :: AMQP.Connection
   , chan :: AMQP.Channel
   , responseQueue :: Id
@@ -97,11 +94,6 @@ data T a b c = T
   , responseHandlers :: HashTable Id (Response -> IO ())
   -- Key: subscriberId to Value: (consumerTag, close)
   , subscriberInfo :: HashTable Id (AMQP.ConsumerTag, IO ())
-  , publishers :: Butler.Publisher a
-  , publishers' :: Butler.Publisher' a
-  , subscribers' :: Butler.Subscriber' a
-  , clients :: Butler.Client b
-  , clients' :: Butler.Client' c
   }
 
 data BridgeException
@@ -125,9 +117,6 @@ newQueueName = do
   myHostName <- Network.HostName.getHostName >>- Text.pack
   return $ myHostName <> "." <> id
 
-amqpMsgToText :: AMQP.Message -> Text
-amqpMsgToText = Text.pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
-
 readAmqpMsg :: (Read a) => AMQP.Message -> Maybe a
 readAmqpMsg = Text.Read.readMaybe . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
@@ -136,49 +125,27 @@ toAmqpMsg x =
   AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString (show x)}
 
 with ::
-     ( Butler.HasPublisher a
-     , Butler.HasSubscriber a
-     , Butler.HasServer b
-     , Butler.HasClient b
-     , Butler.HasServer c
-     , Butler.HasClient c
-     )
-  => Config a b c
-  -> (T a b c -> IO ())
+     (Butler.HasServer a, Butler.HasServer b)
+  => Config a b
+  -> (T -> IO ())
   -> IO ()
 with config = bracket (make config) kill
 
 withForever ::
-     ( Butler.HasPublisher a
-     , Butler.HasSubscriber a
-     , Butler.HasServer b
-     , Butler.HasClient b
-     , Butler.HasServer c
-     , Butler.HasClient c
-     )
-  => Config a b c
-  -> (T a b c -> IO ())
+     (Butler.HasServer a, Butler.HasServer b)
+  => Config a b
+  -> (T -> IO ())
   -> IO ()
 withForever config action =
   bracket (make config) kill (\x -> action x >> blockForever)
 
 -- Connects to bridge, begins listening on RPC queue.
 -- Returns (state, publishers, publishers', subscribers', clients, clients').
-make ::
-     ( Butler.HasPublisher a
-     , Butler.HasSubscriber a
-     , Butler.HasServer b
-     , Butler.HasClient b
-     , Butler.HasServer c
-     , Butler.HasClient c
-     )
-  => Config a b c
-  -> IO (T a b c)
+make :: (Butler.HasServer a, Butler.HasServer b) => Config a b -> IO T
 make Config { hostname
             , virtualHost
             , username
             , password
-            , publishAPI
             , serveAPI
             , handlers
             , serveAPI'
@@ -203,21 +170,9 @@ make Config { hostname
       (\(msg, env) -> do
          readAmqpMsg msg >|>| handleResponse -- Do nothing if response message is malformed.
          AMQP.ackEnv env)
-  serveConsumerTags <- Butler.makeServer serveAPI handlers (serveRPC chan)
-  serveConsumerTags' <- Butler.makeServer' serveAPI' handlers' (serveRPC' chan)
+  serveConsumerTags <- Butler.makeServer serveAPI handlers (serve chan)
+  serveConsumerTags' <- Butler.makeServer' serveAPI' handlers' (serve' chan)
   subscriberInfo <- HashTable.new
-  let publishers = Butler.makePublisher publishAPI (publish chan)
-  let publishers' = Butler.makePublisher' publishAPI (publish chan)
-  let subscribers' =
-        Butler.makeSubscriber' publishAPI (subscribe' (chan, subscriberInfo))
-  let clients =
-        Butler.makeClient
-          serveAPI
-          (callRPCTimeout (chan, responseQueue, responseHandlers))
-  let clients' =
-        Butler.makeClient'
-          serveAPI'
-          (callRPCTimeout' (chan, responseQueue, responseHandlers))
   return
     T
       { conn
@@ -228,15 +183,10 @@ make Config { hostname
       , serveConsumerTags'
       , responseHandlers
       , subscriberInfo
-      , publishers
-      , publishers'
-      , subscribers'
-      , clients
-      , clients'
       }
 
 -- Kills and cleans up bridge.
-kill :: T a b c -> IO ()
+kill :: T -> IO ()
 kill t = do
   let T { conn
         , chan
@@ -250,19 +200,19 @@ kill t = do
   AMQP.cancelConsumer chan responseConsumerTag
   mapM_ (AMQP.cancelConsumer chan) serveConsumerTags
   mapM_ (AMQP.cancelConsumer chan) serveConsumerTags'
-  HashTable.mapM_ (unsubscribe t . fst) subscriberInfo -- TODO: Fix.
+  HashTable.mapM_ (unsubscribe t . fst) subscriberInfo
   -- responseHandlers will automatically time out.
   _ <- AMQP.deleteQueue chan _responseQueue
   AMQP.closeConnection conn -- And chan.
 
 -- RPC server.
-_serveRPC ::
+_serve ::
      ((Response -> IO ()) -> x' -> IO ())
   -> AMQP.Channel
   -> Route
   -> (Text -> IO x')
   -> IO AMQP.ConsumerTag
-_serveRPC publisher chan (Route queueName) handler = do
+_serve publisher chan (Route queueName) handler = do
   let wrappedHandler RequestMessage {id = requestId, responseQueue, req} = do
         let Id _responseQueue = responseQueue
             pub res =
@@ -290,17 +240,17 @@ _serveRPC publisher chan (Route queueName) handler = do
   return handlerTag
 
 -- Direct RPC server.
-serveRPC :: AMQP.Channel -> Route -> (Text -> IO Text) -> IO AMQP.ConsumerTag
-serveRPC = _serveRPC (\pub -> pub . Result)
+serve :: AMQP.Channel -> Route -> (Text -> IO Text) -> IO AMQP.ConsumerTag
+serve = _serve (\pub -> pub . Result)
 
 -- Streaming RPC server.
-serveRPC' ::
+serve' ::
      AMQP.Channel
   -> Route
   -> (Text -> IO (Streamly.Serial Text))
   -> IO AMQP.ConsumerTag
-serveRPC' =
-  _serveRPC
+serve' =
+  _serve
     (\pub results -> do
        Streamly.mapM_ (pub . Result) results
        pub EndOfResults)
@@ -310,18 +260,17 @@ serveRPC' =
 -- Registers a handler in the waiting RPC call hash table, and deregisters it after done resolves.
 -- Times out if done is not fulfilled after _timeout, with the timeout reset every time a response
 -- is received.
-_callRPCTimeout ::
+_call ::
      IO (Response -> IO (), IO x', IO ())
   -- Response handler, result, done.
-  -> (AMQP.Channel, Id, HashTable Id (Response -> IO ()))
-  -- Channel, response queue ID, response handler table.
   -> Time Second
+  -> T
   -> Route
   -> Text
   -> IO x'
-_callRPCTimeout handler (chan, responseQueue, responseHandlers) _timeout (Route queueName) req = do
+_call handler _timeout T {chan, responseQueue, responseHandlers} (Route queueName) req = do
   id <- newUuid
-  let request = toAmqpMsg RequestMessage {id, responseQueue, req = show req}
+  let request = toAmqpMsg RequestMessage {id, responseQueue, req}
   (push, result, waitForDone) <- handler
   renewTimeout <- timeoutThrow' waitForDone _timeout
   HashTable.insert responseHandlers id (\x -> renewTimeout >> push x)
@@ -330,14 +279,9 @@ _callRPCTimeout handler (chan, responseQueue, responseHandlers) _timeout (Route 
   result
 
 -- Direct RPC call.
-callRPCTimeout ::
-     (AMQP.Channel, Id, HashTable Id (Response -> IO ()))
-  -> Time Second
-  -> Route
-  -> Text
-  -> IO Text
-callRPCTimeout =
-  _callRPCTimeout
+callUnsafe :: Time Second -> T -> Route -> Text -> IO Text
+callUnsafe =
+  _call
     (do resultVar <- MVar.newEmptyMVar
         let push =
               \case
@@ -350,14 +294,9 @@ callRPCTimeout =
         return (push, result, void result))
 
 -- Streaming RPC call.
-callRPCTimeout' ::
-     (AMQP.Channel, Id, HashTable Id (Response -> IO ()))
-  -> Time Second
-  -> Route
-  -> Text
-  -> IO (Streamly.Serial Text)
-callRPCTimeout' =
-  _callRPCTimeout
+callUnsafe' :: Time Second -> T -> Route -> Text -> IO (Streamly.Serial Text)
+callUnsafe' =
+  _call
     (do (_push, close, results) <- repeatableStream
         let push =
               \case
@@ -370,9 +309,8 @@ defaultTimeout :: Time Second
 defaultTimeout = sec 10
 
 -- Publish in the usual pub/sub model.
-publish :: AMQP.Channel -> Route -> Text -> IO ()
-publish chan route a = do
-  let Route exchangeName = route
+publishUnsafe :: T -> Route -> Text -> IO ()
+publishUnsafe T {chan} (Route exchangeName) a = do
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
@@ -384,11 +322,8 @@ publish chan route a = do
 -- similar), or adding Cassandra to RabbitMQ. For now, you can use makeStreamVar in conjunction
 -- with subscribe' to get one-off values from a published topic.
 -- Returns subscriber ID and result stream as tuple (ID, stream).
-subscribe' ::
-     (AMQP.Channel, HashTable Id (AMQP.ConsumerTag, IO ()))
-  -> Route
-  -> IO (Id, Streamly.Serial Text)
-subscribe' (chan, subscriberInfo) (Route route) = do
+subscribeUnsafe' :: T -> Route -> IO (Id, Streamly.Serial Text)
+subscribeUnsafe' T {chan, subscriberInfo} (Route route) = do
   AMQP.declareExchange
     chan
     AMQP.newExchange {AMQP.exchangeName = route, AMQP.exchangeType = "fanout"}
@@ -398,13 +333,13 @@ subscribe' (chan, subscriberInfo) (Route route) = do
   AMQP.bindQueue chan queueName route "" -- Routing key blank.
   (push, close, results) <- repeatableStream
   consumerTag <-
-    AMQP.consumeMsgs chan queueName AMQP.NoAck (push . amqpMsgToText . fst)
+    AMQP.consumeMsgs chan queueName AMQP.NoAck (mapM_ push . readAmqpMsg . fst)
   let subscriberId = Id queueName
   HashTable.insert subscriberInfo subscriberId (consumerTag, close)
   return (subscriberId, results)
 
 -- Unsubscribes a consumer (idempotent).
-unsubscribe :: T a b c -> Id -> IO ()
+unsubscribe :: T -> Id -> IO ()
 unsubscribe T {chan, subscriberInfo} subscriberId = do
   let Id queueName = subscriberId
   HashTable.lookup subscriberInfo subscriberId >>= \case
@@ -415,5 +350,5 @@ unsubscribe T {chan, subscriberInfo} subscriberId = do
       close
   HashTable.delete subscriberInfo subscriberId
 
-unsubscribe' :: T a b c -> Id -> IO ()
+unsubscribe' :: T -> Id -> IO ()
 unsubscribe' = unsubscribe
