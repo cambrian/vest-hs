@@ -11,7 +11,10 @@ description:         See README.md.
 
 dependencies:
 - base               >= 4.10 && < 5
+- generics-sop       >= 0.3  && < 1
+# - stripe-haskell     >= 2.4  && < 3
 - bridge
+- price-server
 - vest-prelude
 
 # The default-extensions and ghc-options have been taken from here:
@@ -46,6 +49,7 @@ default-extensions:
 - NamedFieldPuns
 - NoImplicitPrelude
 - OverloadedStrings
+- OverloadedLabels
 - PatternSynonyms
 - RankNTypes
 - ScopedTypeVariables
@@ -56,6 +60,7 @@ default-extensions:
 - TypeFamilies
 - TypeFamilyDependencies
 - TypeOperators
+- UndecidableInstances
 
 ghc-options:
 - -Wall

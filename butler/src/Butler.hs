@@ -179,7 +179,7 @@ instance (KnownSymbol s, FromJSON a, ToJSON b) =>
     \request -> do
       req <- decodeUnsafe request
       result <- handler req
-      return $ encodeToText result
+      return $ encode result
   wrap' ::
        Proxy (ProtocolJSON s a b)
     -> (a -> IO (Streamly.Serial b))
@@ -188,7 +188,7 @@ instance (KnownSymbol s, FromJSON a, ToJSON b) =>
     \request -> do
       req <- decodeUnsafe request
       results <- handler req
-      return $ Streamly.map encodeToText results
+      return $ Streamly.map encode results
   makeServer ::
        Proxy (ProtocolJSON s a b)
     -> (a -> IO b)
@@ -288,11 +288,7 @@ instance (KnownSymbol s, ToJSON a, FromJSON b) =>
   makeClient _ publish =
     \_timeout backend req -> do
       result <-
-        publish
-          _timeout
-          backend
-          (symbolToRoute (Proxy :: Proxy s))
-          (encodeToText req)
+        publish _timeout backend (symbolToRoute (Proxy :: Proxy s)) (encode req)
       decodeUnsafe result
   makeClient' ::
        Proxy (ProtocolJSON s a b)
@@ -305,7 +301,7 @@ instance (KnownSymbol s, ToJSON a, FromJSON b) =>
           _timeout
           backend
           (symbolToStreamRoute (Proxy :: Proxy s))
-          (encodeToText req)
+          (encode req)
       return $ Streamly.mapM decodeUnsafe results
 
 -- The Publisher type families.
@@ -384,7 +380,7 @@ instance (KnownSymbol s, ToJSON a) =>
   makePublisher _ publish =
     \backend req -> do
       let path = (symbolToRoute (Proxy :: Proxy s))
-      publish backend path (encodeToText req)
+      publish backend path (encode req)
   makePublisher' ::
        Proxy (PublishingJSON s a)
     -> (backend -> Route -> Text -> IO ())
@@ -392,7 +388,7 @@ instance (KnownSymbol s, ToJSON a) =>
   makePublisher' _ publish =
     \backend req -> do
       let path = (symbolToRoute (Proxy :: Proxy s))
-      Streamly.mapM_ (publish backend path . encodeToText) req
+      Streamly.mapM_ (publish backend path . encode) req
 
 -- The Subscriber type families.
 type family Subscriber backend spec :: *

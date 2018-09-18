@@ -32,7 +32,7 @@ handleDirectAPI :: Butler.Server DirectAPI
 handleDirectAPI = echo :<|> echoInts :<|> echoChars :<|> echoTimeout
 
 callEcho :<|> callEchoInts :<|> callEchoChars :<|> callEchoTimeout =
-  Butler.makeClient proxyDirectAPI Bridge.callUnsafe
+  Butler.makeClient proxyDirectAPI Bridge.callUntyped
 
 type StreamingAPI
    = Protocol "echoInts" [Int] Int :<|> Protocol "echoChars" [Char] Char :<|> Protocol "echoDelay" Int Int :<|> Protocol "echoTimeout" [Int] Int
@@ -60,17 +60,17 @@ handleStreamingAPI :: Butler.Server' StreamingAPI
 handleStreamingAPI = echoInts' :<|> echoChars' :<|> echoDelay' :<|> echoTimeout'
 
 callEchoInts' :<|> callEchoChars' :<|> callEchoDelay' :<|> callEchoTimeout' =
-  Butler.makeClient' proxyStreamingAPI Bridge.callUnsafe'
+  Butler.makeClient' proxyStreamingAPI Bridge.callUntyped'
 
 type PublishAPI = Publishing "increment" Int
 
 proxyPublishAPI :: Proxy PublishAPI
 proxyPublishAPI = Proxy
 
-publishIncrement = Butler.makePublisher' proxyPublishAPI Bridge.publishUnsafe
+publishIncrement = Butler.makePublisher' proxyPublishAPI Bridge.publishUntyped
 
 subscribeIncrement =
-  Butler.makeSubscriber' proxyPublishAPI Bridge.subscribeUnsafe'
+  Butler.makeSubscriber' proxyPublishAPI Bridge.subscribeUntyped'
 
 increment :: Streamly.Serial Int
 increment =
@@ -82,17 +82,22 @@ increment =
             else Nothing
    in (Streamly.unfoldrM f 0)
 
-apiConfig :: Bridge.Config DirectAPI StreamingAPI
-apiConfig =
-  Bridge.localConfig
-    proxyDirectAPI
-    handleDirectAPI
-    proxyStreamingAPI
-    handleStreamingAPI
+config :: Bridge.Config DirectAPI StreamingAPI
+config =
+  Bridge.Config
+    { connection = Bridge.localConnection
+    , api =
+        Bridge.Api
+          { api = proxyDirectAPI
+          , handlers = handleDirectAPI
+          , api' = proxyStreamingAPI
+          , handlers' = handleStreamingAPI
+          }
+    }
 
 echoTest :: Spec
 echoTest =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running simple echo RPC" $
   it "returns the original output" $ \b -> do
     result <- callEcho Bridge.defaultTimeout b "test"
@@ -100,7 +105,7 @@ echoTest =
 
 echoTest' :: Spec
 echoTest' =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running simple echoInts RPC" $
   it "returns the original output" $ \b -> do
     results <- callEchoInts' Bridge.defaultTimeout b [1, 2, 3]
@@ -108,7 +113,7 @@ echoTest' =
 
 multipleFnTest :: Spec
 multipleFnTest =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running multiple echo RPCs" $
   it "returns the original output for both" $ \b -> do
     resultInts <- callEchoInts Bridge.defaultTimeout b [1, 2, 3]
@@ -118,7 +123,7 @@ multipleFnTest =
 
 multipleFnTest' :: Spec
 multipleFnTest' =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running multiple echo RPCs" $
   it "returns the original output for both" $ \b -> do
     resultsInt <- callEchoInts' Bridge.defaultTimeout b [1, 2, 3]
@@ -128,7 +133,7 @@ multipleFnTest' =
 
 multipleConsumeTest' :: Spec
 multipleConsumeTest' =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running echo with multiple stream consumers" $
   it "returns the original output for both" $ \b -> do
     results <- callEchoInts' Bridge.defaultTimeout b [1, 2, 3]
@@ -137,7 +142,7 @@ multipleConsumeTest' =
 
 concurrentTest' :: Spec
 concurrentTest' =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running RPCs with concurrent callers" $
   it "returns the correct output for both" $ \b -> do
     results1 <- callEchoDelay' Bridge.defaultTimeout b 1
@@ -149,14 +154,14 @@ concurrentTest' =
 
 timeoutTest :: Spec
 timeoutTest =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \b ->
     callEchoTimeout (sec 0.1) b [1, 2, 3] `shouldThrow` (== Timeout (sec 0.1))
 
 timeoutTest' :: Spec
 timeoutTest' =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \b -> do
     (do results <- callEchoTimeout' (sec 0.1) b [1, 2, 3]
@@ -166,7 +171,7 @@ timeoutTest' =
 
 pubSubTest' :: Spec
 pubSubTest' =
-  around (Bridge.with apiConfig) $
+  around (Bridge.with config) $
   context "when publishing an incrementing stream" $
   it "functions correctly on the subscribing end" $ \b -> do
     (id, results) <- subscribeIncrement b

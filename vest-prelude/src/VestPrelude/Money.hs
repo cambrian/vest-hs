@@ -3,9 +3,10 @@ module VestPrelude.Money
   , module Reexports
   ) where
 
--- use: import qualified VestPrelude.Money as Money
 import Money as Reexports
 import Money.Aeson as Reexports ()
+-- use: import qualified VestPrelude.Money as Money
+import VestPrelude
 
 type instance Scale "XTZ" "XTZ" = '(1000000, 1)
 

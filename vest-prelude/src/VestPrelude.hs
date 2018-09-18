@@ -9,14 +9,17 @@ import Control.Concurrent.MVar as Reexports
 import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
-import Data.Aeson as Reexports (FromJSON, ToJSON, decode, encode)
+import Data.Aeson as Reexports (FromJSON, ToJSON)
+import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
-import qualified Data.Text as Text
+import Data.Proxy as Reexports
+import Data.Text as Reexports (pack, unpack)
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Data.Vector as Vector
 import qualified Foreign.StablePtr as StablePtr
+import GHC.TypeLits
 import Protolude as VestPrelude hiding
   ( Exception
   , bracket
@@ -49,11 +52,19 @@ import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
 
--- If you want the Id or Route string you should destructure instead of using show:
+-- For all of these wrapper types, you can extract the base Text by deconstructing:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
 newtype Id =
   Id Text
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
+
+newtype Host =
+  Host Text
+  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
+
+newtype Hash =
+  Hash Text
   deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Port =
@@ -118,9 +129,6 @@ instance Exception Timeout where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
 
-(+++) :: Text -> Text -> Text
-(+++) = Text.append
-
 infixl 1 >>-
 
 -- Infix map with arguments flipped. Like (>>=), but the chained function is pure.
@@ -149,12 +157,12 @@ blockForever = do
 decodeUnsafe :: (FromJSON a) => Text -> IO a
 -- TODO: Clean this up.
 decodeUnsafe text =
-  case decode . ByteString.Lazy.UTF8.fromString . Text.unpack $ text of
+  case Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack $ text of
     Nothing -> throwIO $ DecodeException text
     Just x -> return x
 
-encodeToText :: (ToJSON a) => a -> Text
-encodeToText = Text.pack . ByteString.Lazy.UTF8.toString . encode
+encode :: (ToJSON a) => a -> Text
+encode = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
 
 fromJustUnsafe :: Maybe a -> IO a
 fromJustUnsafe Nothing = throwIO NothingException
@@ -179,8 +187,11 @@ makeStreamVar' init as = do
 newUuid :: IO Id
 newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
+proxyText :: (KnownSymbol a) => Proxy a -> Text
+proxyText = pack . symbolVal
+
 readMaybe :: (Read a) => Text -> Maybe a
-readMaybe = Text.Read.readMaybe . Text.unpack
+readMaybe = Text.Read.readMaybe . unpack
 
 readUnsafe :: (Read a) => Text -> IO a
 readUnsafe text =
@@ -219,3 +230,14 @@ timeoutThrow' action _timeout = do
     UpdatableTimer.replacer (throwTo outerThreadId (Timeout _timeout)) micros
   async $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
+
+class Resource config t where
+  hold :: config -> IO t
+  release :: t -> IO ()
+  -- ^ Minimal required definition
+  with :: config -> (t -> IO ()) -> IO ()
+  with config = bracket (hold config) (release @config @t)
+  -- TODO: catch exceptions and reconnect
+  withForever :: config -> (t -> IO ()) -> IO ()
+  withForever config action =
+    bracket (hold config) (release @config @t) (\x -> action x >> blockForever)
