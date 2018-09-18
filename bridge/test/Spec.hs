@@ -80,7 +80,7 @@ increment =
           if s < 5
             then Just (s, s + 1 :: Int)
             else Nothing
-   in (Streamly.unfoldrM f 0)
+   in Streamly.unfoldrM f 0
 
 config :: Bridge.Config DirectAPI StreamingAPI
 config =
@@ -163,11 +163,11 @@ timeoutTest' :: Spec
 timeoutTest' =
   around (Bridge.with config) $
   context "when running RPCs that take too long" $
-  it "forces callers to time out" $ \b -> do
+  it "forces callers to time out" $ \b ->
     (do results <- callEchoTimeout' (sec 0.1) b [1, 2, 3]
         resultsList <- Streamly.toList results
         print resultsList) `shouldThrow`
-      (== Timeout (sec 0.1))
+    (== Timeout (sec 0.1))
 
 pubSubTest' :: Spec
 pubSubTest' =
@@ -182,10 +182,10 @@ pubSubTest' =
     Streamly.toList results `shouldReturn` [0, 1, 2, 3, 4]
 
 main :: IO ()
-main = do
+main =
   hspec $ do
     describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
     describe "streaming RPC bridge" $
       echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
       timeoutTest'
-    describe "publish/subscribe bridge" $ pubSubTest'
+    describe "publish/subscribe bridge" pubSubTest'
