@@ -1,89 +1,147 @@
+-- Should be disabled to destructure makeX calls without manual type signatures.
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
+
 import qualified Bridge
+import qualified Butler
+import Butler ((:<|>)(..), Protocol, Publishing)
 import qualified Data.List
+import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Test.Hspec
 import VestPrelude
 
+type DirectAPI
+   = Protocol "echo" Text Text :<|> Protocol "echoInts" [Int] [Int] :<|> Protocol "echoChars" [Char] [Char] :<|> Protocol "echoTimeout" [Int] [Int]
+
+echo :: Text -> IO Text
+echo = return . identity
+
+echoInts :: [Int] -> IO [Int]
+echoInts = return . identity
+
+echoChars :: [Char] -> IO [Char]
+echoChars = return . identity
+
+echoTimeout :: [Int] -> IO [Int]
+echoTimeout xs = threadDelay (sec 0.2) >> return xs
+
+proxyDirectAPI :: Proxy DirectAPI
+proxyDirectAPI = Proxy
+
+handleDirectAPI :: Butler.Server DirectAPI
+handleDirectAPI = echo :<|> echoInts :<|> echoChars :<|> echoTimeout
+
+callEcho :<|> callEchoInts :<|> callEchoChars :<|> callEchoTimeout =
+  Butler.makeClient proxyDirectAPI Bridge.callUnsafe
+
+type StreamingAPI
+   = Protocol "echoInts" [Int] Int :<|> Protocol "echoChars" [Char] Char :<|> Protocol "echoDelay" Int Int :<|> Protocol "echoTimeout" [Int] Int
+
+echoInts' :: [Int] -> IO (Streamly.Serial Int)
+echoInts' = return . Streamly.fromList
+
+echoChars' :: [Char] -> IO (Streamly.Serial Char)
+echoChars' = return . Streamly.fromList
+
+echoDelay' :: Int -> IO (Streamly.Serial Int)
+echoDelay' x =
+  return $
+  Streamly.repeatM (threadDelay (sec 0.1) >> return x) & Streamly.take 3
+
+echoTimeout' :: [Int] -> IO (Streamly.Serial Int)
+echoTimeout' xs =
+  return $
+  Streamly.fromList xs & Streamly.mapM (\x -> threadDelay (sec 0.2) >> return x)
+
+proxyStreamingAPI :: Proxy StreamingAPI
+proxyStreamingAPI = Proxy
+
+handleStreamingAPI :: Butler.Server' StreamingAPI
+handleStreamingAPI = echoInts' :<|> echoChars' :<|> echoDelay' :<|> echoTimeout'
+
+callEchoInts' :<|> callEchoChars' :<|> callEchoDelay' :<|> callEchoTimeout' =
+  Butler.makeClient' proxyStreamingAPI Bridge.callUnsafe'
+
+type PublishAPI = Publishing "increment" Int
+
+proxyPublishAPI :: Proxy PublishAPI
+proxyPublishAPI = Proxy
+
+publishIncrement = Butler.makePublisher' proxyPublishAPI Bridge.publishUnsafe
+
+subscribeIncrement =
+  Butler.makeSubscriber' proxyPublishAPI Bridge.subscribeUnsafe'
+
+increment :: Streamly.Serial Int
+increment =
+  let f s = do
+        threadDelay (sec 0.05)
+        return $
+          if s < 5
+            then Just (s, s + 1 :: Int)
+            else Nothing
+   in (Streamly.unfoldrM f 0)
+
+apiConfig :: Bridge.Config DirectAPI StreamingAPI
+apiConfig =
+  Bridge.localConfig
+    proxyDirectAPI
+    handleDirectAPI
+    proxyStreamingAPI
+    handleStreamingAPI
+
 echoTest :: Spec
 echoTest =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running simple echo RPC" $
   it "returns the original output" $ \b -> do
-    let route = Route "echo"
-        xs = [1, 2, 3]
-    Bridge.serveRPC b route (\() -> return xs)
-    result <- Bridge.callRPC @() @[Int] b route ()
-    result `shouldBe` xs
+    result <- callEcho Bridge.defaultTimeout b "test"
+    result `shouldBe` "test"
 
 echoTest' :: Spec
 echoTest' =
-  around (Bridge.with Bridge.localConfig) $
-  context "when running simple echo RPC" $
+  around (Bridge.with apiConfig) $
+  context "when running simple echoInts RPC" $
   it "returns the original output" $ \b -> do
-    let route = Route "echo"
-        xs = [1, 2, 3]
-    Bridge.serveRPC' b route (\() -> return $ Streamly.fromList xs)
-    results <- Bridge.callRPC' @() @Int b route ()
-    Streamly.toList results `shouldReturn` xs
+    results <- callEchoInts' Bridge.defaultTimeout b [1, 2, 3]
+    Streamly.toList results `shouldReturn` [1, 2, 3]
 
 multipleFnTest :: Spec
 multipleFnTest =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running multiple echo RPCs" $
   it "returns the original output for both" $ \b -> do
-    let route = Route "echoInts"
-        routeCh = Route "echoChars"
-        xs = [1, 2, 3]
-        chars = ['a', 'b', 'c']
-    Bridge.serveRPC b route (\() -> return xs)
-    Bridge.serveRPC b routeCh (\() -> return chars)
-    result <- Bridge.callRPC @() @[Int] b route ()
-    resultCh <- Bridge.callRPC @() @[Char] b routeCh ()
-    result `shouldBe` xs
-    resultCh `shouldBe` chars
+    resultInts <- callEchoInts Bridge.defaultTimeout b [1, 2, 3]
+    resultChars <- callEchoChars Bridge.defaultTimeout b ['a', 'b', 'c']
+    resultInts `shouldBe` [1, 2, 3]
+    resultChars `shouldBe` ['a', 'b', 'c']
 
 multipleFnTest' :: Spec
 multipleFnTest' =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running multiple echo RPCs" $
   it "returns the original output for both" $ \b -> do
-    let route = Route "echoInts"
-        routeCh = Route "echoChars"
-        xs = [1, 2, 3]
-        chars = ['a', 'b', 'c']
-    Bridge.serveRPC' b route (\() -> return $ Streamly.fromList xs)
-    Bridge.serveRPC' b routeCh (\() -> return $ Streamly.fromList chars)
-    results <- Bridge.callRPC' @() @Int b route ()
-    resultsCh <- Bridge.callRPC' @() @Char b routeCh ()
-    Streamly.toList results `shouldReturn` xs
-    Streamly.toList resultsCh `shouldReturn` chars
+    resultsInt <- callEchoInts' Bridge.defaultTimeout b [1, 2, 3]
+    resultsChar <- callEchoChars' Bridge.defaultTimeout b ['a', 'b', 'c']
+    Streamly.toList resultsInt `shouldReturn` [1, 2, 3]
+    Streamly.toList resultsChar `shouldReturn` ['a', 'b', 'c']
 
 multipleConsumeTest' :: Spec
 multipleConsumeTest' =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running echo with multiple stream consumers" $
   it "returns the original output for both" $ \b -> do
-    let route = Route "echo"
-        xs = [1, 2, 3]
-    Bridge.serveRPC' b route (\() -> return $ Streamly.fromList xs)
-    results <- Bridge.callRPC' @() @Int b route ()
-    Streamly.toList results `shouldReturn` xs
-    Streamly.toList results `shouldReturn` xs
+    results <- callEchoInts' Bridge.defaultTimeout b [1, 2, 3]
+    Streamly.toList results `shouldReturn` [1, 2, 3]
+    Streamly.toList results `shouldReturn` [1, 2, 3]
 
 concurrentTest' :: Spec
 concurrentTest' =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running RPCs with concurrent callers" $
   it "returns the correct output for both" $ \b -> do
-    let route = Route "concurrent"
-    Bridge.serveRPC'
-      b
-      route
-      (\(x :: Int) ->
-         return $
-         Streamly.repeatM (threadDelay (sec 0.1) >> return x) & Streamly.take 3)
-    results1 <- Bridge.callRPC' @Int @Int b route 1
-    results2 <- Bridge.callRPC' @Int @Int b route 2
+    results1 <- callEchoDelay' Bridge.defaultTimeout b 1
+    results2 <- callEchoDelay' Bridge.defaultTimeout b 2
     resultList1 <- Streamly.toList results1
     resultList2 <- Streamly.toList results2
     resultList1 `shouldSatisfy` Data.List.all (== 1)
@@ -91,50 +149,28 @@ concurrentTest' =
 
 timeoutTest :: Spec
 timeoutTest =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running RPCs that take too long" $
-  it "forces callers to time out" $ \b -> do
-    let route = Route "echo"
-        xs = [1, 2, 3] :: [Int] -- Annotation to shut up GHC.
-    Bridge.serveRPC b route (\() -> threadDelay (sec 0.2) >> return xs)
-    Bridge.callRPCTimeout @() @[Int] (sec 0.1) b route () `shouldThrow`
-      (== Timeout (sec 0.1))
+  it "forces callers to time out" $ \b ->
+    callEchoTimeout (sec 0.1) b [1, 2, 3] `shouldThrow` (== Timeout (sec 0.1))
 
 timeoutTest' :: Spec
 timeoutTest' =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \b -> do
-    let route = Route "echo"
-        xs = [1, 2, 3] :: [Int]
-    Bridge.serveRPC'
-      b
-      route
-      (\() ->
-         return $
-         Streamly.fromList xs &
-         Streamly.mapM (\x -> threadDelay (sec 0.2) >> return x))
-    (do results <- Bridge.callRPCTimeout' @() @Int (sec 0.1) b route ()
-        -- Have to coerce results to actually reach the timeout.
+    (do results <- callEchoTimeout' (sec 0.1) b [1, 2, 3]
         resultsList <- Streamly.toList results
         print resultsList) `shouldThrow`
       (== Timeout (sec 0.1))
 
 pubSubTest' :: Spec
 pubSubTest' =
-  around (Bridge.with Bridge.localConfig) $
+  around (Bridge.with apiConfig) $
   context "when publishing an incrementing stream" $
   it "functions correctly on the subscribing end" $ \b -> do
-    let route = Route "increment"
-    async $ do
-      let f s = do
-            threadDelay (sec 0.05)
-            return $
-              if s < 5
-                then Just (s, s + 1 :: Int)
-                else Nothing
-      Bridge.publish' b route (Streamly.unfoldrM f 0)
-    (id, results) <- Bridge.subscribe' @Int b route
+    (id, results) <- subscribeIncrement b
+    publishIncrement b increment
     async $ do
       threadDelay (sec 0.5)
       Bridge.unsubscribe' b id
