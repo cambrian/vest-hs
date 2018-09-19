@@ -196,7 +196,7 @@ _serve publisher chan (Route queueName) handler = do
           (\e -> do
              let _ = (e :: ReadException)
              pub . Left . BadCall $ "bad input: " <> req)
-  AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
+  _ <- AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
   AMQP.consumeMsgs
     chan
     queueName

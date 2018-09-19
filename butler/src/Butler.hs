@@ -141,8 +141,7 @@ instance (HasServer a, HasServer b) => HasServer (a :<|> b) where
 instance (KnownSymbol s, Read a, Show b) =>
          HasServer (Protocol (s :: Symbol) a b) where
   wrap :: Proxy (Protocol s a b) -> (a -> IO b) -> (Text -> IO Text)
-  wrap _ handler =
-    \request -> do
+  wrap _ handler request = do
       req <- readUnsafe request
       result <- handler req
       return $ show result
@@ -150,8 +149,7 @@ instance (KnownSymbol s, Read a, Show b) =>
        Proxy (Protocol s a b)
     -> (a -> IO (Streamly.Serial b))
     -> (Text -> IO (Streamly.Serial Text))
-  wrap' _ handler =
-    \request -> do
+  wrap' _ handler request = do
       req <- readUnsafe request
       results <- handler req
       return $ Streamly.map show results
@@ -175,8 +173,7 @@ instance (KnownSymbol s, Read a, Show b) =>
 instance (KnownSymbol s, FromJSON a, ToJSON b) =>
          HasServer (ProtocolJSON (s :: Symbol) a b) where
   wrap :: Proxy (ProtocolJSON s a b) -> (a -> IO b) -> (Text -> IO Text)
-  wrap _ handler =
-    \request -> do
+  wrap _ handler request = do
       req <- decodeUnsafe request
       result <- handler req
       return $ encode result
@@ -184,8 +181,7 @@ instance (KnownSymbol s, FromJSON a, ToJSON b) =>
        Proxy (ProtocolJSON s a b)
     -> (a -> IO (Streamly.Serial b))
     -> (Text -> IO (Streamly.Serial Text))
-  wrap' _ handler =
-    \request -> do
+  wrap' _ handler request = do
       req <- decodeUnsafe request
       results <- handler req
       return $ Streamly.map encode results
@@ -260,8 +256,7 @@ instance (KnownSymbol s, Show a, Read b) =>
        Proxy (Protocol s a b)
     -> (Time Second -> backend -> Route -> Text -> IO Text)
     -> (Time Second -> backend -> a -> IO b)
-  makeClient _ publish =
-    \_timeout backend req -> do
+  makeClient _ publish _timeout backend req = do
       result <-
         publish _timeout backend (symbolToRoute (Proxy :: Proxy s)) (show req)
       readUnsafe result
@@ -269,8 +264,7 @@ instance (KnownSymbol s, Show a, Read b) =>
        Proxy (Protocol s a b)
     -> (Time Second -> backend -> Route -> Text -> IO (Streamly.Serial Text))
     -> (Time Second -> backend -> a -> IO (Streamly.Serial b))
-  makeClient' _ publish =
-    \_timeout backend req -> do
+  makeClient' _ publish _timeout backend req = do
       results <-
         publish
           _timeout
@@ -285,8 +279,7 @@ instance (KnownSymbol s, ToJSON a, FromJSON b) =>
        Proxy (ProtocolJSON s a b)
     -> (Time Second -> backend -> Route -> Text -> IO Text)
     -> (Time Second -> backend -> a -> IO b)
-  makeClient _ publish =
-    \_timeout backend req -> do
+  makeClient _ publish _timeout backend req = do
       result <-
         publish _timeout backend (symbolToRoute (Proxy :: Proxy s)) (encode req)
       decodeUnsafe result
@@ -294,8 +287,7 @@ instance (KnownSymbol s, ToJSON a, FromJSON b) =>
        Proxy (ProtocolJSON s a b)
     -> (Time Second -> backend -> Route -> Text -> IO (Streamly.Serial Text))
     -> (Time Second -> backend -> a -> IO (Streamly.Serial b))
-  makeClient' _ publish =
-    \_timeout backend req -> do
+  makeClient' _ publish _timeout backend req = do
       results <-
         publish
           _timeout
@@ -358,17 +350,15 @@ instance (KnownSymbol s, Show a) =>
        Proxy (Publishing s a)
     -> (backend -> Route -> Text -> IO ())
     -> (backend -> a -> IO ())
-  makePublisher _ publish =
-    \backend req -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makePublisher _ publish backend req = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       publish backend path (show req)
   makePublisher' ::
        Proxy (Publishing s a)
     -> (backend -> Route -> Text -> IO ())
     -> (backend -> Streamly.Serial a -> IO ())
-  makePublisher' _ publish =
-    \backend req -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makePublisher' _ publish backend req = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       Streamly.mapM_ (publish backend path . show) req
 
 instance (KnownSymbol s, ToJSON a) =>
@@ -377,17 +367,15 @@ instance (KnownSymbol s, ToJSON a) =>
        Proxy (PublishingJSON s a)
     -> (backend -> Route -> Text -> IO ())
     -> (backend -> a -> IO ())
-  makePublisher _ publish =
-    \backend req -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makePublisher _ publish backend req = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       publish backend path (encode req)
   makePublisher' ::
        Proxy (PublishingJSON s a)
     -> (backend -> Route -> Text -> IO ())
     -> (backend -> Streamly.Serial a -> IO ())
-  makePublisher' _ publish =
-    \backend req -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makePublisher' _ publish backend req = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       Streamly.mapM_ (publish backend path . encode) req
 
 -- The Subscriber type families.
@@ -442,21 +430,18 @@ instance (KnownSymbol s, Read a) =>
        Proxy (Publishing s a)
     -> (backend -> Route -> IO Text)
     -> (backend -> IO a)
-  makeSubscriber _ receiveIO =
-    \backend -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makeSubscriber _ receiveIO backend = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       result <- receiveIO backend path
-      res <- readUnsafe result
-      return res
+      readUnsafe result
   makeSubscriber' ::
        Proxy (Publishing s a)
     -> (backend -> Route -> IO (Id, Streamly.Serial Text))
     -> (backend -> IO (Id, Streamly.Serial a))
-  makeSubscriber' _ receiveIO =
-    \backend -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makeSubscriber' _ receiveIO backend = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       (id, results) <- receiveIO backend path
-      return $ (id, Streamly.mapM readUnsafe results)
+      return (id, Streamly.mapM readUnsafe results)
 
 instance (KnownSymbol s, FromJSON a) =>
          HasSubscriber backend (PublishingJSON (s :: Symbol) a) where
@@ -464,18 +449,15 @@ instance (KnownSymbol s, FromJSON a) =>
        Proxy (PublishingJSON s a)
     -> (backend -> Route -> IO Text)
     -> (backend -> IO a)
-  makeSubscriber _ receiveIO =
-    \backend -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makeSubscriber _ receiveIO backend = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       result <- receiveIO backend path
-      res <- decodeUnsafe result
-      return res
+      decodeUnsafe result
   makeSubscriber' ::
        Proxy (PublishingJSON s a)
     -> (backend -> Route -> IO (Id, Streamly.Serial Text))
     -> (backend -> IO (Id, Streamly.Serial a))
-  makeSubscriber' _ receiveIO =
-    \backend -> do
-      let path = (symbolToRoute (Proxy :: Proxy s))
+  makeSubscriber' _ receiveIO backend = do
+      let path = symbolToRoute (Proxy :: Proxy s)
       (id, results) <- receiveIO backend path
-      return $ (id, Streamly.mapM decodeUnsafe results)
+      return (id, Streamly.mapM decodeUnsafe results)

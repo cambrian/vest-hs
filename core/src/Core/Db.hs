@@ -34,7 +34,7 @@ connectionString Config {host, port, database, currency, password} =
       Id db = database
       user = proxyText currency
       Id pwd = password
-   in "host="<>h<>" port="<>(show p)<>" dbname="<>db<>" user="<>user<>" password="<>pwd
+   in "host="<>h<>" port="<>show p<>" dbname="<>db<>" user="<>user<>" password="<>pwd
 
 -- TODO: God awful formatting in this file, probably thanks to hindent's inability to recognize
 -- type-level operators. Disable formatting somehow and just do it manually if possible.

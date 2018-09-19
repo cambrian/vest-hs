@@ -11,7 +11,10 @@ import Test.Hspec
 import VestPrelude
 
 type DirectAPI
-   = Protocol "echo" Text Text :<|> Protocol "echoInts" [Int] [Int] :<|> Protocol "echoChars" [Char] [Char] :<|> Protocol "echoTimeout" [Int] [Int]
+   = Protocol "echo" Text Text
+     :<|> Protocol "echoInts" [Int] [Int]
+     :<|> Protocol "echoChars" [Char] [Char]
+     :<|> Protocol "echoTimeout" [Int] [Int]
 
 echo :: Text -> IO Text
 echo = return . identity
@@ -35,7 +38,10 @@ callEcho :<|> callEchoInts :<|> callEchoChars :<|> callEchoTimeout =
   Butler.makeClient proxyDirectAPI Bridge.callUntyped
 
 type StreamingAPI
-   = Protocol "echoInts" [Int] Int :<|> Protocol "echoChars" [Char] Char :<|> Protocol "echoDelay" Int Int :<|> Protocol "echoTimeout" [Int] Int
+   = Protocol "echoInts" [Int] Int
+     :<|> Protocol "echoChars" [Char] Char
+     :<|> Protocol "echoDelay" Int Int
+     :<|> Protocol "echoTimeout" [Int] Int
 
 echoInts' :: [Int] -> IO (Streamly.Serial Int)
 echoInts' = return . Streamly.fromList
