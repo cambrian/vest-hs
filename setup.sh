@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ ! -f ~/.vest_haskell ]; then
-  stack install phoityne-vscode hindent
+  stack install phoityne-vscode hindent hlint
   # TODO: Add importify (figure out weird extra-deps errors).
   git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive
   cd ~/.haskell-ide-engine
