@@ -1,4 +1,4 @@
-import Butler ((:<|>)(..), Protocol, ProtocolJSON, Publishing, PublishingJSON)
+import Butler ((:<|>)(..), Endpoint, EndpointJSON, Publishing, PublishingJSON)
 import qualified Butler
 import qualified Control.Concurrent.MVar as MVar
 import qualified Data.HashTable.IO as HashTable
@@ -23,7 +23,9 @@ doubleSum :: [Int] -> IO Int
 doubleSum = return . (2 *) . sum
 
 type SimpleAPI
-   = Protocol "double" Int Int :<|> Protocol "echo" Text Text :<|> ProtocolJSON "doubleSum" [Int] Int
+   = Endpoint "double" Int Int
+     :<|> Endpoint "echo" Text Text
+     :<|> EndpointJSON "doubleSum" [Int] Int
 
 proxySimpleAPI :: Proxy SimpleAPI
 proxySimpleAPI = Proxy
@@ -51,12 +53,10 @@ _testSimpleAPI = do
            route
            resultVar
          -- Simple server thread per route.
-         serverThread <-
-           async . forever $ do
-             request <- MVar.takeMVar requestVar
-             result <- handler request
-             MVar.putMVar resultVar result
-         return serverThread)
+         async . forever $ do
+           request <- MVar.takeMVar requestVar
+           result <- handler request
+           MVar.putMVar resultVar result)
   let callDouble :<|> callEcho :<|> callDoubleSum =
         Butler.makeClient
           proxySimpleAPI
@@ -81,7 +81,9 @@ doubleStream x = return . Streamly.fromList $ fmap (x *) [1, 2, 3]
 echoStream :: Text -> IO (Streamly.Serial Text)
 echoStream = return . Streamly.fromList . replicate 3
 
-type StreamAPI = Protocol "double'" Int Int :<|> Protocol "echo'" Text Text
+type StreamAPI
+   = Endpoint "double'" Int Int
+     :<|> Endpoint "echo'" Text Text
 
 proxyStreamAPI :: Proxy StreamAPI
 proxyStreamAPI = Proxy
@@ -111,14 +113,12 @@ _testStreamAPI = do
            route
            resultsVar
          -- Stream server thread per route.
-         serverThread <-
-           async . forever $ do
-             request <- MVar.takeMVar requestVar
-             results <- handler request
-             (push, close, _) <- MVar.takeMVar resultsVar
-             Streamly.mapM_ push results
-             close
-         return serverThread)
+         async . forever $ do
+           request <- MVar.takeMVar requestVar
+           results <- handler request
+           (push, close, _) <- MVar.takeMVar resultsVar
+           Streamly.mapM_ push results
+           close)
   let callDouble' :<|> callEcho' =
         Butler.makeClient'
           proxyStreamAPI
@@ -142,7 +142,9 @@ _testStreamAPI = do
     it "should compute results correctly" $
     (as, bs) `shouldBe` ([3, 6, 9], ["test", "test", "test"])
 
-type PublishAPI = PublishingJSON "increment" Int :<|> Publishing "repeat" Text
+type PublishAPI
+   = PublishingJSON "increment" Int
+     :<|> Publishing "repeat" Text
 
 proxyPublishAPI :: Proxy PublishAPI
 proxyPublishAPI = Proxy

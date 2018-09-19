@@ -3,7 +3,7 @@
 
 import qualified Bridge
 import qualified Butler
-import Butler ((:<|>)(..), Protocol, Publishing)
+import Butler ((:<|>)(..), Endpoint, Publishing)
 import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -11,10 +11,10 @@ import Test.Hspec
 import VestPrelude
 
 type DirectAPI
-   = Protocol "echo" Text Text
-     :<|> Protocol "echoInts" [Int] [Int]
-     :<|> Protocol "echoChars" [Char] [Char]
-     :<|> Protocol "echoTimeout" [Int] [Int]
+   = Endpoint "echo" Text Text
+     :<|> Endpoint "echoInts" [Int] [Int]
+     :<|> Endpoint "echoChars" [Char] [Char]
+     :<|> Endpoint "echoTimeout" [Int] [Int]
 
 echo :: Text -> IO Text
 echo = return . identity
@@ -38,10 +38,10 @@ callEcho :<|> callEchoInts :<|> callEchoChars :<|> callEchoTimeout =
   Butler.makeClient proxyDirectAPI Bridge.callUntyped
 
 type StreamingAPI
-   = Protocol "echoInts" [Int] Int
-     :<|> Protocol "echoChars" [Char] Char
-     :<|> Protocol "echoDelay" Int Int
-     :<|> Protocol "echoTimeout" [Int] Int
+   = Endpoint "echoInts" [Int] Int
+     :<|> Endpoint "echoChars" [Char] Char
+     :<|> Endpoint "echoDelay" Int Int
+     :<|> Endpoint "echoTimeout" [Int] Int
 
 echoInts' :: [Int] -> IO (Streamly.Serial Int)
 echoInts' = return . Streamly.fromList
