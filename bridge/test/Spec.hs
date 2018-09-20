@@ -91,10 +91,10 @@ echoTest = do
         with
           config
           (\(bridge :: Bridge.T) -> do
-             Butler.serve (Proxy :: Proxy RpcApi) bridge handlers
+             Butler.serve (Proxy :: Proxy (RpcApi, Bridge.T)) bridge handlers
              let callEcho =
                    Butler.makeClient
-                     (Proxy :: Proxy (DirectEndpoint "echo" Text Text))
+                     (Proxy :: Proxy (DirectEndpoint "echo" Text Text, Bridge.T))
                      bridge
              action callEcho)
    in around (withServer Bridge.localConfig) $

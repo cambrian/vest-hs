@@ -27,31 +27,39 @@ type instance Streams (a :<|> b) = Streams a :<|> Streams b
 class (PubSubTransport transport) =>
       Publisher spec transport
   where
-  publish :: Proxy spec -> transport -> Streams spec -> IO ()
+  publish :: Proxy (spec, transport) -> transport -> Streams spec -> IO ()
 
 instance (Publisher a transport, Publisher b transport) =>
          Publisher (a
                     :<|> b) transport where
   publish ::
-       Proxy (a
-              :<|> b)
+       Proxy ( a
+               :<|> b
+             , transport)
     -> transport
     -> (Streams a
         :<|> Streams b)
     -> IO ()
   publish _ transport (aStreams :<|> bStreams) = do
-    publish (Proxy :: Proxy a) transport aStreams
-    publish (Proxy :: Proxy b) transport bStreams
+    publish (Proxy :: Proxy (a, transport)) transport aStreams
+    publish (Proxy :: Proxy (b, transport)) transport bStreams
 
 instance (KnownSymbol route, Show a, PubSubTransport transport) =>
          Publisher (Topic (route :: Symbol) a) transport where
-  publish :: Proxy (Topic route a) -> transport -> Streamly.Serial a -> IO ()
+  publish ::
+       Proxy (Topic route a, transport)
+    -> transport
+    -> Streamly.Serial a
+    -> IO ()
   publish _ = _publish show (Route $ proxyText $ (Proxy :: Proxy route))
 
 instance (KnownSymbol route, ToJSON a, PubSubTransport transport) =>
          Publisher (TopicJSON (route :: Symbol) a) transport where
   publish ::
-       Proxy (TopicJSON route a) -> transport -> Streamly.Serial a -> IO ()
+       Proxy (TopicJSON route a, transport)
+    -> transport
+    -> Streamly.Serial a
+    -> IO ()
   publish _ = _publish encode (Route $ proxyText $ (Proxy :: Proxy route))
 
 type family SubscriberBindings spec :: *
@@ -66,31 +74,37 @@ type instance SubscriberBindings (a :<|> b) =
 class (PubSubTransport transport) =>
       Subscriber spec transport
   where
-  makeSubscriber :: Proxy spec -> transport -> SubscriberBindings spec
+  makeSubscriber ::
+       Proxy (spec, transport) -> transport -> SubscriberBindings spec
 
 instance (Subscriber a transport, Subscriber b transport) =>
          Subscriber (a
                      :<|> b) transport where
   makeSubscriber ::
-       Proxy (a
-              :<|> b)
+       Proxy ( a
+               :<|> b
+             , transport)
     -> transport
     -> SubscriberBindings a
        :<|> SubscriberBindings b
   makeSubscriber _ transport =
-    makeSubscriber (Proxy :: Proxy a) transport :<|>
-    makeSubscriber (Proxy :: Proxy b) transport
+    makeSubscriber (Proxy :: Proxy (a, transport)) transport :<|>
+    makeSubscriber (Proxy :: Proxy (b, transport)) transport
 
 instance (KnownSymbol route, Read a, PubSubTransport transport) =>
          Subscriber (Topic (route :: Symbol) a) transport where
   makeSubscriber ::
-       Proxy (Topic route a) -> transport -> IO (Id, Streamly.Serial a)
+       Proxy (Topic route a, transport)
+    -> transport
+    -> IO (Id, Streamly.Serial a)
   makeSubscriber _ =
     _subscribe readUnsafe (Route $ proxyText $ (Proxy :: Proxy route))
 
 instance (KnownSymbol route, FromJSON a, PubSubTransport transport) =>
          Subscriber (TopicJSON (route :: Symbol) a) transport where
   makeSubscriber ::
-       Proxy (TopicJSON route a) -> transport -> IO (Id, Streamly.Serial a)
+       Proxy (TopicJSON route a, transport)
+    -> transport
+    -> IO (Id, Streamly.Serial a)
   makeSubscriber _ =
     _subscribe decodeUnsafe (Route $ proxyText $ (Proxy :: Proxy route))

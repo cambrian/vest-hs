@@ -53,31 +53,36 @@ type instance Handlers (a :<|> b) = Handlers a :<|> Handlers b
 class (RpcTransport transport) =>
       Server spec transport
   where
-  serve :: Proxy spec -> transport -> Handlers spec -> IO ()
+  serve :: Proxy (spec, transport) -> transport -> Handlers spec -> IO ()
 
 instance (Server a transport, Server b transport) =>
          Server (a
                  :<|> b) transport where
   serve ::
-       Proxy (a
-              :<|> b)
+       Proxy ( a
+               :<|> b
+             , transport)
     -> transport
     -> (Handlers a
         :<|> Handlers b)
     -> IO ()
   serve _ transport (aHandlers :<|> bHandlers) = do
-    serve (Proxy :: Proxy a) transport aHandlers
-    serve (Proxy :: Proxy b) transport bHandlers
+    serve (Proxy :: Proxy (a, transport)) transport aHandlers
+    serve (Proxy :: Proxy (b, transport)) transport bHandlers
 
 instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
          Server (DirectEndpoint (s :: Symbol) a b) transport where
-  serve :: Proxy (DirectEndpoint s a b) -> transport -> (a -> IO b) -> IO ()
+  serve ::
+       Proxy (DirectEndpoint s a b, transport)
+    -> transport
+    -> (a -> IO b)
+    -> IO ()
   serve _ = _serve (. show) read (Route $ proxyText (Proxy :: Proxy s))
 
 instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
          Server (StreamingEndpoint (s :: Symbol) a b) transport where
   serve ::
-       Proxy (StreamingEndpoint s a b)
+       Proxy (StreamingEndpoint s a b, transport)
     -> transport
     -> (a -> IO (Streamly.Serial b))
     -> IO ()
@@ -91,13 +96,17 @@ instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
 
 instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
          Server (DirectEndpointJSON (s :: Symbol) a b) transport where
-  serve :: Proxy (DirectEndpointJSON s a b) -> transport -> (a -> IO b) -> IO ()
+  serve ::
+       Proxy (DirectEndpointJSON s a b, transport)
+    -> transport
+    -> (a -> IO b)
+    -> IO ()
   serve _ = _serve (. encode) decode (Route . proxyText $ (Proxy :: Proxy s))
 
 instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
          Server (StreamingEndpointJSON (s :: Symbol) a b) transport where
   serve ::
-       Proxy (StreamingEndpointJSON s a b)
+       Proxy (StreamingEndpointJSON s a b, transport)
     -> transport
     -> (a -> IO (Streamly.Serial b))
     -> IO ()
@@ -126,25 +135,26 @@ type instance ClientBindings (a :<|> b) =
 class (RpcTransport transport) =>
       Client spec transport
   where
-  makeClient :: Proxy spec -> transport -> ClientBindings spec
+  makeClient :: Proxy (spec, transport) -> transport -> ClientBindings spec
 
 instance (Client a transport, Client b transport) =>
          Client (a
                  :<|> b) transport where
   makeClient ::
-       Proxy (a
-              :<|> b)
+       Proxy ( a
+               :<|> b
+             , transport)
     -> transport
     -> ClientBindings a
        :<|> ClientBindings b
   makeClient _ transport =
-    makeClient (Proxy :: Proxy a) transport :<|>
-    makeClient (Proxy :: Proxy b) transport
+    makeClient (Proxy :: Proxy (a, transport)) transport :<|>
+    makeClient (Proxy :: Proxy (b, transport)) transport
 
 instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
          Client (DirectEndpoint route req res) transport where
   makeClient ::
-       Proxy (DirectEndpoint route req res)
+       Proxy (DirectEndpoint route req res, transport)
     -> transport
     -> (Time Second -> req -> IO res)
   makeClient _ =
@@ -161,7 +171,7 @@ instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
 instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
          Client (StreamingEndpoint route req res) transport where
   makeClient ::
-       Proxy (StreamingEndpoint route req res)
+       Proxy (StreamingEndpoint route req res, transport)
     -> transport
     -> (Time Second -> req -> IO (Streamly.Serial res))
   makeClient _ =
@@ -178,7 +188,7 @@ instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
 instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =>
          Client (DirectEndpointJSON route req res) transport where
   makeClient ::
-       Proxy (DirectEndpointJSON route req res)
+       Proxy (DirectEndpointJSON route req res, transport)
     -> transport
     -> (Time Second -> req -> IO res)
   makeClient _ =
@@ -195,7 +205,7 @@ instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =
 instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =>
          Client (StreamingEndpointJSON route req res) transport where
   makeClient ::
-       Proxy (StreamingEndpointJSON route req res)
+       Proxy (StreamingEndpointJSON route req res, transport)
     -> transport
     -> (Time Second -> req -> IO (Streamly.Serial res))
   makeClient _ =
