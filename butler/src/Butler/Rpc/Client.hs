@@ -7,6 +7,10 @@ import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
+data RpcClientException =
+  BadCall Text
+  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
+
 type family ClientBindings spec :: *
 
 type instance

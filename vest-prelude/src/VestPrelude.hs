@@ -96,11 +96,11 @@ newtype ReadException =
   ReadException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-newtype Timeout =
-  Timeout (Time Second)
+newtype TimeoutException =
+  TimeoutException (Time Second)
   deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
-instance Exception Timeout where
+instance Exception TimeoutException where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
 
@@ -143,14 +143,14 @@ decode = decodeMaybe
 decodeUnsafe :: (FromJSON a) => Text -> IO a
 decodeUnsafe text =
   case decodeMaybe text of
-    Nothing -> throwIO $ DecodeException text
+    Nothing -> throw $ DecodeException text
     Just x -> return x
 
 encode :: (ToJSON a) => a -> Text
 encode = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
 
 fromJustUnsafe :: Maybe a -> IO a
-fromJustUnsafe Nothing = throwIO NothingException
+fromJustUnsafe Nothing = throw NothingException
 fromJustUnsafe (Just a) = return a
 
 -- Creates a TVar that is updated with the latest value from as.
@@ -184,7 +184,7 @@ read = readMaybe
 readUnsafe :: (Read a) => Text -> IO a
 readUnsafe text =
   case readMaybe text of
-    Nothing -> throwIO $ ReadException text
+    Nothing -> throw $ ReadException text
     Just x -> return x
 
 -- Returns (push, close, stream).
@@ -206,7 +206,8 @@ repeatableStream = do
 timeoutThrow :: IO a -> Time Second -> IO ()
 timeoutThrow action _timeout = do
   let micros = toNum @Microsecond _timeout
-  timer <- UpdatableTimer.replacer (throw (Timeout _timeout) :: IO ()) micros
+  timer <-
+    UpdatableTimer.replacer (throw (TimeoutException _timeout) :: IO ()) micros
   action >> Killable.kill timer
 
 -- Returns timeout renewer.
@@ -215,7 +216,9 @@ timeoutThrow' action _timeout = do
   outerThreadId <- myThreadId
   let micros = toNum @Microsecond _timeout
   timer <-
-    UpdatableTimer.replacer (throwTo outerThreadId (Timeout _timeout)) micros
+    UpdatableTimer.replacer
+      (throwTo outerThreadId (TimeoutException _timeout))
+      micros
   async $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
 
@@ -229,4 +232,4 @@ class Resource t where
   -- TODO: catch exceptions and reconnect
   withForever :: ResourceConfig t -> (t -> IO ()) -> IO ()
   withForever config action =
-    bracket (hold config) release (\x -> action x >> blockForever)
+    bracket (hold config) release (\t -> action t >> blockForever)

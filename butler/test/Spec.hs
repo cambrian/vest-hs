@@ -1,191 +1,166 @@
 import Butler
-import qualified Control.Concurrent.MVar as MVar
-import qualified Data.HashTable.IO as HashTable
+import qualified Butler.Transports.Amqp as Amqp
+import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import qualified System.Random as Random
 import Test.Hspec
 import VestPrelude
 
-type HashTable k v = HashTable.BasicHashTable k v
-
-defaultTimeout :: Time Second
-defaultTimeout = sec 10
-
-double :: Int -> IO Int
-double = return . (2 *)
+type RpcApi
+   = DirectEndpoint "echo" Text Text
+     :<|> DirectEndpoint "echoInts" [Int] [Int]
+     :<|> StreamingEndpoint "echoInts'" [Int] Int
+     :<|> DirectEndpoint "echoChars" [Char] [Char]
+     :<|> StreamingEndpoint "echoChars'" [Char] Char
+     :<|> DirectEndpoint "echoTimeout" [Int] [Int]
+     :<|> StreamingEndpoint "echoTimeout'" [Int] Int
+     :<|> StreamingEndpoint "echoDelay'" Int Int
 
 echo :: Text -> IO Text
-echo = return
+echo = return . identity
 
-doubleSum :: [Int] -> IO Int
-doubleSum = return . (2 *) . sum
+echoInts :: [Int] -> IO [Int]
+echoInts = return . identity
 
-type SimpleAPI
-   = DirectEndpoint "double" Int Int
-     :<|> DirectEndpoint "echo" Text Text
-     :<|> DirectEndpointJSON "doubleSum" [Int] Int
+echoInts' :: [Int] -> IO (Streamly.Serial Int)
+echoInts' = return . Streamly.fromList
 
-proxySimpleAPI :: Proxy SimpleAPI
-proxySimpleAPI = Proxy
+echoChars :: [Char] -> IO [Char]
+echoChars = return . identity
 
-handleSimpleAPI :: Butler.Handlers SimpleAPI
-handleSimpleAPI = double :<|> echo :<|> doubleSum
+echoChars' :: [Char] -> IO (Streamly.Serial Char)
+echoChars' = return . Streamly.fromList
 
--- _testSimpleAPI :: IO Spec
--- _testSimpleAPI = do
---   requestTable <- HashTable.new -- Route (MVar Text)
---   resultTable <- HashTable.new -- Route (MVar Text)
---   serverThreads <-
---     Butler.makeServer
---       proxySimpleAPI
---       handleSimpleAPI
---       (\route handler -> do
---          requestVar <- MVar.newEmptyMVar
---          resultVar <- MVar.newEmptyMVar
---          HashTable.insert
---            (requestTable :: HashTable Route (MVar.MVar Text))
---            route
---            requestVar
---          HashTable.insert
---            (resultTable :: HashTable Route (MVar.MVar Text))
---            route
---            resultVar
---          -- Simple server thread per route.
---          async . forever $ do
---            request <- MVar.takeMVar requestVar
---            result <- handler request
---            MVar.putMVar resultVar result)
---   let callDouble :<|> callEcho :<|> callDoubleSum =
---         Butler.makeClient
---           proxySimpleAPI
---           (\_ _ route request -> do
---              requestVarMaybe <- HashTable.lookup requestTable route
---              resultVarMaybe <- HashTable.lookup resultTable route
---              case (requestVarMaybe, resultVarMaybe) of
---                (Just requestVar, Just resultVar) -> do
---                  MVar.putMVar requestVar request
---                  MVar.takeMVar resultVar
---                _ -> panic "this is a bug")
---   a <- callDouble defaultTimeout () 3
---   b <- callEcho defaultTimeout () "test"
---   c <- callDoubleSum defaultTimeout () [1, 2, 3, 4]
---   mapM_ cancel serverThreads
---   return . describe "simple API" $
---     it "should compute results correctly" $ (a, b, c) `shouldBe` (6, "test", 20)
--- doubleStream :: Int -> IO (Streamly.Serial Int)
--- doubleStream x = return . Streamly.fromList $ fmap (x *) [1, 2, 3]
--- echoStream :: Text -> IO (Streamly.Serial Text)
--- echoStream = return . Streamly.fromList . replicate 3
--- type StreamAPI
---    = Endpoint "double'" Int Int
---      :<|> Endpoint "echo'" Text Text
--- proxyStreamAPI :: Proxy StreamAPI
--- proxyStreamAPI = Proxy
--- handleStreamAPI :: Butler.Server' StreamAPI
--- handleStreamAPI = doubleStream :<|> echoStream
--- _testStreamAPI :: IO Spec
--- _testStreamAPI = do
---   requestTable <- HashTable.new -- Route (MVar Text)
---   resultTable <- HashTable.new -- Route (MVar Text)
---   serverThreads <-
---     Butler.makeServer'
---       proxyStreamAPI
---       handleStreamAPI
---       (\route handler -> do
---          requestVar <- MVar.newEmptyMVar
---          resultsVar <- MVar.newEmptyMVar
---          HashTable.insert
---            (requestTable :: HashTable Route (MVar.MVar Text))
---            route
---            requestVar
---          HashTable.insert
---            (resultTable :: HashTable Route (MVar ( Text -> IO ()
---                                                  , IO ()
---                                                  , Streamly.Serial Text)))
---            route
---            resultsVar
---          -- Stream server thread per route.
---          async . forever $ do
---            request <- MVar.takeMVar requestVar
---            results <- handler request
---            (push, close, _) <- MVar.takeMVar resultsVar
---            Streamly.mapM_ push results
---            close)
---   let callDouble' :<|> callEcho' =
---         Butler.makeClient'
---           proxyStreamAPI
---           (\_ _ route request -> do
---              requestVarMaybe <- HashTable.lookup requestTable route
---              resultsVarMaybe <- HashTable.lookup resultTable route
---              case (requestVarMaybe, resultsVarMaybe) of
---                (Just requestVar, Just resultsVar) -> do
---                  rp <- repeatableStream
---                  let (_, _, stream) = rp
---                  MVar.putMVar requestVar request
---                  MVar.putMVar resultsVar rp
---                  return stream
---                _ -> panic "this is a bug")
---   a <- callDouble' defaultTimeout () 3
---   b <- callEcho' defaultTimeout () "test"
---   as <- Streamly.toList a
---   bs <- Streamly.toList b
---   mapM_ cancel serverThreads
---   return . describe "stream API" $
---     it "should compute results correctly" $
---     (as, bs) `shouldBe` ([3, 6, 9], ["test", "test", "test"])
--- type PublishAPI
---    = TopicJSON "increment" Int
---      :<|> Topic "repeat" Text
--- proxyPublishAPI :: Proxy PublishAPI
--- proxyPublishAPI = Proxy
--- _testPublishAPI :: IO Spec
--- _testPublishAPI = do
---   (pushInc, closeInc, streamInc) <- repeatableStream
---   (pushRep, closeRep, streamRep) <- repeatableStream
---   let publishIncrement' :<|> publishRepeat' =
---         Butler.makePublisher'
---           proxyPublishAPI
---           (\_ route message ->
---              case route of
---                Route "increment" -> pushInc message
---                Route "repeat" -> pushRep message
---                _ -> return ())
---   let subscribeIncrement' :<|> subscribeRepeat' =
---         Butler.makeSubscriber'
---           proxyPublishAPI
---           (\_ route -> do
---              idInt <- Random.randomRIO (1, 10000)
---              let id = Id . show $ (idInt :: Int)
---              return $
---                case route of
---                  Route "increment" -> (id, streamInc)
---                  Route "repeat" -> (id, streamRep)
---                  _ -> (id, Streamly.nil))
---   (_, resultsInc) <- subscribeIncrement' ()
---   (_, resultsRep) <- subscribeRepeat' ()
---   async $ do
---     publishIncrement' () (Streamly.fromList [1, 2, 3, 4])
---     closeInc
---   async $ do
---     publishRepeat' () (Streamly.fromList ["test", "test", "test"])
---     closeRep
---   resultListInc <- Streamly.toList resultsInc
---   resultListRep <- Streamly.toList resultsRep
---   return . describe "publish API" $
---     it "should compute results correctly" $
---     (resultListInc, resultListRep) `shouldBe`
---     ([1, 2, 3, 4], ["test", "test", "test"])
+echoTimeout :: [Int] -> IO [Int]
+echoTimeout xs = threadDelay (sec 0.2) >> return xs
+
+echoTimeout' :: [Int] -> IO (Streamly.Serial Int)
+echoTimeout' xs =
+  return $
+  Streamly.fromList xs & Streamly.mapM (\x -> threadDelay (sec 0.2) >> return x)
+
+echoDelay' :: Int -> IO (Streamly.Serial Int)
+echoDelay' x =
+  return $
+  Streamly.repeatM (threadDelay (sec 0.1) >> return x) & Streamly.take 3
+
+handlers :: Butler.Handlers RpcApi
+handlers =
+  echo :<|> echoInts :<|> echoInts' :<|> echoChars :<|> echoChars' :<|>
+  echoTimeout :<|>
+  echoTimeout' :<|>
+  echoDelay'
+
+-- callEcho :<|> callEchoInts :<|> callEchoChars :<|> callEchoTimeout =
+--   Butler.makeClient proxyDirectAPI Amqp.callUntyped
+-- callEchoInts' :<|> callEchoChars' :<|> callEchoDelay' :<|> callEchoTimeout' =
+--   Butler.makeClient' proxyStreamingAPI Amqp.callUntyped'
+type PubSubApi = Topic "increment" Int
+
+-- subscribeIncrement =
+--   Butler.makeSubscriber' proxyPublishAPI Amqp.subscribeUntyped'
+increment :: Streamly.Serial Int
+increment =
+  let f s = do
+        threadDelay (sec 0.05)
+        return $
+          if s < 5
+            then Just (s, s + 1 :: Int)
+            else Nothing
+   in Streamly.unfoldrM f 0
+
+echoTest :: Spec
+echoTest = do
+  let withServer config action =
+        with
+          config
+          (\(bridge :: Amqp.T) -> do
+             Butler.serve (Proxy :: Proxy (RpcApi, Amqp.T)) bridge handlers
+             let callEcho =
+                   Butler.makeClient
+                     (Proxy :: Proxy (DirectEndpoint "echo" Text Text, Amqp.T))
+                     bridge
+             action callEcho)
+   in around (withServer Amqp.localConfig) $
+      context "when running simple echo RPC" $
+      it "returns the original output" $ \callEcho -> do
+        result <- callEcho (sec 1) "test"
+        result `shouldBe` "test"
+
+-- echoTest' :: Spec
+-- echoTest' =
+--   around (Amqp.with config) $
+--   context "when running simple echoInts RPC" $
+--   it "returns the original output" $ \b -> do
+--     results <- callEchoInts' Amqp.defaultTimeout b [1, 2, 3]
+--     Streamly.toList results `shouldReturn` [1, 2, 3]
+-- multipleFnTest :: Spec
+-- multipleFnTest =
+--   around (Amqp.with config) $
+--   context "when running multiple echo RPCs" $
+--   it "returns the original output for both" $ \b -> do
+--     resultInts <- callEchoInts Amqp.defaultTimeout b [1, 2, 3]
+--     resultChars <- callEchoChars Amqp.defaultTimeout b ['a', 'b', 'c']
+--     resultInts `shouldBe` [1, 2, 3]
+--     resultChars `shouldBe` ['a', 'b', 'c']
+-- multipleFnTest' :: Spec
+-- multipleFnTest' =
+--   around (Amqp.with config) $
+--   context "when running multiple echo RPCs" $
+--   it "returns the original output for both" $ \b -> do
+--     resultsInt <- callEchoInts' Amqp.defaultTimeout b [1, 2, 3]
+--     resultsChar <- callEchoChars' Amqp.defaultTimeout b ['a', 'b', 'c']
+--     Streamly.toList resultsInt `shouldReturn` [1, 2, 3]
+--     Streamly.toList resultsChar `shouldReturn` ['a', 'b', 'c']
+-- multipleConsumeTest' :: Spec
+-- multipleConsumeTest' =
+--   around (Amqp.with config) $
+--   context "when running echo with multiple stream consumers" $
+--   it "returns the original output for both" $ \b -> do
+--     results <- callEchoInts' Amqp.defaultTimeout b [1, 2, 3]
+--     Streamly.toList results `shouldReturn` [1, 2, 3]
+--     Streamly.toList results `shouldReturn` [1, 2, 3]
+-- concurrentTest' :: Spec
+-- concurrentTest' =
+--   around (Amqp.with config) $
+--   context "when running RPCs with concurrent callers" $
+--   it "returns the correct output for both" $ \b -> do
+--     results1 <- callEchoDelay' Amqp.defaultTimeout b 1
+--     results2 <- callEchoDelay' Amqp.defaultTimeout b 2
+--     resultList1 <- Streamly.toList results1
+--     resultList2 <- Streamly.toList results2
+--     resultList1 `shouldSatisfy` Data.List.all (== 1)
+--     resultList2 `shouldSatisfy` Data.List.all (== 2)
+-- timeoutTest :: Spec
+-- timeoutTest =
+--   around (Amqp.with config) $
+--   context "when running RPCs that take too long" $
+--   it "forces callers to time out" $ \b ->
+--     callEchoTimeout (sec 0.1) b [1, 2, 3] `shouldThrow` (== Timeout (sec 0.1))
+-- timeoutTest' :: Spec
+-- timeoutTest' =
+--   around (Amqp.with config) $
+--   context "when running RPCs that take too long" $
+--   it "forces callers to time out" $ \b ->
+--     (do results <- callEchoTimeout' (sec 0.1) b [1, 2, 3]
+--         resultsList <- Streamly.toList results
+--         print resultsList) `shouldThrow`
+--     (== Timeout (sec 0.1))
+-- pubSubTest' :: Spec
+-- pubSubTest' =
+--   around (Amqp.with config) $
+--   context "when publishing an incrementing stream" $
+--   it "functions correctly on the subscribing end" $ \b -> do
+--     (id, results) <- subscribeIncrement b
+--     publishIncrement b increment
+--     async $ do
+--       threadDelay (sec 0.5)
+--       Amqp.unsubscribe' b id
+--     Streamly.toList results `shouldReturn` [0, 1, 2, 3, 4]
 main :: IO ()
-main
-  -- testSimpleAPI <- _testSimpleAPI
-  -- testStreamAPI <- _testStreamAPI
-  -- testPublishAPI <- _testPublishAPI
-  -- hspec $ do
-  --   testSimpleAPI
-  --   testStreamAPI
-  --   testPublishAPI
-    -- TODO: Explicitly test Butler.run.
-    -- (Currently tested in Bridge code).
- = do
-  return ()
+main = hspec $ do describe "direct RPC bridge" $ echoTest
+    -- describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
+    -- describe "streaming RPC bridge" $
+    --   echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
+    --   timeoutTest'
+    -- describe "publish/subscribe bridge" pubSubTest'

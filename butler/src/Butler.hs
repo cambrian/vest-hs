@@ -4,3 +4,4 @@ module Butler
 
 import Butler.PubSub as Reexports
 import Butler.Rpc as Reexports
+import VestPrelude

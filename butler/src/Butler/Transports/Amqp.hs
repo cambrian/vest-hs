@@ -1,11 +1,11 @@
-module Bridge
+module Butler.Transports.Amqp
   ( T(..)
   , Config(..)
   , localConfig
   ) where
 
-import Butler
-import qualified Control.Concurrent.MVar as MVar
+import Butler.PubSub
+import Butler.Rpc
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP
@@ -26,7 +26,7 @@ data RequestMessage = RequestMessage
 data ResponseMessage = ResponseMessage
   { requestId :: Id
     -- Other metadata.
-  , response :: Either RpcException Text
+  , response :: Either RpcClientException Text
   } deriving (Eq, Show, Read)
 
 data Config = Config
@@ -50,7 +50,7 @@ data T = T
   , chan :: AMQP.Channel
   , responseQueue :: Id
   , responseConsumerTag :: AMQP.ConsumerTag
-  , serveConsumerTags :: HashTable AMQP.ConsumerTag () -- poor man's mutable set
+  , servedRouteTags :: HashTable Route AMQP.ConsumerTag
   , responseHandlers :: HashTable Id (Text -> IO ())
   -- Key: subscriberId to Value: (consumerTag, close)
   , subscriberInfo :: HashTable Id (AMQP.ConsumerTag, IO ())
@@ -105,7 +105,7 @@ instance Resource T where
         (\(msg, env) -> do
            fromAmqpMsg read msg >|>| handleResponse -- Do nothing if response message is malformed.
            AMQP.ackEnv env)
-    serveConsumerTags <- HashTable.new
+    servedRouteTags <- HashTable.new
     subscriberInfo <- HashTable.new
     return
       T
@@ -113,7 +113,7 @@ instance Resource T where
         , chan
         , responseQueue = Id queueName
         , responseConsumerTag
-        , serveConsumerTags
+        , servedRouteTags
         , responseHandlers
         , subscriberInfo
         }
@@ -123,12 +123,12 @@ instance Resource T where
           , chan
           , responseQueue
           , responseConsumerTag
-          , serveConsumerTags
+          , servedRouteTags
           , subscriberInfo
           } = t
         Id _responseQueue = responseQueue
     AMQP.cancelConsumer chan responseConsumerTag
-    HashTable.mapM_ (AMQP.cancelConsumer chan . fst) serveConsumerTags
+    HashTable.mapM_ (AMQP.cancelConsumer chan . snd) servedRouteTags
     HashTable.mapM_ (_unsubscribe t . fst) subscriberInfo
     -- responseHandlers will automatically time out.
     _ <- AMQP.deleteQueue chan _responseQueue
@@ -142,7 +142,10 @@ instance RpcTransport T where
     -> T
     -> (req -> IO x)
     -> IO () -- should mutate t to store the details necessary for kill
-  _serve publisher deserialize (Route queueName) T {chan, serveConsumerTags} handler = do
+  _serve publisher deserialize (Route queueName) T {chan, servedRouteTags} handler = do
+    HashTable.lookup servedRouteTags (Route queueName) >>= \case
+      Nothing -> return ()
+      Just _ -> throwIO $ AlreadyServing (Route queueName)
     let handleMsg RequestMessage {id = requestId, responseQueue, reqText} = do
           let Id _responseQueue = responseQueue
               pub response =
@@ -165,8 +168,7 @@ instance RpcTransport T where
            void . async $ do
              fromAmqpMsg read msg >|>| handleMsg -- Do nothing if request message is malformed.
              AMQP.ackEnv env)
-    HashTable.insert serveConsumerTags consumerTag ()
-  -- General RPC call.
+    HashTable.insert servedRouteTags (Route queueName) consumerTag
   -- handler :: IO (responseHandler, result, done) defines how to wrap results up for the caller.
   -- Registers a handler in the waiting RPC call hash table, and deregisters it after done resolves.
   -- Times out if done is not fulfilled after _timeout, with the timeout reset every time a response

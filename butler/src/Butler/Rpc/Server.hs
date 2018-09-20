@@ -7,6 +7,10 @@ import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
+data RpcServerException =
+  AlreadyServing Route
+  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
+
 type family Handlers spec :: *
 
 type instance
@@ -24,15 +28,6 @@ class (RpcTransport transport) =>
   where
   serve :: Proxy (spec, transport) -> transport -> Handlers spec -> IO ()
 
--- instance (Resource transport) => Resource (Server spec transport) where
---   type ResourceConfig (Server spec transport) = ( spec
---                                                 , Handlers spec
---                                                 , ResourceConfig transport)
---   hold :: ResourceConfig t -> IO t
---   hold (spec, handlers, transportConfig) = do
---     transport <- hold transportConfig
---     serve (Proxy :: Proxy (spec, transport)) transport handlers
---   release :: t -> IO ()
 instance (Server a transport, Server b transport) =>
          Server (a
                  :<|> b) transport where
