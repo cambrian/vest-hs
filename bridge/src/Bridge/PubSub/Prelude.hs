@@ -1,5 +1,5 @@
-module Butler.PubSub.Prelude
-  ( module Butler.PubSub.Prelude
+module Bridge.PubSub.Prelude
+  ( module Bridge.PubSub.Prelude
   ) where
 
 import qualified Streamly

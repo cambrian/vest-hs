@@ -1,5 +1,5 @@
-module Butler.Rpc.Prelude
-  ( module Butler.Rpc.Prelude
+module Bridge.Rpc.Prelude
+  ( module Bridge.Rpc.Prelude
   ) where
 
 import qualified Streamly

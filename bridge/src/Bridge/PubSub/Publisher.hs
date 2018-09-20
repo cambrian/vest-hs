@@ -1,8 +1,8 @@
-module Butler.PubSub.Publisher
-  ( module Butler.PubSub.Publisher
+module Bridge.PubSub.Publisher
+  ( module Bridge.PubSub.Publisher
   ) where
 
-import Butler.PubSub.Prelude
+import Bridge.PubSub.Prelude
 import qualified Streamly
 import VestPrelude
 

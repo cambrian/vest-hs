@@ -1,8 +1,8 @@
-module Butler.Rpc.Server
-  ( module Butler.Rpc.Server
+module Bridge.Rpc.Server
+  ( module Bridge.Rpc.Server
   ) where
 
-import Butler.Rpc.Prelude
+import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude

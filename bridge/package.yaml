@@ -1,4 +1,4 @@
-name:                butler
+name:                bridge
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -78,7 +78,7 @@ library:
   source-dirs: src
 
 tests:
-  butler-test:
+  bridge-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -86,4 +86,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - butler
+    - bridge
