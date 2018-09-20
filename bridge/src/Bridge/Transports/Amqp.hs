@@ -140,8 +140,8 @@ instance RpcTransport T where
   _serve ::
        ((Text -> IO ()) -> x -> IO ())
        -- (publish -> res/Stream res -> IO ())
-       -- Generic publisher on intermediate result x. Should
-       -- encapsulate serializing the intermediate results.
+       -- Generic publisher on intermediate result x. Should encapsulate serializing the
+       -- intermediate results.
     -> (Text -> Maybe req)
     -> Route
        -- Should throw if Route is already being served.

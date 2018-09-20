@@ -6,7 +6,7 @@ import Bridge.PubSub.Prelude
 import qualified Streamly
 import VestPrelude
 
--- The bound streams close iff unsubscribe is called
+-- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
   SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) = ( Id
                                                                , Streamly.Serial a)

@@ -107,17 +107,18 @@ withSubscribed config _ action =
   with
     config
     (\(transport :: transport) -> do
+       subscribed <- subscribe (Proxy :: Proxy (spec, transport)) transport
        publish (Proxy :: Proxy (PubSubApi, transport)) transport streams
-       subscribe (Proxy :: Proxy (spec, transport)) transport >>= action)
+       action subscribed)
 
 echoTest :: Spec
-echoTest = do
+echoTest =
   around
     (withRpcClient Amqp.localConfig (Proxy :: Proxy (EchoEndpoint, Amqp.T))) $
-    context "when running simple echo RPC" $
-    it "returns the original output" $ \callEcho -> do
-      result <- callEcho (sec 1) "test"
-      result `shouldBe` "test"
+  context "when running simple echo RPC" $
+  it "returns the original output" $ \callEcho -> do
+    result <- callEcho (sec 1) "test"
+    result `shouldBe` "test"
 
 echoTest' :: Spec
 echoTest' =
@@ -212,7 +213,7 @@ pubSubTest' =
   around
     (withSubscribed Amqp.localConfig (Proxy :: Proxy (IncrementTopic, Amqp.T))) $
   context "when publishing an incrementing stream" $
-  it "functions correctly on the subscribing end" $ \(_id, results) -> do
+  it "functions correctly on the subscribing end" $ \(_id, results) ->
     Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
 
 main :: IO ()
