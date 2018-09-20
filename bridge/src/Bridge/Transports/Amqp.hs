@@ -152,7 +152,7 @@ instance RpcTransport T where
   _serve publisher deserialize (Route queueName) T {chan, servedRouteTags} handler = do
     HashTable.lookup servedRouteTags (Route queueName) >>= \case
       Nothing -> return ()
-      Just _ -> throwIO $ AlreadyServing (Route queueName)
+      Just _ -> throw $ AlreadyServing (Route queueName)
     let handleMsg RequestMessage {id = requestId, responseQueue, reqText} = do
           let Id _responseQueue = responseQueue
               pub response =

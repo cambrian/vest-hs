@@ -192,6 +192,22 @@ makeStreamVar' init as = do
 newUuid :: IO Id
 newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
+-- Returns (push, close, stream).
+-- Push does nothing after close is bound.
+nonRepeatablePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
+nonRepeatablePushStream = do
+  resultVar <- newEmptyMVar
+  let push a = putMVar resultVar a
+      stream =
+        Streamly.unfoldrM
+          (\idx -> do
+             resultMaybe <- takeMVar resultVar
+             case resultMaybe of
+               Nothing -> return Nothing
+               Just result -> return $ Just (result, idx + 1))
+          0
+  return (push . Just, push Nothing, stream)
+
 proxyText :: (KnownSymbol a) => Proxy a -> Text
 proxyText = pack . symbolVal
 
