@@ -4,4 +4,3 @@ module Bridge
 
 import Bridge.PubSub as Reexports
 import Bridge.Rpc as Reexports
-import VestPrelude

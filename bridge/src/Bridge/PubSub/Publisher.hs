@@ -6,6 +6,18 @@ import Bridge.PubSub.Prelude
 import qualified Streamly
 import VestPrelude
 
+type family Topics spec where
+  Topics (TopicAs (f :: Format) (s :: Symbol) a) = '[ s]
+  Topics (a
+          :<|> b) = (Topics a) :++ (Topics b)
+
+type family NubTopics spec where
+  NubTopics (TopicAs (f :: Format) (s :: Symbol) a) = '[ s]
+  NubTopics (a
+             :<|> b) = Nub ((NubTopics a) :++ (NubTopics b))
+
+type HasUniqueTopics spec = Topics spec ~ NubTopics spec
+
 type family Streams spec :: *
 
 type instance Streams (TopicAs (f :: Format) (s :: Symbol) a) =
@@ -18,7 +30,11 @@ class (PubSubTransport transport) =>
   where
   publish :: Proxy (spec, transport) -> transport -> Streams spec -> IO ()
 
-instance (Publisher a transport, Publisher b transport) =>
+instance ( HasUniqueTopics (a
+                            :<|> b)
+         , Publisher a transport
+         , Publisher b transport
+         ) =>
          Publisher (a
                     :<|> b) transport where
   publish ::

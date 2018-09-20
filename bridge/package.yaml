@@ -65,6 +65,7 @@ default-extensions:
 - TypeFamilies
 - TypeFamilyDependencies
 - TypeOperators
+- UndecidableInstances # Added. In theory could make compiler never terminate.
 
 ghc-options:
 - -Wall

@@ -15,6 +15,7 @@ import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
 import Data.Proxy as Reexports
 import Data.Text as Reexports (pack, unpack)
+import Data.Type.Bool as Reexports
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Data.Vector as Vector
@@ -51,6 +52,22 @@ import qualified System.Timer.Updatable as UpdatableTimer
 import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
+
+-- Checks if x in xs at type level.
+type family Elem x xs where
+  Elem x '[] = 'False
+  Elem x (x ': xs) = 'True
+  Elem x (y ': xs) = Elem x xs
+
+-- De-duplicates xs at type level.
+type family Nub xs where
+  Nub '[] = '[]
+  Nub (x ': xs) = If (Elem x xs) (Nub xs) (x ': Nub xs)
+
+-- Type-level array concatenation using :++.
+type family (x :: [k]) :++ (y :: [k]) :: [k] where
+  '[] :++ xs = xs
+  (x ': xs) :++ ys = x ': (xs :++ ys)
 
 -- For all of these wrapper types, you can extract the base Text by deconstructing:
 -- show (Id "x") == "Id \"x\""

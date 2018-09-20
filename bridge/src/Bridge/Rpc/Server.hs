@@ -7,6 +7,20 @@ import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
+type family Routes spec where
+  Routes (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
+  Routes (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
+  Routes (a
+          :<|> b) = (Routes a) :++ (Routes b)
+
+type family NubRoutes spec where
+  NubRoutes (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
+  NubRoutes (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
+  NubRoutes (a
+             :<|> b) = Nub ((NubRoutes a) :++ (NubRoutes b))
+
+type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
+
 data RpcServerException =
   AlreadyServing Route
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
@@ -28,7 +42,11 @@ class (RpcTransport transport) =>
   where
   serve :: Proxy (spec, transport) -> transport -> Handlers spec -> IO ()
 
-instance (Server a transport, Server b transport) =>
+instance ( HasUniqueRoutes (a
+                            :<|> b)
+         , Server a transport
+         , Server b transport
+         ) =>
          Server (a
                  :<|> b) transport where
   serve ::
