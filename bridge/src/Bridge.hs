@@ -26,7 +26,7 @@ data RequestMessage = RequestMessage
 data ResponseMessage = ResponseMessage
   { requestId :: Id
     -- Other metadata.
-  , response :: Either ButlerException Text
+  , response :: Either RpcException Text
   } deriving (Eq, Show, Read)
 
 data Config = Config
