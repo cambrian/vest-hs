@@ -1,8 +1,7 @@
 resolver: lts-12.9
 
 packages:
-# - bridge
-- butler
+- bridge
 # - core
 # - price-server
 # - socket-server

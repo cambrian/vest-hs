@@ -1,5 +1,5 @@
-import Butler
-import qualified Butler.Transports.Amqp as Amqp
+import Bridge
+import qualified Bridge.Transports.Amqp as Amqp
 import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -44,7 +44,7 @@ echoDelay' x =
   return $
   Streamly.repeatM (threadDelay (sec 0.1) >> return x) & Streamly.take 3
 
-handlers :: Butler.Handlers RpcApi
+handlers :: Bridge.Handlers RpcApi
 handlers =
   echo :<|> echoInts :<|> echoInts' :<|> echoChars :<|> echoChars' :<|>
   echoTimeout :<|>
@@ -52,13 +52,13 @@ handlers =
   echoDelay'
 
 -- callEcho :<|> callEchoInts :<|> callEchoChars :<|> callEchoTimeout =
---   Butler.makeClient proxyDirectAPI Amqp.callUntyped
+--   Bridge.makeClient proxyDirectAPI Amqp.callUntyped
 -- callEchoInts' :<|> callEchoChars' :<|> callEchoDelay' :<|> callEchoTimeout' =
---   Butler.makeClient' proxyStreamingAPI Amqp.callUntyped'
+--   Bridge.makeClient' proxyStreamingAPI Amqp.callUntyped'
 type PubSubApi = Topic "increment" Int
 
 -- subscribeIncrement =
---   Butler.makeSubscriber' proxyPublishAPI Amqp.subscribeUntyped'
+--   Bridge.makeSubscriber' proxyPublishAPI Amqp.subscribeUntyped'
 increment :: Streamly.Serial Int
 increment =
   let f s = do
@@ -75,9 +75,9 @@ echoTest = do
         with
           config
           (\(bridge :: Amqp.T) -> do
-             Butler.serve (Proxy :: Proxy (RpcApi, Amqp.T)) bridge handlers
+             Bridge.serve (Proxy :: Proxy (RpcApi, Amqp.T)) bridge handlers
              let callEcho =
-                   Butler.makeClient
+                   Bridge.makeClient
                      (Proxy :: Proxy (DirectEndpoint "echo" Text Text, Amqp.T))
                      bridge
              action callEcho)
