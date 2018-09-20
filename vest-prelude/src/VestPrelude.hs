@@ -57,77 +57,57 @@ import Time.Units as Reexports
 -- let Id text = (Id "x") -> text == "x"
 newtype Id =
   Id Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Host =
   Host Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Hash =
   Hash Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Port =
   Port Int
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 newtype Route =
   Route Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 newtype URI =
   URI Text
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+data Format
+  = Haskell
+  | JSON
+  deriving (Eq, Ord, Show, Read, Enum, Generic, Hashable, ToJSON, FromJSON)
 
 newtype DecodeException =
   DecodeException Text
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Typeable
-           , Generic
-           , Exception
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 data NothingException =
   NothingException
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Typeable
-           , Generic
-           , Exception
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 newtype ReadException =
   ReadException Text
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Typeable
-           , Generic
-           , Exception
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 newtype Timeout =
   Timeout (Time Second)
-  deriving (Eq, Ord, Show, Read, Typeable, Generic, Hashable, FromJSON, ToJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 instance Exception Timeout where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
+
+data a :<|> b =
+  a :<|> b
+
+infixr 8 :<|>
 
 infixl 1 >>-
 
@@ -154,10 +134,15 @@ blockForever = do
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
 
+decodeMaybe :: (FromJSON a) => Text -> Maybe a
+decodeMaybe = Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack
+
+decode :: (FromJSON a) => Text -> Maybe a
+decode = decodeMaybe
+
 decodeUnsafe :: (FromJSON a) => Text -> IO a
--- TODO: Clean this up.
 decodeUnsafe text =
-  case Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack $ text of
+  case decodeMaybe text of
     Nothing -> throwIO $ DecodeException text
     Just x -> return x
 
@@ -192,6 +177,9 @@ proxyText = pack . symbolVal
 
 readMaybe :: (Read a) => Text -> Maybe a
 readMaybe = Text.Read.readMaybe . unpack
+
+read :: (Read a) => Text -> Maybe a
+read = readMaybe
 
 readUnsafe :: (Read a) => Text -> IO a
 readUnsafe text =
@@ -231,13 +219,14 @@ timeoutThrow' action _timeout = do
   async $ action >> Killable.kill timer
   return (UpdatableTimer.renewIO timer micros)
 
-class Resource config t where
-  hold :: config -> IO t
+class Resource t where
+  type ResourceConfig t :: *
+  hold :: ResourceConfig t -> IO t
   release :: t -> IO ()
   -- ^ Minimal required definition
-  with :: config -> (t -> IO ()) -> IO ()
-  with config = bracket (hold config) (release @config @t)
+  with :: ResourceConfig t -> (t -> IO ()) -> IO ()
+  with config = bracket (hold config) release
   -- TODO: catch exceptions and reconnect
-  withForever :: config -> (t -> IO ()) -> IO ()
+  withForever :: ResourceConfig t -> (t -> IO ()) -> IO ()
   withForever config action =
-    bracket (hold config) (release @config @t) (\x -> action x >> blockForever)
+    bracket (hold config) release (\x -> action x >> blockForever)
