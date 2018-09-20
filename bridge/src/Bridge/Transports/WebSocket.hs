@@ -161,17 +161,17 @@ instance RpcTransport T where
     -> (req -> IO x)
     -> IO ()
     -- Should mutate t to store the details necessary for cleanup.
-  _serve publisher deserialize (Route _route) T { servedRouteRequests
-                                                , servedConnectionResponses
-                                                } handler = do
+  _serve publisher deserialize route T { servedRouteRequests
+                                       , servedConnectionResponses
+                                       } handler = do
     (_, _, streamIn) <-
-      HashTable.lookup servedRouteRequests (Route _route) >>= \case
+      HashTable.lookup servedRouteRequests route >>= \case
         Nothing -> do
           requests <- nonRepeatablePushStream
-          HashTable.insert servedRouteRequests (Route _route) requests
+          HashTable.insert servedRouteRequests route requests
           return requests
-        Just _ -> throw $ AlreadyServing (Route _route)
-    let handleMsg (clientId, RequestMessage {id = requestId, route, reqText}) = do
+        Just _ -> throw $ AlreadyServing route
+    let handleMsg (clientId, RequestMessage {id = requestId, reqText}) = do
           let pub response = do
                 outMaybe <- HashTable.lookup servedConnectionResponses clientId
                 case outMaybe of
@@ -184,6 +184,37 @@ instance RpcTransport T where
             Just r -> handler r >>= publisher (pub . Right)
     -- Thread dies on its own when stream closed on kill.
     async $ Streamly.mapM_ handleMsg streamIn
+  _call ::
+       IO (res -> IO (), IO x, IO ())
+       -- IO (push, result, done)
+       -- Generic response handler that takes an intermediate result x and defines how to push it
+       -- to the caller.
+    -> (req -> Text)
+    -> (Text -> IO res)
+    -> Route
+    -> T
+    -> Time Second
+       -- Timeout
+    -> req
+    -> IO x
+    -- Registers a handler in the waiting RPC call hash table, and deregisters it after done
+    -- resolves.
+    -- Timeouts occur if a result or stream result is not received after the specified time.
+  _call handler serialize deserializeUnsafe route T { chan
+                                                    , responseQueue
+                                                    , responseHandlers
+                                                    } _timeout req = do
+    id <- newUuid
+    let request = encode RequestMessage {id, route, reqText = serialize req}
+    (push, result, waitForDone) <- handler
+    renewTimeout <- timeoutThrow' waitForDone _timeout
+    HashTable.insert
+      responseHandlers
+      id
+      (\x -> renewTimeout >> deserializeUnsafe x >>= push)
+    _ <- AMQP.publishMsg chan "" queueName request
+    async $ waitForDone >> HashTable.delete responseHandlers id
+    result
 
 _callRPCTimeout ::
      forall req res. (ToJSON req)
