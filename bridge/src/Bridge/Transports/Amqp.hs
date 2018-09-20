@@ -201,25 +201,27 @@ instance RpcTransport T where
     async $ waitForDone >> HashTable.delete responseHandlers id
     result
 
+declarePubSubExchange :: AMQP.Channel -> Text -> IO ()
+declarePubSubExchange chan exchangeName =
+  AMQP.declareExchange
+    chan
+    AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
+
 instance PubSubTransport T where
   _publish :: (a -> Text) -> Route -> T -> Streamly.Serial a -> IO ()
   _publish serialize (Route exchangeName) T {chan} as = do
-    AMQP.declareExchange
-      chan
-      AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
-    Streamly.mapM_
-      (AMQP.publishMsg chan exchangeName "" . toAmqpMsg serialize)
-      as -- Queue name blank.
+    declarePubSubExchange chan exchangeName
+    void . async $
+      Streamly.mapM_
+        (AMQP.publishMsg chan exchangeName "" . toAmqpMsg serialize) -- Queue name blank.
+        as
   -- _subscribe should mutate t to store the details necessary for unsubscribe
   _subscribe :: (Text -> IO a) -> Route -> T -> IO (Id, Streamly.Serial a)
-  _subscribe deserializeUnsafe (Route route) T {chan, subscriberInfo} = do
-    AMQP.declareExchange
-      chan
-      AMQP.newExchange {AMQP.exchangeName = route, AMQP.exchangeType = "fanout"}
-    -- Sanity check to make sure the desired pub/sub route is actually a fanout exchange.
+  _subscribe deserializeUnsafe (Route exchangeName) T {chan, subscriberInfo} = do
+    declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-    AMQP.bindQueue chan queueName route "" -- Routing key blank.
+    AMQP.bindQueue chan queueName exchangeName "" -- Routing key blank.
     (push, close, results) <- repeatableStream
     consumerTag <-
       AMQP.consumeMsgs

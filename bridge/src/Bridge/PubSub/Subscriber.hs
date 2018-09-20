@@ -6,11 +6,12 @@ import Bridge.PubSub.Prelude
 import qualified Streamly
 import VestPrelude
 
+-- The bound streams close iff unsubscribe is called
 type family SubscriberBindings spec :: *
 
 type instance
      SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) =
-     IO (Id, Streamly.Serial a)
+     (Id, Streamly.Serial a)
 
 type instance SubscriberBindings (a :<|> b) =
      SubscriberBindings a :<|> SubscriberBindings b
@@ -19,7 +20,7 @@ class (PubSubTransport transport) =>
       Subscriber spec transport
   where
   makeSubscriber ::
-       Proxy (spec, transport) -> transport -> SubscriberBindings spec
+       Proxy (spec, transport) -> transport -> IO (SubscriberBindings spec)
 
 instance (Subscriber a transport, Subscriber b transport) =>
          Subscriber (a
@@ -29,11 +30,12 @@ instance (Subscriber a transport, Subscriber b transport) =>
                :<|> b
              , transport)
     -> transport
-    -> SubscriberBindings a
-       :<|> SubscriberBindings b
-  makeSubscriber _ transport =
-    makeSubscriber (Proxy :: Proxy (a, transport)) transport :<|>
-    makeSubscriber (Proxy :: Proxy (b, transport)) transport
+    -> IO (SubscriberBindings a
+           :<|> SubscriberBindings b)
+  makeSubscriber _ transport = do
+    aStreams <- makeSubscriber (Proxy :: Proxy (a, transport)) transport
+    bStreams <- makeSubscriber (Proxy :: Proxy (b, transport)) transport
+    return $ aStreams :<|> bStreams
 
 instance (KnownSymbol route, Read a, PubSubTransport transport) =>
          Subscriber (Topic (route :: Symbol) a) transport where
