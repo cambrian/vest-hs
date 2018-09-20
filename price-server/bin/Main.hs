@@ -1,9 +1,14 @@
-import qualified Bridge
+import qualified Bridge.Transports.Amqp as Amqp
 import qualified PriceServer
 import VestPrelude
 
-priceServerConfig :: PriceServer.Config
-priceServerConfig = PriceServer.Config {}
+config :: PriceServer.Config
+config = PriceServer.Config {}
 
 main :: IO ()
-main = PriceServer.start Bridge.localConfig priceServerConfig
+main =
+  withForever
+    Amqp.localConfig
+    (\amqp -> do
+       t <- PriceServer.make config amqp
+       PriceServer.start (Proxy :: Proxy (SymbolT "XTZ")) t amqp amqp)

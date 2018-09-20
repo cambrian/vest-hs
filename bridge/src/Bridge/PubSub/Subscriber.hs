@@ -17,38 +17,38 @@ type family SubscriberBindings spec where
 class (PubSubTransport transport) =>
       Subscriber spec transport
   where
-  makeSubscriber ::
+  subscribe ::
        Proxy (spec, transport) -> transport -> IO (SubscriberBindings spec)
 
 instance (Subscriber a transport, Subscriber b transport) =>
          Subscriber (a
                      :<|> b) transport where
-  makeSubscriber ::
+  subscribe ::
        Proxy ( a
                :<|> b
              , transport)
     -> transport
     -> IO (SubscriberBindings a
            :<|> SubscriberBindings b)
-  makeSubscriber _ transport = do
-    aStreams <- makeSubscriber (Proxy :: Proxy (a, transport)) transport
-    bStreams <- makeSubscriber (Proxy :: Proxy (b, transport)) transport
+  subscribe _ transport = do
+    aStreams <- subscribe (Proxy :: Proxy (a, transport)) transport
+    bStreams <- subscribe (Proxy :: Proxy (b, transport)) transport
     return $ aStreams :<|> bStreams
 
 instance (KnownSymbol route, Read a, PubSubTransport transport) =>
          Subscriber (Topic (route :: Symbol) a) transport where
-  makeSubscriber ::
+  subscribe ::
        Proxy (Topic route a, transport)
     -> transport
     -> IO (Id, Streamly.Serial a)
-  makeSubscriber _ =
+  subscribe _ =
     _subscribe readUnsafe (Route $ proxyText $ (Proxy :: Proxy route))
 
 instance (KnownSymbol route, FromJSON a, PubSubTransport transport) =>
          Subscriber (TopicJSON (route :: Symbol) a) transport where
-  makeSubscriber ::
+  subscribe ::
        Proxy (TopicJSON route a, transport)
     -> transport
     -> IO (Id, Streamly.Serial a)
-  makeSubscriber _ =
+  subscribe _ =
     _subscribe decodeUnsafe (Route $ proxyText $ (Proxy :: Proxy route))

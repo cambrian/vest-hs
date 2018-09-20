@@ -11,13 +11,13 @@ type family Routes spec where
   Routes (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
   Routes (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
   Routes (a
-          :<|> b) = (Routes a) :++ (Routes b)
+          :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
   NubRoutes (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
   NubRoutes (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
   NubRoutes (a
-             :<|> b) = Nub ((NubRoutes a) :++ (NubRoutes b))
+             :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
 type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 

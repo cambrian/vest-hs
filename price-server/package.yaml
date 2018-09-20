@@ -59,6 +59,7 @@ default-extensions:
 - TypeFamilies
 - TypeFamilyDependencies
 - TypeOperators
+- UndecidableInstances
 
 ghc-options:
 - -Wall

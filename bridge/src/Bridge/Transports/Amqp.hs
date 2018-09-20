@@ -53,7 +53,7 @@ data T = T
   , servedRouteTags :: HashTable Route AMQP.ConsumerTag
   , responseHandlers :: HashTable Id (Text -> IO ())
   , subscriberInfo :: HashTable Id (AMQP.ConsumerTag, IO ())
-    -- Key: subscriberId to Value: (consumerTag, close)
+    -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
 newQueueName :: IO Text

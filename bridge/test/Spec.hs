@@ -108,7 +108,7 @@ withSubscribed config _ action =
     config
     (\(transport :: transport) -> do
        publish (Proxy :: Proxy (PubSubApi, transport)) transport streams
-       makeSubscriber (Proxy :: Proxy (spec, transport)) transport >>= action)
+       subscribe (Proxy :: Proxy (spec, transport)) transport >>= action)
 
 echoTest :: Spec
 echoTest = do

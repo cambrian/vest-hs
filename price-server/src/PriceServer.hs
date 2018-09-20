@@ -1,49 +1,21 @@
 module PriceServer
   ( Config(..)
+  , T
   , PriceContractRequest(..)
-  , Priceable(..)
+  , Priceable()
   , start
+  , make
   ) where
 
-import qualified Bridge
-import Streamly.Prelude as Streamly
+import Bridge
+import qualified Bridge.Transports.Amqp as Amqp
+import GHC.TypeLits
+import PriceServer.Prelude
+import qualified Streamly
+import qualified Streamly.Prelude as Streamly
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data PriceContractRequest (a :: Symbol) = PriceContractRequest
-  { size :: Money.Dense a
-  , duration :: Time Day
-  } deriving (Eq, Ord, Show, Read, Generic, ToJSON, FromJSON, Hashable)
-
-class (KnownSymbol a) =>
-      Priceable (a :: Symbol)
-  where
-  priceContract :: T -> Money.Dense a -> Time Day -> IO (Money.Dense "USD")
-  -- ^ Minimal complete definition
-  priceContract' :: T -> PriceContractRequest a -> IO (Money.Dense "USD")
-  priceContract' t PriceContractRequest {size, duration} =
-    priceContract t size duration
-  priceContractEndpoint :: Proxy a -> Route
-  priceContractEndpoint = Route . ("priceContract" <>) . proxyText
-  servePriceContract :: Proxy a -> Bridge.T -> T -> IO ()
-  servePriceContract proxy bridge t =
-    Bridge.serveRPC bridge (priceContractEndpoint proxy) (priceContract' @a t)
-
-instance Priceable "XTZ" where
-  priceContract T {tezosPrice} size duration = do
-    xtzUsd <- readTVarIO tezosPrice
-    let mutez = toRational size
-        xtzUsdRaw = Money.exchangeRateToRational xtzUsd
-        price = mutez * xtzUsdRaw
-    return $ Money.dense' price
-
-type family Currencies currencies where
-  Currencies a = a
-  Currencies (a
-              :<|> b) = (Currencies a
-                         :<|> Currencies b)
-
-servePrices :: Currencies currencies => IO ()
 data Config = Config
   {
   } deriving (Eq, Show, Read, Generic)
@@ -52,18 +24,21 @@ data T = T
   { tezosPrice :: TVar (Money.ExchangeRate "XTZ" "USD")
   }
 
-make :: Config -> Bridge.T -> IO T
-make Config {} bridge = do
-  dummyTezosExchangeRate <- fromJustUnsafe $ Money.exchangeRate 1
-  tezosPrice <-
-    Bridge.subscribe' bridge (Route "tezosPrice") >>=
-    (makeStreamVar' dummyTezosExchangeRate . snd)
-  return $ T {tezosPrice}
+instance Priceable "XTZ" T where
+  priceContract T {tezosPrice} size duration = do
+    xtzUsd <- readTVarIO tezosPrice
+    let mutez = toRational size
+        xtzUsdRaw = Money.exchangeRateToRational xtzUsd
+        price = mutez * xtzUsdRaw
+    return $ Money.dense' price
 
-start :: Bridge.Config -> Config -> IO ()
-start bridgeConfig config =
-  Bridge.withForever
-    bridgeConfig
-    (\bridge -> do
-       t <- make config bridge
-       servePriceContract (Proxy :: Proxy "XTZ") bridge t)
+-- Eventually this will live inside the exchanger
+type TezosPriceTopic = Topic "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
+
+make :: Config -> Amqp.T -> IO T
+make Config {} amqp = do
+  dummyTezosExchangeRate <- fromJustUnsafe $ Money.exchangeRate 1
+  (_, tezosPriceStream) <-
+    subscribe (Proxy :: Proxy (TezosPriceTopic, amqp)) amqp
+  tezosPrice <- makeStreamVar' dummyTezosExchangeRate tezosPriceStream
+  return $ T {tezosPrice}

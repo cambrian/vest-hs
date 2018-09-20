@@ -121,6 +121,9 @@ instance Exception TimeoutException where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
 
+-- Wrapper to get a kind Symbol as a *
+data SymbolT (s :: Symbol)
+
 data a :<|> b =
   a :<|> b
 
