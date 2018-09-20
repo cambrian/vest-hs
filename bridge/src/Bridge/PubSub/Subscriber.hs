@@ -7,14 +7,12 @@ import qualified Streamly
 import VestPrelude
 
 -- The bound streams close iff unsubscribe is called
-type family SubscriberBindings spec :: *
-
-type instance
-     SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) =
-     (Id, Streamly.Serial a)
-
-type instance SubscriberBindings (a :<|> b) =
-     SubscriberBindings a :<|> SubscriberBindings b
+type family SubscriberBindings spec where
+  SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) = ( Id
+                                                               , Streamly.Serial a)
+  SubscriberBindings (a
+                      :<|> b) = (SubscriberBindings a
+                                 :<|> SubscriberBindings b)
 
 class (PubSubTransport transport) =>
       Subscriber spec transport

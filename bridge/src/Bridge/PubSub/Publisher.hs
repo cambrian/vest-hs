@@ -18,12 +18,11 @@ type family NubTopics spec where
 
 type HasUniqueTopics spec = Topics spec ~ NubTopics spec
 
-type family Streams spec :: *
-
-type instance Streams (TopicAs (f :: Format) (s :: Symbol) a) =
-     Streamly.Serial a
-
-type instance Streams (a :<|> b) = Streams a :<|> Streams b
+type family Streams spec where
+  Streams (TopicAs (f :: Format) (s :: Symbol) a) = Streamly.Serial a
+  Streams (a
+           :<|> b) = (Streams a
+                      :<|> Streams b)
 
 class (PubSubTransport transport) =>
       Publisher spec transport

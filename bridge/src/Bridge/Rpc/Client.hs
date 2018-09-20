@@ -11,19 +11,12 @@ data RpcClientException =
   BadCall Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
-type family ClientBindings spec :: *
-
-type instance
-     ClientBindings (DirectEndpointAs (f :: Format) (s :: Symbol) a b) =
-     Time Second -> a -> IO b
-
-type instance
-     ClientBindings
-       (StreamingEndpointAs (f :: Format) (s :: Symbol) a b)
-     = Time Second -> a -> IO (Streamly.Serial b)
-
-type instance ClientBindings (a :<|> b) =
-     ClientBindings a :<|> ClientBindings b
+type family ClientBindings spec where
+  ClientBindings (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = Time Second -> a -> IO b
+  ClientBindings (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = Time Second -> a -> IO (Streamly.Serial b)
+  ClientBindings (a
+                  :<|> b) = (ClientBindings a
+                             :<|> ClientBindings b)
 
 class (RpcTransport transport) =>
       Client spec transport

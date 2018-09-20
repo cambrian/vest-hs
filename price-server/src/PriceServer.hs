@@ -19,6 +19,7 @@ class (KnownSymbol a) =>
       Priceable (a :: Symbol)
   where
   priceContract :: T -> Money.Dense a -> Time Day -> IO (Money.Dense "USD")
+  -- ^ Minimal complete definition
   priceContract' :: T -> PriceContractRequest a -> IO (Money.Dense "USD")
   priceContract' t PriceContractRequest {size, duration} =
     priceContract t size duration
@@ -36,6 +37,13 @@ instance Priceable "XTZ" where
         price = mutez * xtzUsdRaw
     return $ Money.dense' price
 
+type family Currencies currencies where
+  Currencies a = a
+  Currencies (a
+              :<|> b) = (Currencies a
+                         :<|> Currencies b)
+
+servePrices :: Currencies currencies => IO ()
 data Config = Config
   {
   } deriving (Eq, Show, Read, Generic)

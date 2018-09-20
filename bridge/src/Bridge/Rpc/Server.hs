@@ -25,17 +25,12 @@ data RpcServerException =
   AlreadyServing Route
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
-type family Handlers spec :: *
-
-type instance
-     Handlers (DirectEndpointAs (f :: Format) (s :: Symbol) a b) =
-     a -> IO b
-
-type instance
-     Handlers (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) =
-     a -> IO (Streamly.Serial b)
-
-type instance Handlers (a :<|> b) = Handlers a :<|> Handlers b
+type family Handlers spec where
+  Handlers (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = a -> IO b
+  Handlers (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = a -> IO (Streamly.Serial b)
+  Handlers (a
+            :<|> b) = (Handlers a
+                       :<|> Handlers b)
 
 class (RpcTransport transport) =>
       Server spec transport
