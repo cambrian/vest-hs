@@ -52,8 +52,8 @@ data T = T
   , responseConsumerTag :: AMQP.ConsumerTag
   , servedRouteTags :: HashTable Route AMQP.ConsumerTag
   , responseHandlers :: HashTable Id (Text -> IO ())
-  -- Key: subscriberId to Value: (consumerTag, close)
   , subscriberInfo :: HashTable Id (AMQP.ConsumerTag, IO ())
+    -- Key: subscriberId to Value: (consumerTag, close)
   }
 
 newQueueName :: IO Text
@@ -84,8 +84,8 @@ _unsubscribe T {chan, subscriberInfo} subscriberId = do
 
 instance Resource T where
   type ResourceConfig T = Config
-  -- Connects to bridge, begins listening on RPC queue.
   hold :: Config -> IO T
+    -- Connects to bridge, begins listening on RPC queue.
   hold Config {hostname, virtualHost, username, password} = do
     conn <- AMQP.openConnection (unpack hostname) virtualHost username password
     chan <- AMQP.openChannel conn
@@ -118,6 +118,9 @@ instance Resource T where
         , subscriberInfo
         }
   release :: T -> IO ()
+    -- Closes AMQP consumers, connection, deletes response queue.
+    -- Unsubscribes from any subscribed topics.
+    -- Not necessary to clear responseHandlers because they automatically time out.
   release t = do
     let T { conn
           , chan
@@ -130,18 +133,22 @@ instance Resource T where
     AMQP.cancelConsumer chan responseConsumerTag
     HashTable.mapM_ (AMQP.cancelConsumer chan . snd) servedRouteTags
     HashTable.mapM_ (_unsubscribe t . fst) subscriberInfo
-    -- responseHandlers will automatically time out.
     _ <- AMQP.deleteQueue chan _responseQueue
-    AMQP.closeConnection conn -- And chan.
+    AMQP.closeConnection conn -- Also closes chan.
 
 instance RpcTransport T where
   _serve ::
-       ((Text -> IO ()) -> x -> IO ()) -- (publish -> res/Stream res -> IO ())
+       ((Text -> IO ()) -> x -> IO ())
+       -- (publish -> res/Stream res -> IO ())
+       -- Generic publisher on intermediate result x. Should
+       -- encapsulate serializing the intermediate results.
     -> (Text -> Maybe req)
     -> Route
+       -- Should throw if Route is already being served.
     -> T
     -> (req -> IO x)
-    -> IO () -- should mutate t to store the details necessary for kill
+    -> IO ()
+    -- Should mutate t to store the details necessary for cleanup.
   _serve publisher deserialize (Route queueName) T {chan, servedRouteTags} handler = do
     HashTable.lookup servedRouteTags (Route queueName) >>= \case
       Nothing -> return ()
@@ -169,19 +176,22 @@ instance RpcTransport T where
              fromAmqpMsg read msg >|>| handleMsg -- Do nothing if request message is malformed.
              AMQP.ackEnv env)
     HashTable.insert servedRouteTags (Route queueName) consumerTag
-  -- handler :: IO (responseHandler, result, done) defines how to wrap results up for the caller.
-  -- Registers a handler in the waiting RPC call hash table, and deregisters it after done resolves.
-  -- Times out if done is not fulfilled after _timeout, with the timeout reset every time a response
-  -- is received.
   _call ::
-       IO (res -> IO (), IO x, IO ()) -- push, result, done
+       IO (res -> IO (), IO x, IO ())
+       -- IO (push, result, done)
+       -- Generic response handler that takes an intermediate result x and defines how to push it
+       -- to the caller.
     -> (req -> Text)
     -> (Text -> IO res)
     -> Route
     -> T
-    -> Time Second -- timeout
+    -> Time Second
+       -- Timeout
     -> req
     -> IO x
+    -- Registers a handler in the waiting RPC call hash table, and deregisters it after done
+    -- resolves.
+    -- Timeouts occur if a result or stream result is not received after the specified time.
   _call handler serialize deserializeUnsafe (Route queueName) T { chan
                                                                 , responseQueue
                                                                 , responseHandlers
@@ -215,8 +225,9 @@ instance PubSubTransport T where
       Streamly.mapM_
         (AMQP.publishMsg chan exchangeName "" . toAmqpMsg serialize) -- Queue name blank.
         as
-  -- _subscribe should mutate t to store the details necessary for unsubscribe
   _subscribe :: (Text -> IO a) -> Route -> T -> IO (Id, Streamly.Serial a)
+  -- Returns subscriber ID and result stream as tuple (ID, stream).
+  -- Shoud mutate t to store the details necessary for unsubscribe.
   _subscribe deserializeUnsafe (Route exchangeName) T {chan, subscriberInfo} = do
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
