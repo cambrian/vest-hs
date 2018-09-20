@@ -246,7 +246,7 @@ class Resource t where
   -- ^ Minimal required definition
   with :: ResourceConfig t -> (t -> IO ()) -> IO ()
   with config = bracket (hold config) release
-  -- TODO: catch exceptions and reconnect
+  -- TODO: Catch exceptions and reconnect.
   withForever :: ResourceConfig t -> (t -> IO ()) -> IO ()
   withForever config action =
     bracket (hold config) release (\t -> action t >> blockForever)
