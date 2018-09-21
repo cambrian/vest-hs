@@ -8,7 +8,7 @@ import VestPrelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
-  SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) = ( Id
+  SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) = ( Id "Subscriber"
                                                                , Streamly.Serial a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
@@ -40,15 +40,15 @@ instance (KnownSymbol route, Read a, PubSubTransport transport) =>
   subscribe ::
        Proxy (Topic route a, transport)
     -> transport
-    -> IO (Id, Streamly.Serial a)
+    -> IO (Id "Subscriber", Streamly.Serial a)
   subscribe _ =
-    _subscribe readUnsafe (Route $ proxyText $ (Proxy :: Proxy route))
+    _subscribe readUnsafe (Id $ proxyText (Proxy :: Proxy route))
 
 instance (KnownSymbol route, FromJSON a, PubSubTransport transport) =>
          Subscriber (TopicJSON (route :: Symbol) a) transport where
   subscribe ::
        Proxy (TopicJSON route a, transport)
     -> transport
-    -> IO (Id, Streamly.Serial a)
+    -> IO (Id "Subscriber", Streamly.Serial a)
   subscribe _ =
-    _subscribe decodeUnsafe (Route $ proxyText $ (Proxy :: Proxy route))
+    _subscribe decodeUnsafe (Id $ proxyText (Proxy :: Proxy route))

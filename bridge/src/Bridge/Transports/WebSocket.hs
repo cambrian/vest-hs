@@ -21,14 +21,14 @@ import VestPrelude
 type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
-  { id :: Id
-  , route :: Route
+  { id :: Id "RpcRequest"
+  , route :: Id "Rpc"
     -- Other metadata (time?).
   , reqText :: Text -- Should be the serialization of a request object, but this is not guaranteed.
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data ResponseMessage = ResponseMessage
-  { requestId :: Id
+  { requestId :: Id "RpcRequest"
     -- Other metadata.
   , response :: Either RpcClientException Text
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
@@ -36,9 +36,9 @@ data ResponseMessage = ResponseMessage
 data Config = Config
   { serverPort :: Port
   , pingInterval :: Int
-  , clientUri :: URI
+  , clientUri :: Id "Uri"
   , clientPort :: Port
-  , clientPath :: Route
+  , clientPath :: Id "Path"
   }
 
 localConfig :: ResourceConfig T
@@ -46,24 +46,24 @@ localConfig =
   Config
     { serverPort = Port 3000
     , pingInterval = 30
-    , clientUri = URI "127.0.0.1"
+    , clientUri = Id "127.0.0.1"
     , clientPort = Port 3000
-    , clientPath = Route "/"
+    , clientPath = Id "/"
     }
 
 data T = T
   { serverThread :: Async ()
-  , clients :: HashTable Id WS.Connection
-  , servedRouteRequests :: HashTable Route ( (Id, RequestMessage) -> IO () -- Request pusher.
+  , clients :: HashTable (Id "Client") WS.Connection
+  , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO () -- Request pusher.
                                            , IO ()
-                                           , Streamly.Serial ( Id
+                                           , Streamly.Serial ( Id "Client"
                                                              , RequestMessage))
-  , servedConnectionResponses :: HashTable Id ( Text -> IO () -- Response pusher.
+  , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO () -- Response pusher.
                                               , IO ()
                                               , Streamly.Serial Text)
-  , clientUri :: URI
+  , clientUri :: Id "Uri"
   , clientPort :: Port
-  , clientPath :: Route
+  , clientPath :: Id "Path"
   }
 
 type instance ResourceConfig T = Config
@@ -121,19 +121,19 @@ wsApp socketServer pingInterval pendingConn = do
     (serveClient socketServer clientId conn)
     (disconnectClient socketServer clientId)
 
-connectClient :: T -> WS.Connection -> IO Id
+connectClient :: T -> WS.Connection -> IO (Id "Client")
 connectClient socketServer conn = do
   let T {clients} = socketServer
   clientId <- newUuid
   HashTable.insert clients clientId conn
   return clientId
 
-disconnectClient :: T -> Id -> IO ()
+disconnectClient :: T -> Id "Client" -> IO ()
 disconnectClient T {clients, servedConnectionResponses} clientId = do
   HashTable.delete clients clientId
   HashTable.delete servedConnectionResponses clientId
 
-serveClient :: T -> Id -> WS.Connection -> IO ()
+serveClient :: T -> Id "Client" -> WS.Connection -> IO ()
 serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = do
   responses <- nonRepeatablePushStream
   HashTable.insert servedConnectionResponses clientId responses
@@ -156,7 +156,7 @@ instance RpcTransport T where
        -- Generic publisher on intermediate result x. Should encapsulate serializing the
        -- intermediate results.
     -> (Text -> Maybe req)
-    -> Route
+    -> Id "Rpc"
        -- Should throw if Route is already being served.
     -> T
     -> (req -> IO x)
@@ -194,7 +194,7 @@ instance RpcTransport T where
        -- to the caller.
     -> (req -> Text)
     -> (Text -> IO res)
-    -> Route
+    -> Id "Rpc"
     -> T
     -> Time Second
        -- Timeout
@@ -207,7 +207,7 @@ instance RpcTransport T where
                                                     , clientPath
                                                     } _timeout req = do
     id <- newUuid
-    let (URI _uri, Port _port, Route _path) =
+    let (Id _uri, Port _port, Id _path) =
           (clientUri, clientPort, clientPath)
     let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let request = encode RequestMessage {id, route, reqText = serialize req}

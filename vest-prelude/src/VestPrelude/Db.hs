@@ -1,5 +1,3 @@
-{-# LANGUAGE UndecidableInstances #-}
-
 module VestPrelude.Db
   ( module VestPrelude.Db
   , module Reexports
@@ -9,8 +7,9 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import qualified Money
-import Squeal.PostgreSQL as Reexports
-import Squeal.PostgreSQL.Render as Reexports
+import Database.Beam as Reexports hiding (insert)
+import qualified Database.Beam.Postgres as Reexports
+import Database.Beam.Backend.SQL
 import VestPrelude
 -- -- Provide a bunch of instances to let types be used in SqlRow and SqlType
 -- -- instance Bounded (Time rat)
@@ -19,9 +18,11 @@ import VestPrelude
 -- instance Bounded Timestamp
 -- instance Generic Timestamp
 -- instance Enum Timestamp
--- -- In theory you could implement this directly on Timestamp without having to create a UTCTime
--- -- but that's a bunch of work for what's only a smallish win.
--- -- Rounds to the nearest second. TODO: get remainder as nanos
+-- In theory you could implement this directly on Timestamp without having to create a UTCTime
+-- but that's a bunch of work for what's only a smallish win.
+-- Rounds to the nearest second. TODO: get remainder as nanos
+instance HasSqlValueSyntax be Text => HasSqlValueSyntax be (Id a) where
+  sqlValueSyntax (Id text) = sqlValueSyntax text
 -- instance SqlType Timestamp where
 --   mkLit x =
 --     let Timestamp seconds = x

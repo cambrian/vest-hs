@@ -50,7 +50,7 @@ connectionString Config {host, port, database, currency, password} =
 type Schema =
   '[ "users" ::: 'Table (
         '[ "pk_users" ::: 'PrimaryKey '[ "hash"]] :=>
-        '[ "hash" :::      'NoDef :=> 'NotNull 'PGbytea
+        '[ "hash" ::: 'NoDef :=> 'NotNull 'PGbytea
          , "balance" ::: 'NoDef :=> 'NotNull 'PGnumeric
         ])
     , "staking_contracts" ::: 'Table (

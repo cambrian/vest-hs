@@ -1,8 +1,5 @@
-module VestPrelude
-  ( module VestPrelude
-  , module Reexports
-  ) where
-
+module VestPrelude (module VestPrelude, module Reexports)
+where
 import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
 import Control.Concurrent.MVar as Reexports
@@ -21,7 +18,7 @@ import qualified Data.UUID.V4 as UUID
 import qualified Data.Vector as Vector
 import qualified Foreign.StablePtr as StablePtr
 import GHC.TypeLits
-import Protolude as VestPrelude hiding
+import Protolude as Reexports hiding
   ( Exception
   , bracket
   , bracketOnError
@@ -52,7 +49,6 @@ import qualified System.Timer.Updatable as UpdatableTimer
 import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
-
 -- Checks if x in xs at type level.
 type family Elem x xs where
   Elem x '[] = 'False
@@ -72,28 +68,12 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
 -- For all of these wrapper types, you can extract the base Text by deconstructing:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
-newtype Id =
+newtype Id (t :: Symbol) =
   Id Text
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
-
-newtype Host =
-  Host Text
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
-
-newtype Hash =
-  Hash Text
   deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Port =
   Port Int
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
-
-newtype Route =
-  Route Text
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
-
-newtype URI =
-  URI Text
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 data Format
@@ -189,7 +169,7 @@ makeStreamVar' init as = do
   async $ Streamly.mapM_ (atomically . writeTVar var) as
   return var
 
-newUuid :: IO Id
+newUuid :: IO (Id a)
 newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
 -- Returns (push, close, stream).

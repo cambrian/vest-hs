@@ -19,7 +19,7 @@ type family NubTopics spec where
 type HasUniqueTopics spec = Topics spec ~ NubTopics spec
 
 data PubSubPublisherException =
-  AlreadyPublishing Route
+  AlreadyPublishing (Id "Topic")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Streams spec where
@@ -59,7 +59,7 @@ instance (KnownSymbol route, Show a, PubSubTransport transport) =>
     -> transport
     -> Streamly.Serial a
     -> IO ()
-  publish _ = _publish show (Route $ proxyText $ (Proxy :: Proxy route))
+  publish _ = _publish show (Id $ proxyText (Proxy :: Proxy route))
 
 instance (KnownSymbol route, ToJSON a, PubSubTransport transport) =>
          Publisher (TopicJSON (route :: Symbol) a) transport where
@@ -68,4 +68,4 @@ instance (KnownSymbol route, ToJSON a, PubSubTransport transport) =>
     -> transport
     -> Streamly.Serial a
     -> IO ()
-  publish _ = _publish encode (Route $ proxyText $ (Proxy :: Proxy route))
+  publish _ = _publish encode (Id $ proxyText (Proxy :: Proxy route))

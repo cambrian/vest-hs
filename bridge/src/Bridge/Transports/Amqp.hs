@@ -17,14 +17,14 @@ import VestPrelude
 type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
-  { id :: Id
-  , responseQueue :: Id
+  { id :: Id "RpcRequest"
+  , responseQueue :: Id "ResponseQueue"
     -- Other metadata (time?).
   , reqText :: Text -- Should be the serialization of a request object, but this is not guaranteed.
   } deriving (Eq, Show, Read)
 
 data ResponseMessage = ResponseMessage
-  { requestId :: Id
+  { requestId :: Id "RpcRequest"
     -- Other metadata.
   , response :: Either RpcClientException Text
   } deriving (Eq, Show, Read)
@@ -48,12 +48,12 @@ localConfig =
 data T = T
   { conn :: AMQP.Connection
   , chan :: AMQP.Channel
-  , responseQueue :: Id
+  , responseQueue :: Id "ResponseQueue"
   , responseConsumerTag :: AMQP.ConsumerTag
-  , servedRouteTags :: HashTable Route AMQP.ConsumerTag
-  , responseHandlers :: HashTable Id (Text -> IO ())
-  , publishedRoutes :: HashTable Route ()
-  , subscriberInfo :: HashTable Id (AMQP.ConsumerTag, IO ())
+  , servedRouteTags :: HashTable (Id "Rpc") AMQP.ConsumerTag
+  , responseHandlers :: HashTable (Id "RpcRequest") (Text -> IO ())
+  , publishedTopics :: HashTable (Id "Topic") ()
+  , subscriberInfo :: HashTable (Id "Subscriber") (AMQP.ConsumerTag, IO ())
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
@@ -72,7 +72,7 @@ toAmqpMsg serialize x =
   AMQP.newMsg
     {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack . serialize $ x}
 
-_unsubscribe :: T -> Id -> IO ()
+_unsubscribe :: T -> Id "Subscriber" -> IO ()
 _unsubscribe T {chan, subscriberInfo} subscriberId = do
   let Id queueName = subscriberId
       maybeUnsubscribe =
@@ -108,7 +108,7 @@ instance Resource T where
            fromAmqpMsg read msg >|>| handleResponse -- Do nothing if response message is malformed.
            AMQP.ackEnv env)
     servedRouteTags <- HashTable.new
-    publishedRoutes <- HashTable.new
+    publishedTopics <- HashTable.new
     subscriberInfo <- HashTable.new
     return
       T
@@ -118,7 +118,7 @@ instance Resource T where
         , responseConsumerTag
         , servedRouteTags
         , responseHandlers
-        , publishedRoutes
+        , publishedTopics
         , subscriberInfo
         }
   release :: T -> IO ()
@@ -147,16 +147,17 @@ instance RpcTransport T where
        -- Generic publisher on intermediate result x. Should encapsulate serializing the
        -- intermediate results.
     -> (Text -> Maybe req)
-    -> Route
+    -> Id "Rpc"
        -- Should throw if Route is already being served.
     -> T
     -> (req -> IO x)
     -> IO ()
     -- Should mutate t to store the details necessary for cleanup.
-  _serve publisher deserialize (Route queueName) T {chan, servedRouteTags} handler = do
-    HashTable.lookup servedRouteTags (Route queueName) >>= \case
+  _serve publisher deserialize route T {chan, servedRouteTags} handler = do
+    HashTable.lookup servedRouteTags route >>= \case
       Nothing -> return ()
-      Just _ -> throw $ AlreadyServing (Route queueName)
+      Just _ -> throw $ AlreadyServing route
+    let Id queueName = route
     let handleMsg RequestMessage {id = requestId, responseQueue, reqText} = do
           let Id _responseQueue = responseQueue
               pub response =
@@ -179,7 +180,7 @@ instance RpcTransport T where
            void . async $ do
              fromAmqpMsg read msg >|>| handleMsg -- Do nothing if request message is malformed.
              AMQP.ackEnv env)
-    HashTable.insert servedRouteTags (Route queueName) consumerTag
+    HashTable.insert servedRouteTags route consumerTag
   _call ::
        IO (res -> IO (), IO x, IO ())
        -- IO (push, result, done)
@@ -187,7 +188,7 @@ instance RpcTransport T where
        -- to the caller.
     -> (req -> Text)
     -> (Text -> IO res)
-    -> Route
+    -> Id "Rpc"
     -> T
     -> Time Second
        -- Timeout
@@ -196,7 +197,7 @@ instance RpcTransport T where
     -- Registers a handler in the waiting RPC call hash table, and deregisters it after done
     -- resolves.
     -- Timeouts occur if a result or stream result is not received after the specified time.
-  _call handler serialize deserializeUnsafe (Route queueName) T { chan
+  _call handler serialize deserializeUnsafe (Id queueName) T { chan
                                                                 , responseQueue
                                                                 , responseHandlers
                                                                 } _timeout req = do
@@ -222,20 +223,21 @@ declarePubSubExchange chan exchangeName =
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
 
 instance PubSubTransport T where
-  _publish :: (a -> Text) -> Route -> T -> Streamly.Serial a -> IO ()
-  _publish serialize (Route exchangeName) T {chan, publishedRoutes} as = do
-    HashTable.lookup publishedRoutes (Route exchangeName) >>= \case
-      Nothing -> HashTable.insert publishedRoutes (Route exchangeName) ()
-      Just _ -> throw $ AlreadyPublishing (Route exchangeName)
+  _publish :: (a -> Text) -> Id "Topic" -> T -> Streamly.Serial a -> IO ()
+  _publish serialize topic T {chan, publishedTopics} as = do
+    HashTable.lookup publishedTopics topic >>= \case
+      Nothing -> HashTable.insert publishedTopics topic ()
+      Just _ -> throw $ AlreadyPublishing topic
+    let Id exchangeName = topic
     declarePubSubExchange chan exchangeName
     void . async $
       Streamly.mapM_
         (AMQP.publishMsg chan exchangeName "" . toAmqpMsg serialize) -- Queue name blank.
         as
-  _subscribe :: (Text -> IO a) -> Route -> T -> IO (Id, Streamly.Serial a)
+  _subscribe :: (Text -> IO a) -> Id "Topic" -> T -> IO (Id "Subscriber", Streamly.Serial a)
   -- Returns subscriber ID and result stream as tuple (ID, stream).
   -- Shoud mutate t to store the details necessary for unsubscribe.
-  _subscribe deserializeUnsafe (Route exchangeName) T {chan, subscriberInfo} = do
+  _subscribe deserializeUnsafe (Id exchangeName) T {chan, subscriberInfo} = do
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
@@ -250,5 +252,5 @@ instance PubSubTransport T where
     let subscriberId = Id queueName
     HashTable.insert subscriberInfo subscriberId (consumerTag, close)
     return (subscriberId, results)
-  unsubscribe :: T -> Id -> IO ()
+  unsubscribe :: T -> Id "Subscriber" -> IO ()
   unsubscribe = _unsubscribe

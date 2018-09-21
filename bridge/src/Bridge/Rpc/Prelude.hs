@@ -11,8 +11,8 @@ class RpcTransport t where
     -- Generic publisher on intermediate result x. Should encapsulate serializing the intermediate
     -- results.
     -> (Text -> Maybe req)
-    -> Route
-    -- ^ Should throw if Route is already being served.
+    -> Id "Rpc"
+    -- ^ Should throw if route is already being served.
     -> t
     -> (req -> IO x)
     -> IO ()
@@ -24,7 +24,7 @@ class RpcTransport t where
     -- the caller.
     -> (req -> Text)
     -> (Text -> IO res)
-    -> Route
+    -> Id "Rpc"
     -> t
     -> Time Second
     -- ^ timeout

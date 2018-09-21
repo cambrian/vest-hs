@@ -21,15 +21,15 @@ localConfig :: Config
 localConfig = ()
 
 data T = T
-  { requestVars :: HashTable Route (MVar (Id, Text)) -- Route to request.
-  , responseVars :: HashTable Id (MVar Text) -- Call ID to response.
-  , serverThreads :: HashTable Route (Async ()) -- List of serving threads.
-  , publisherThreads :: HashTable Route (Async ()) -- List of publisher threads.
-  , streams :: HashTable Route (Text -> IO (), Streamly.Serial Text) -- PubSub streams.
-  , subscriberInfo :: HashTable Id (Async (), IO ()) -- ID to (thread, close).
+  { requestVars :: HashTable (Id "Rpc") (MVar (Id "RpcRequest", Text)) -- Route to request.
+  , responseVars :: HashTable (Id "RpcRequest") (MVar Text) -- Call ID to response.
+  , serverThreads :: HashTable (Id "Rpc") (Async ()) -- List of serving threads.
+  , publisherThreads :: HashTable (Id "Topic") (Async ()) -- List of publisher threads.
+  , streams :: HashTable (Id "Topic") (Text -> IO (), Streamly.Serial Text) -- PubSub streams.
+  , subscriberInfo :: HashTable (Id "Subscriber") (Async (), IO ()) -- ID to (thread, close).
   }
 
-_unsubscribe :: T -> Id -> IO ()
+_unsubscribe :: T -> Id "Subscriber" -> IO ()
 _unsubscribe T {subscriberInfo} subscriberId = do
   let maybeUnsubscribe =
         (>|>| \(thread, close) -> do
@@ -69,7 +69,7 @@ instance RpcTransport T where
   _serve ::
        ((Text -> IO ()) -> x -> IO ())
     -> (Text -> Maybe req)
-    -> Route
+    -> Id "Rpc"
     -> T
     -> (req -> IO x)
     -> IO ()
@@ -100,7 +100,7 @@ instance RpcTransport T where
        IO (res -> IO (), IO x, IO ())
     -> (req -> Text)
     -> (Text -> IO res)
-    -> Route
+    -> Id "Rpc"
     -> T
     -> Time Second
     -> req
@@ -121,34 +121,34 @@ instance RpcTransport T where
     async $ waitForDone >> cancel responseThread
     result
 
-retrieveStream :: T -> Route -> IO (Text -> IO (), Streamly.Serial Text)
-retrieveStream T {streams} route =
-  HashTable.lookup streams route >>= \case
+retrieveStream :: T -> Id "Topic" -> IO (Text -> IO (), Streamly.Serial Text)
+retrieveStream T {streams} topic =
+  HashTable.lookup streams topic >>= \case
     Just stream -> return stream
     Nothing -> do
       (push, _, results) <- nonRepeatablePushStream
-      HashTable.insert streams route (push, results)
+      HashTable.insert streams topic (push, results)
       return (push, results)
 
 instance PubSubTransport T where
-  _publish :: (a -> Text) -> Route -> T -> Streamly.Serial a -> IO ()
-  _publish serialize route t as = do
+  _publish :: (a -> Text) -> Id "Topic" -> T -> Streamly.Serial a -> IO ()
+  _publish serialize topic t as = do
     let T {publisherThreads} = t
-    HashTable.lookup publisherThreads route >>= \case
+    HashTable.lookup publisherThreads topic >>= \case
       Nothing -> do
-        (push, _) <- retrieveStream t route
+        (push, _) <- retrieveStream t topic
         publisherThread <- async $ Streamly.mapM_ (push . serialize) as
-        HashTable.insert publisherThreads route publisherThread
-      Just _ -> throw $ AlreadyPublishing route
-  _subscribe :: (Text -> IO a) -> Route -> T -> IO (Id, Streamly.Serial a)
-  _subscribe deserializeUnsafe route t = do
+        HashTable.insert publisherThreads topic publisherThread
+      Just _ -> throw $ AlreadyPublishing topic
+  _subscribe :: (Text -> IO a) -> Id "Topic" -> T -> IO (Id "Subscriber", Streamly.Serial a)
+  _subscribe deserializeUnsafe topic t = do
     let T {subscriberInfo} = t
-    (_, stream) <- retrieveStream t route
+    (_, stream) <- retrieveStream t topic
     (push, close, results) <- repeatableStream
     subscriberId <- newUuid
     subscriberThread <-
       async $ Streamly.mapM_ (\msg -> deserializeUnsafe msg >>= push) stream
     HashTable.insert subscriberInfo subscriberId (subscriberThread, close)
     return (subscriberId, results)
-  unsubscribe :: T -> Id -> IO ()
+  unsubscribe :: T -> Id "Subscriber" -> IO ()
   unsubscribe = _unsubscribe

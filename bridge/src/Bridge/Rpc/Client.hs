@@ -52,7 +52,7 @@ instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
           return (push, result, done))
       show
       readUnsafe
-      (Route $ proxyText (Proxy :: Proxy route))
+      (Id $ proxyText (Proxy :: Proxy route))
 
 instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
          Client (StreamingEndpoint route req res) transport where
@@ -69,7 +69,7 @@ instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
           return (push, return results, done))
       show
       readUnsafe
-      (Route $ proxyText (Proxy :: Proxy route))
+      (Id $ proxyText (Proxy :: Proxy route))
 
 instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =>
          Client (DirectEndpointJSON route req res) transport where
@@ -86,7 +86,7 @@ instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =
           return (push, result, done))
       encode
       decodeUnsafe
-      (Route $ proxyText (Proxy :: Proxy route))
+      (Id $ proxyText (Proxy :: Proxy route))
 
 instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =>
          Client (StreamingEndpointJSON route req res) transport where
@@ -103,4 +103,4 @@ instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =
           return (push, return results, done))
       encode
       decodeUnsafe
-      (Route $ proxyText (Proxy :: Proxy route))
+      (Id $ proxyText (Proxy :: Proxy route))

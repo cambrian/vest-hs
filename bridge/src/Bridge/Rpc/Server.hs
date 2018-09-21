@@ -22,7 +22,7 @@ type family NubRoutes spec where
 type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 data RpcServerException =
-  AlreadyServing Route
+  AlreadyServing (Id "Rpc")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
@@ -63,7 +63,7 @@ instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
     -> transport
     -> (a -> IO b)
     -> IO ()
-  serve _ = _serve (. show) read (Route $ proxyText (Proxy :: Proxy s))
+  serve _ = _serve (. show) read (Id $ proxyText (Proxy :: Proxy s))
 
 instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
          Server (StreamingEndpoint (s :: Symbol) a b) transport where
@@ -78,7 +78,7 @@ instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
          Streamly.mapM_ (pub . show . Result) xs
          pub $ show $ EndOfResults @b)
       read
-      (Route $ proxyText (Proxy :: Proxy s))
+      (Id $ proxyText (Proxy :: Proxy s))
 
 instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
          Server (DirectEndpointJSON (s :: Symbol) a b) transport where
@@ -87,7 +87,7 @@ instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
     -> transport
     -> (a -> IO b)
     -> IO ()
-  serve _ = _serve (. encode) decode (Route . proxyText $ (Proxy :: Proxy s))
+  serve _ = _serve (. encode) decode (Id $ proxyText (Proxy :: Proxy s))
 
 instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
          Server (StreamingEndpointJSON (s :: Symbol) a b) transport where
@@ -102,4 +102,4 @@ instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
          Streamly.mapM_ (pub . encode . Result) xs
          pub . encode $ EndOfResults @b)
       decode
-      (Route $ proxyText (Proxy :: Proxy s))
+      (Id $ proxyText (Proxy :: Proxy s))
