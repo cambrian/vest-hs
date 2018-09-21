@@ -1,9 +1,14 @@
 #!/bin/bash
 cabal update
-git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive
-cd ~/.haskell-ide-engine
-stack install
-cd -
-stack build phoityne-vscode
-stack install hindent
-brew install rabbitmq libpq postgres
+mkdir -p ~/.vest-hs
+echo "Installing Haskell IDE engine."
+echo "This might take a while."
+git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive > /dev/null 2>&1
+cd ~/.haskell-ide-engine > /dev/null 2>&1
+stack install > ~/.vest-hs/hie-install.log 2>&1
+cd - > /dev/null 2>&1
+echo "Installing IDE-related modules."
+stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log /dev/null 2>&1
+stack install hindent > ~/.vest-hs/hindent-install.log /dev/null 2>&1
+echo "Installing external dependencies."
+brew install rabbitmq libpq postgres > ~/.vest-hs/brew-install.log 2>&1
