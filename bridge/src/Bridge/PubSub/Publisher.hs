@@ -9,12 +9,12 @@ import VestPrelude
 type family Topics spec where
   Topics (TopicAs (f :: Format) (s :: Symbol) a) = '[ s]
   Topics (a
-          :<|> b) = (Topics a) :++ (Topics b)
+          :<|> b) = Topics a :++ Topics b
 
 type family NubTopics spec where
   NubTopics (TopicAs (f :: Format) (s :: Symbol) a) = '[ s]
   NubTopics (a
-             :<|> b) = Nub ((NubTopics a) :++ (NubTopics b))
+             :<|> b) = Nub (NubTopics a :++ NubTopics b)
 
 type HasUniqueTopics spec = Topics spec ~ NubTopics spec
 

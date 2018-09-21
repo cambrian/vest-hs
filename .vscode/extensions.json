@@ -1,9 +1,8 @@
 {
   "recommendations": [
     "jcanero.hoogle-vscode",
-    "lunaryorn.hlint",
-    "monofon.hindent-format",
     "phoityne.phoityne-vscode",
-    "vans.haskero"
+    "alanz.vscode-hie-server",
+    "wk-j.save-and-run"
   ]
 }
