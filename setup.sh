@@ -1,5 +1,6 @@
 #!/bin/bash
 mkdir -p ~/.vest-hs
+echo "Updating Cabal package list."
 cabal update > ~/.vest-hs/cabal-update.log 2>&1
 echo "Installing Haskell IDE engine."
 echo "This might take a while."
