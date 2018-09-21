@@ -1,6 +1,5 @@
 module Bridge.Transports.Amqp
   ( T(..)
-  , Config(..)
   , localConfig
   ) where
 
@@ -82,8 +81,9 @@ _unsubscribe T {chan, subscriberInfo} subscriberId = do
   HashTable.lookup subscriberInfo subscriberId >>= maybeUnsubscribe
   HashTable.delete subscriberInfo subscriberId
 
+type instance ResourceConfig T = Config
+
 instance Resource T where
-  type ResourceConfig T = Config
   hold :: Config -> IO T
     -- Connects to bridge, begins listening on RPC queue.
   hold Config {hostname, virtualHost, username, password} = do
@@ -152,7 +152,7 @@ instance RpcTransport T where
   _serve publisher deserialize (Route queueName) T {chan, servedRouteTags} handler = do
     HashTable.lookup servedRouteTags (Route queueName) >>= \case
       Nothing -> return ()
-      Just _ -> throwIO $ AlreadyServing (Route queueName)
+      Just _ -> throw $ AlreadyServing (Route queueName)
     let handleMsg RequestMessage {id = requestId, responseQueue, reqText} = do
           let Id _responseQueue = responseQueue
               pub response =

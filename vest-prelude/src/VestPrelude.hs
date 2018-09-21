@@ -192,6 +192,22 @@ makeStreamVar' init as = do
 newUuid :: IO Id
 newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
+-- Returns (push, close, stream).
+-- Push does nothing after close is bound.
+nonRepeatablePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
+nonRepeatablePushStream = do
+  resultVar <- newEmptyMVar
+  let push = putMVar resultVar
+      stream =
+        Streamly.unfoldrM
+          (\(idx :: Int) -> do
+             resultMaybe <- takeMVar resultVar
+             case resultMaybe of
+               Nothing -> return Nothing
+               Just result -> return $ Just (result, idx + 1))
+          0
+  return (push . Just, push Nothing, stream)
+
 proxyText :: (KnownSymbol a) => Proxy a -> Text
 proxyText = pack . symbolVal
 
@@ -243,7 +259,6 @@ timeoutThrow' action _timeout = do
   return (UpdatableTimer.renewIO timer micros)
 
 class Resource t where
-  type ResourceConfig t :: *
   hold :: ResourceConfig t -> IO t
   release :: t -> IO ()
   -- ^ Minimal required definition
@@ -253,3 +268,6 @@ class Resource t where
   withForever :: ResourceConfig t -> (t -> IO ()) -> IO ()
   withForever config action =
     bracket (hold config) release (\t -> action t >> blockForever)
+
+-- Make type family injective.
+type family ResourceConfig t = g | g -> t
