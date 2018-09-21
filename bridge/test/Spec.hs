@@ -78,7 +78,7 @@ withRpcClient ::
 withRpcClient config _ action =
   with
     config
-    (\(transport :: transport) -> do
+    (\transport -> do
        serve (Proxy :: Proxy (RpcApi, transport)) transport handlers
        action $ makeClient (Proxy :: Proxy (spec, transport)) transport)
 
@@ -108,7 +108,7 @@ withSubscribed ::
 withSubscribed config _ action =
   with
     config
-    (\(transport :: transport) -> do
+    (\transport -> do
        subscribed <- subscribe (Proxy :: Proxy (spec, transport)) transport
        publish (Proxy :: Proxy (PubSubApi, transport)) transport streams
        action subscribed)

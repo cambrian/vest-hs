@@ -13,7 +13,7 @@ module Core.Db
 import VestPrelude hiding (from)
 import VestPrelude.Db as Reexports
 
--- The user _is_ the currency. This is because squeal does not provide a way to specify the
+-- The db user == currency. This is because squeal does not provide a way to specify the
 -- (postgres) schema per query, so we rely on the fact that a user's schema search path is
 -- ["#user", public].
 -- Number of stripes is left at 1.
@@ -46,60 +46,57 @@ connectionString Config {host, port, database, currency, password} =
 -- condition is not met.
 
 
--- Schema uses NO default values, such that no information flows from db -> server during inserts
---
--- Also jesus h. christ this always gets formatted into garbage. See comment block below for
--- non-garbage code.
-type Schema
-   = '[ "users" ::: 'Table ('[ "pk_users" ::: 'PrimaryKey '[ "hash"]] :=> '[ "hash" ::: 'NoDef :=> 'NotNull 'PGbytea, "balance" ::: 'NoDef :=> 'NotNull 'PGnumeric]), "staking_contracts" ::: 'Table ('[ "pk_staking_contracts" ::: 'PrimaryKey '[ "id"], "fk_owner" ::: 'ForeignKey '[ "owner"] "users" '[ "hash"]] :=> '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea, "owner" ::: 'NoDef :=> 'NotNull 'PGbytea, "size" ::: 'NoDef :=> 'NotNull 'PGnumeric, "start_time" ::: 'NoDef :=> 'NotNull 'PGtimestamp, "duration" ::: 'NoDef :=> 'NotNull 'PGinterval, "price" ::: 'NoDef :=> 'NotNull 'PGnumeric]), "collections" ::: 'Table ('[ "pk_collections" ::: 'PrimaryKey '[ "tx_hash"], "fk_owner" ::: 'ForeignKey '[ "owner"] "users" '[ "hash"]] :=> '[ "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea, "owner" ::: 'NoDef :=> 'NotNull 'PGbytea, "recipient" ::: 'NoDef :=> 'NotNull 'PGbytea, "size" ::: 'NoDef :=> 'NotNull 'PGnumeric, "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp]), "staking_rewards" ::: 'Table ('[ "pk_staking_rewards" ::: 'PrimaryKey '[ "id"], "fk_staking_contract" ::: 'ForeignKey '[ "staking_contract"] "staking_contracts" '[ "id"]] :=> '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea, "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea, "staking_contract" ::: 'NoDef :=> 'NotNull 'PGbytea, "size" ::: 'NoDef :=> 'NotNull 'PGnumeric, "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp])] --
+-- | Schema uses NO default values, such that no information flows from db -> server during inserts
+type Schema =
+  '[ "users" ::: 'Table (
+        '[ "pk_users" ::: 'PrimaryKey '[ "hash"]] :=>
+        '[ "hash" :::      'NoDef :=> 'NotNull 'PGbytea
+         , "balance" ::: 'NoDef :=> 'NotNull 'PGnumeric
+        ])
+    , "staking_contracts" ::: 'Table (
+        '[ "pk_staking_contracts" ::: 'PrimaryKey '["id"]
+         , "fk_owner" ::: 'ForeignKey '["owner"] "users" '["hash"]
+         ] :=>
+        '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "owner" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
+         , "start_time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
+         , "duration" ::: 'NoDef :=> 'NotNull 'PGinterval
+         , "price" ::: 'NoDef :=> 'NotNull 'PGnumeric
+         ])
+    , "collections" ::: 'Table (
+        '[ "pk_collections" ::: 'PrimaryKey '["tx_hash"]
+         , "fk_owner" ::: 'ForeignKey '["owner"] "users" '["hash"]
+         ] :=>
+        '[ "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "owner" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "recipient" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
+         , "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
+         ])
+    , "staking_rewards" ::: 'Table (
+        '[ "pk_staking_rewards" ::: 'PrimaryKey '["id"]
+        , "fk_staking_contract" ::: 'ForeignKey '["staking_contract"] "staking_contracts" '["id"]
+         ] :=>
+        '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "staking_contract" ::: 'NoDef :=> 'NotNull 'PGbytea
+         , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
+         , "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
+         ])
+    ]
 
--- type Schema =
---   '[ "users" ::: 'Table (
---         '[ "pk_users" ::: 'PrimaryKey '[ "hash"]] :=>
---         '[ "hash" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "balance" ::: 'NoDef :=> 'NotNull 'PGnumeric
---         ])
---     , "staking_contracts" ::: 'Table (
---         '[ "pk_staking_contracts" ::: 'PrimaryKey '["id"]
---          , "fk_owner" ::: 'ForeignKey '["owner"] "users" '["hash"]
---          ] :=>
---         '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "owner" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
---          , "start_time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
---          , "duration" ::: 'NoDef :=> 'NotNull 'PGinterval
---          , "price" ::: 'NoDef :=> 'NotNull 'PGnumeric
---          ])
---     , "collections" ::: 'Table (
---         '[ "pk_collections" ::: 'PrimaryKey '["tx_hash"]
---          , "fk_owner" ::: 'ForeignKey '["owner"] "users" '["hash"]
---          ] :=>
---         '[ "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "owner" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "recipient" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
---          , "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
---          ])
---     , "staking_rewards" ::: 'Table (
---         '[ "pk_staking_rewards" ::: 'PrimaryKey '["id"]
---         , "fk_staking_contract" ::: 'ForeignKey '["staking_contract"] "staking_contracts" '["id"]
---          ] :=>
---         '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "staking_contract" ::: 'NoDef :=> 'NotNull 'PGbytea
---          , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
---          , "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
---          ])
---     ]
 tryCreateTables :: Definition Schema Schema
 tryCreateTables =
   createTableIfNotExists
     #users
-    ((bytea & notNullable) `as` #hash :* (numeric & notNullable) `as` #balance)
+    ((bytea & notNullable) `as` #hash :*
+    (numeric & notNullable) `as` #balance)
     (primaryKey #hash `as` #pk_users) >>>
   createTableIfNotExists
     #staking_contracts
-    ((bytea & notNullable) `as` #id :* (bytea & notNullable) `as` #owner :*
+    ((bytea & notNullable) `as` #id :*
+     (bytea & notNullable) `as` #owner :*
      (numeric & notNullable) `as`
      #size :*
      (timestamp & notNullable) `as`
@@ -152,7 +149,7 @@ tryInsertUser =
 
 userBalance :: Query Schema '[ 'NotNull 'PGbytea] '[ "balance" ::: 'NotNull 'PGnumeric]
 userBalance =
-  select #balance $ from (table #users) & where_ (#hash .== param @1)
+  select #balance (from (table #users) & where_ (#hash .== param @1))
 
 insertStakingContract ::
      Manipulation Schema '[ 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGnumeric, 'NotNull 'PGtimestamp, 'NotNull 'PGinterval, 'NotNull 'PGnumeric] '[]

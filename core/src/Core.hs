@@ -2,7 +2,8 @@ module Core
   (
   ) where
 
-import qualified Bridge
+import Bridge
+import qualified Bridge.Transports.Amqp as Amqp
 import qualified Core.Db as Db
 import qualified Generics.SOP as SOP
 import qualified PriceServer
@@ -94,7 +95,7 @@ class (PriceServer.Priceable a) =>
   --        insert_
   --        return ())
 
-make :: Config -> Bridge.T -> IO T
+make :: Config -> Amqp.T -> IO T
 make Config {} bridge = do
   return $ T {}
 -- start :: Db.PGConnectInfo -> Bridge.Config -> Config -> IO ()
