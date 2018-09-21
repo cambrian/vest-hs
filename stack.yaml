@@ -2,9 +2,8 @@ resolver: lts-12.9
 
 packages:
 - bridge
-# - core
+- core
 - price-server
-# - socket-server
 - vest-prelude
 
 extra-deps:
@@ -18,7 +17,6 @@ extra-deps:
 - stripe-core-2.4.0
 - stripe-haskell-2.4.0
 - stripe-http-client-2.4.0
-- time-1.8.0.4 # only for sql formatting time
 - timers-updatable-0.2.0.2
 
 flags:
