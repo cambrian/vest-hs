@@ -149,7 +149,7 @@ tryInsertUser =
 
 userBalance :: Query Schema '[ 'NotNull 'PGbytea] '[ "balance" ::: 'NotNull 'PGnumeric]
 userBalance =
-  select #balance (from (table #users) & where_ (#hash .== param @1))
+  select #balance $ from (table #users) & where_   (#hash .== param @1)
 
 insertStakingContract ::
      Manipulation Schema '[ 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGnumeric, 'NotNull 'PGtimestamp, 'NotNull 'PGinterval, 'NotNull 'PGnumeric] '[]
