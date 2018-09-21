@@ -10,5 +10,6 @@
   "editor.wordWrapColumn": 100,
   "editor.wrappingIndent": "indent",
   // The url of the Hoogle server to query. Can point to a local Hoogle server.
-  "hoogle-vscode.url": "http://127.0.0.1:19000"
+  "hoogle-vscode.url": "http://127.0.0.1:19000",
+  "hindent-format.command": "~/.local/bin/hindent",
 }
