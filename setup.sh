@@ -1,6 +1,6 @@
 #!/bin/bash
-cabal update
 mkdir -p ~/.vest-hs
+cabal update > ~/.vest-hs/cabal-update.log 2>&1
 echo "Installing Haskell IDE engine."
 echo "This might take a while."
 git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive > /dev/null 2>&1
