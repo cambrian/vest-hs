@@ -31,5 +31,5 @@ cabal.project.local~
 # Generated cabal.
 **.cabal
 
-# HSpec test repots
+# HSpec test reports.
 TESTREPORT
