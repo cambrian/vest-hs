@@ -1,16 +1,14 @@
 module Bridge.Transports.WebSocket
   ( T(..)
-  , Config(..)
   , localConfig
   ) where
 
-import Bridge.PubSub
 import Bridge.Rpc
 import qualified Control.Exception as Exception
 import qualified Control.Monad as Monad
-import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
+import qualified Network.Socket.Internal as Socket
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
@@ -32,7 +30,7 @@ data ResponseMessage = ResponseMessage
   { requestId :: Id
     -- Other metadata.
   , response :: Either RpcClientException Text
-  } deriving (Eq, Show, Read)
+  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data Config = Config
   { serverPort :: Port
@@ -42,7 +40,7 @@ data Config = Config
   , clientPath :: Route
   }
 
-localConfig :: Config
+localConfig :: ResourceConfig T
 localConfig =
   Config
     { serverPort = Port 3000
@@ -67,20 +65,23 @@ data T = T
   , clientPath :: Route
   }
 
+type instance ResourceConfig T = Config
+
 instance Resource T where
-  type ResourceConfig T = Config
-  hold :: Config -> IO T
+  hold :: ResourceConfig T -> IO T
   -- Connects to bridge, begins listening on RPC queue.
   hold Config {serverPort, pingInterval, clientUri, clientPort, clientPath} = do
+    let Port _serverPort = serverPort
     clients <- HashTable.new
     servedRouteRequests <- HashTable.new
     servedConnectionResponses <- HashTable.new
     -- Warp runs forever on its own thread.
+    socketServerVar <- newEmptyMVar
     serverThread <-
       async $ do
         socketServer <- readMVar socketServerVar
         -- Wait for thread ID to be added to server state.
-        Warp.run port $
+        Warp.run _serverPort $
           WS.websocketsOr
             WS.defaultConnectionOptions
             (wsApp socketServer pingInterval)
@@ -100,11 +101,9 @@ instance Resource T where
     threadDelay $ sec 0.1 -- TODO: Make less jank.
     return socketServer
   release :: T -> IO ()
-  release T {serverThread, servedRouteRequests} = do
-    HashTable.mapM_ (\(route, ((_, close, _))) -> close) servedRouteRequests
-    HashTable.mapM_
-      (\(route, ((_, close, _))) -> close)
-      servedConnectionResponses
+  release T {serverThread, servedRouteRequests, servedConnectionResponses} = do
+    HashTable.mapM_ (\(_, (_, close, _)) -> close) servedRouteRequests
+    HashTable.mapM_ (\(_, (_, close, _)) -> close) servedConnectionResponses
     cancel serverThread
 
 httpApp :: Wai.Application
@@ -124,9 +123,9 @@ wsApp socketServer pingInterval pendingConn = do
 connectClient :: T -> WS.Connection -> IO Id
 connectClient socketServer conn = do
   let T {clients} = socketServer
-  clientIdRaw <- newUuid
-  HashTable.insert clients (Id clientId) conn
-  return $ Id clientId
+  clientId <- newUuid
+  HashTable.insert clients clientId conn
+  return clientId
 
 disconnectClient :: T -> Id -> IO ()
 disconnectClient T {clients, servedConnectionResponses} clientId = do
@@ -134,7 +133,7 @@ disconnectClient T {clients, servedConnectionResponses} clientId = do
   HashTable.delete servedConnectionResponses clientId
 
 serveClient :: T -> Id -> WS.Connection -> IO ()
-serveClient T {servedRouteRequests} clientId conn = do
+serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = do
   responses <- nonRepeatablePushStream
   HashTable.insert servedConnectionResponses clientId responses
   let (_, _, streamOut) = responses
@@ -144,7 +143,7 @@ serveClient T {servedRouteRequests} clientId conn = do
     msg <- WS.receiveData conn
     decode msg >|>|
       (\reqMsg -> do
-         let RequestMessage {route, reqText} = reqMsg
+         let RequestMessage {route} = reqMsg
          requestsMaybe <- HashTable.lookup servedRouteRequests route
          requestsMaybe >|>| (\(pushIn, _, _) -> pushIn (clientId, reqMsg)))
 
@@ -183,7 +182,7 @@ instance RpcTransport T where
             Nothing -> pub . Left . BadCall $ "bad input: " <> reqText
             Just r -> handler r >>= publisher (pub . Right)
     -- Thread dies on its own when stream closed on kill.
-    async $ Streamly.mapM_ handleMsg streamIn
+    void . async $ Streamly.mapM_ handleMsg streamIn
   _call ::
        IO (res -> IO (), IO x, IO ())
        -- IO (push, result, done)
@@ -200,117 +199,33 @@ instance RpcTransport T where
     -- Registers a handler in the waiting RPC call hash table, and deregisters it after done
     -- resolves.
     -- Timeouts occur if a result or stream result is not received after the specified time.
-  _call handler serialize deserializeUnsafe route T { chan
-                                                    , responseQueue
-                                                    , responseHandlers
+  _call handler serialize deserializeUnsafe route T { clientUri
+                                                    , clientPort
+                                                    , clientPath
                                                     } _timeout req = do
     id <- newUuid
+    let (URI _uri, Port _port, Route _path) =
+          (clientUri, clientPort, clientPath)
+    let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let request = encode RequestMessage {id, route, reqText = serialize req}
     (push, result, waitForDone) <- handler
     renewTimeout <- timeoutThrow' waitForDone _timeout
-    HashTable.insert
-      responseHandlers
-      id
-      (\x -> renewTimeout >> deserializeUnsafe x >>= push)
-    _ <- AMQP.publishMsg chan "" queueName request
-    async $ waitForDone >> HashTable.delete responseHandlers id
+    -- TODO: Track these threads?
+    let wsClientApp conn = do
+          readerThread <-
+            async $ do
+              let readLoop = do
+                    msg <- WS.receiveData conn
+                    case decode msg of
+                      Nothing -> return () -- Swallow if entire message is garbled.
+                      Just ResponseMessage {response} ->
+                        case response of
+                          Left exception -> throw exception -- TODO: Throw async?
+                          Right text ->
+                            renewTimeout >> deserializeUnsafe text >>= push
+                    readLoop
+              readLoop
+          WS.sendTextData conn request
+          waitForDone >> cancel readerThread
+    Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
     result
-
-_callRPCTimeout ::
-     forall req res. (ToJSON req)
-  => IO (Response -> IO (), IO res, IO ())
-  -> Time Second
-  -> SocketClientConfig
-  -> Route
-  -> req
-  -> IO res
-_callRPCTimeout helpers _timeout SocketClientConfig {uri, port, path} route req = do
-  id <- fmap (Id . UUID.toText) UUID.nextRandom
-  let (URI _uri, Port _port, Route _path) = (uri, port, path)
-  let (uriStr, pathStr) = (Text.unpack _uri, Text.unpack _path)
-  let reqMsg = RequestMessage {id, route, req = encodeSerialText req}
-  let rawReqMsg = encode reqMsg
-  (push, result, waitForDone) <- helpers
-  renewTimeout <- timeoutThrow' waitForDone _timeout
-  -- Fork a thread that writes incoming WS data to the stream.
-  -- Then send the outbound request and wait for reader thread to finish.
-  let wsClientApp conn = do
-        readerThread <-
-          async $ do
-            let readLoop = do
-                  rawResMsg <- WS.receiveData conn
-                  renewTimeout
-                  case decode rawResMsg of
-                    Nothing -> return () -- Swallow if entire message is garbled.
-                    Just (ResponseMessage {res}) ->
-                      case res of
-                        Left ex -> throw ex -- TODO: Throw async?
-                        Right resp -> push resp
-                  readLoop
-            readLoop
-        WS.sendTextData conn rawReqMsg
-        waitForDone >> cancel readerThread
-  Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
-  result
-
-callRPCTimeout ::
-     forall req res. (ToJSON req, FromJSON res)
-  => Time Second
-  -> SocketClientConfig
-  -> Route
-  -> req
-  -> IO res
-callRPCTimeout =
-  _callRPCTimeout
-    (do resultVar <- newEmptyMVar
-        let push =
-              \case
-                Result resText -> do
-                  case decodeSerialText resText of
-                    Nothing -> throw $ DecodeException resText
-                    Just res -> putMVar resultVar res
-                EndOfResults ->
-                  throw $
-                  InternalSocketServerException
-                    "direct RPC should never get EndOfResults"
-        let result = readMVar resultVar
-        return (push, result, void result))
-
-callRPCTimeout' ::
-     forall req res. (ToJSON req, FromJSON res)
-  => Time Second
-  -> SocketClientConfig
-  -> Route
-  -> req
-  -> IO (Streamly.Serial res)
-callRPCTimeout' =
-  _callRPCTimeout
-    (do (_push, close, results) <- repeatableStream
-        -- Decoding returns Maybe (Maybe result) where the outer Maybe indicates whether the result
-        -- is to be pushed or not, and the inner Maybe indicates stream continuation.
-        let push = do
-              \case
-                Result resText -> do
-                  case decodeSerialText resText of
-                    Nothing -> throw $ DecodeException resText
-                    Just resActual -> _push resActual
-                EndOfResults -> close
-        let waitForDone = Streamly.mapM_ return results
-        return (push, return results, waitForDone))
-
-defaultTimeout :: Time Second
-defaultTimeout = sec 1
-
--- Direct RPC call with default timeout.
-callRPC ::
-     (ToJSON req, FromJSON res) => SocketClientConfig -> Route -> req -> IO res
-callRPC = callRPCTimeout defaultTimeout
-
--- Streaming RPC call with default timeout.
-callRPC' ::
-     (ToJSON req, FromJSON res)
-  => SocketClientConfig
-  -> Route
-  -> req
-  -> IO (Streamly.Serial res)
-callRPC' = callRPCTimeout' defaultTimeout

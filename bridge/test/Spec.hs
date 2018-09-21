@@ -1,5 +1,6 @@
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
+import qualified Bridge.Transports.WebSocket as WebSocket
 import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -8,7 +9,7 @@ import VestPrelude
 
 type EchoEndpoint = DirectEndpoint "echo" Text Text
 
-type EchoIntsEndpoint = DirectEndpoint "echoInts" [Int] [Int]
+type EchoIntsEndpoint = DirectEndpointJSON "echoInts" [Int] [Int]
 
 type EchoInts'Endpoint = StreamingEndpoint "echoInts'" [Int] Int
 
@@ -111,32 +112,30 @@ withSubscribed config _ action =
        publish (Proxy :: Proxy (PubSubApi, transport)) transport streams
        action subscribed)
 
-echoTest :: Spec
-echoTest =
-  around
-    (withRpcClient Amqp.localConfig (Proxy :: Proxy (EchoEndpoint, Amqp.T))) $
+echoTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+echoTest config =
+  around (withRpcClient config (Proxy :: Proxy (EchoEndpoint, a))) $
   context "when running simple echo RPC" $
   it "returns the original output" $ \callEcho -> do
     result <- callEcho (sec 1) "test"
     result `shouldBe` "test"
 
-echoTest' :: Spec
-echoTest' =
-  around
-    (withRpcClient Amqp.localConfig (Proxy :: Proxy (EchoInts'Endpoint, Amqp.T))) $
+echoTest' :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+echoTest' config =
+  around (withRpcClient config (Proxy :: Proxy (EchoInts'Endpoint, a))) $
   context "when running simple echoInts' RPC" $
   it "returns the original output" $ \callEchoInts' -> do
     results <- callEchoInts' (sec 1) [1, 2, 3]
     Streamly.toList results `shouldReturn` [1, 2, 3]
 
-multipleFnTest :: Spec
-multipleFnTest =
+multipleFnTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+multipleFnTest config =
   around
     (withRpcClient
-       Amqp.localConfig
+       config
        (Proxy :: Proxy ( EchoIntsEndpoint
                          :<|> EchoCharsEndpoint
-                       , Amqp.T))) $
+                       , a))) $
   context "when running multiple echo RPCs" $
   it "returns the original output for both" $ \(callEchoInts :<|> callEchoChars) -> do
     resultInts <- callEchoInts (sec 1) [1, 2, 3]
@@ -144,14 +143,14 @@ multipleFnTest =
     resultInts `shouldBe` [1, 2, 3]
     resultChars `shouldBe` ['a', 'b', 'c']
 
-multipleFnTest' :: Spec
-multipleFnTest' =
+multipleFnTest' :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+multipleFnTest' config =
   around
     (withRpcClient
-       Amqp.localConfig
+       config
        (Proxy :: Proxy ( EchoInts'Endpoint
                          :<|> EchoChars'Endpoint
-                       , Amqp.T))) $
+                       , a))) $
   context "when running multiple echo RPCs" $
   it "returns the original output for both" $ \(callEchoInts' :<|> callEchoChars') -> do
     resultsInt <- callEchoInts' (sec 1) [1, 2, 3]
@@ -159,22 +158,18 @@ multipleFnTest' =
     Streamly.toList resultsInt `shouldReturn` [1, 2, 3]
     Streamly.toList resultsChar `shouldReturn` ['a', 'b', 'c']
 
-multipleConsumeTest' :: Spec
-multipleConsumeTest' =
-  around
-    (withRpcClient Amqp.localConfig (Proxy :: Proxy (EchoInts'Endpoint, Amqp.T))) $
+multipleConsumeTest' :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+multipleConsumeTest' config =
+  around (withRpcClient config (Proxy :: Proxy (EchoInts'Endpoint, a))) $
   context "when running echo with multiple stream consumers" $
   it "returns the original output for both" $ \callEchoInts' -> do
     results <- callEchoInts' (sec 1) [1, 2, 3]
     Streamly.toList results `shouldReturn` [1, 2, 3]
     Streamly.toList results `shouldReturn` [1, 2, 3]
 
-concurrentTest' :: Spec
-concurrentTest' =
-  around
-    (withRpcClient
-       Amqp.localConfig
-       (Proxy :: Proxy (EchoDelay'Endpoint, Amqp.T))) $
+concurrentTest' :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+concurrentTest' config =
+  around (withRpcClient config (Proxy :: Proxy (EchoDelay'Endpoint, a))) $
   context "when running RPCs with concurrent callers" $
   it "returns the correct output for both" $ \callEchoDelay' -> do
     results1 <- callEchoDelay' (sec 1) 1
@@ -184,23 +179,17 @@ concurrentTest' =
     resultList1 `shouldSatisfy` Data.List.all (== 1)
     resultList2 `shouldSatisfy` Data.List.all (== 2)
 
-timeoutTest :: Spec
-timeoutTest =
-  around
-    (withRpcClient
-       Amqp.localConfig
-       (Proxy :: Proxy (EchoTimeoutEndpoint, Amqp.T))) $
+timeoutTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+timeoutTest config =
+  around (withRpcClient config (Proxy :: Proxy (EchoTimeoutEndpoint, a))) $
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \callEchoTimeout ->
     callEchoTimeout (sec 0.01) [1, 2, 3] `shouldThrow`
     (== TimeoutException (sec 0.01))
 
-timeoutTest' :: Spec
-timeoutTest' =
-  around
-    (withRpcClient
-       Amqp.localConfig
-       (Proxy :: Proxy (EchoTimeout'Endpoint, Amqp.T))) $
+timeoutTest' :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
+timeoutTest' config =
+  around (withRpcClient config (Proxy :: Proxy (EchoTimeout'Endpoint, a))) $
   context "when running RPCs that take too long" $
   it "forces callers to time out" $ \callEchoTimeout' ->
     (do results <- callEchoTimeout' (sec 0.01) [1, 2, 3]
@@ -208,19 +197,37 @@ timeoutTest' =
         print resultsList) `shouldThrow`
     (== TimeoutException (sec 0.01))
 
-pubSubTest' :: Spec
-pubSubTest' =
-  around
-    (withSubscribed Amqp.localConfig (Proxy :: Proxy (IncrementTopic, Amqp.T))) $
+pubSubTest' :: (Resource a, PubSubTransport a) => ResourceConfig a -> Spec
+pubSubTest' config =
+  around (withSubscribed config (Proxy :: Proxy (IncrementTopic, a))) $
   context "when publishing an incrementing stream" $
   it "functions correctly on the subscribing end" $ \(_id, results) ->
     Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
 
+directTests :: (Resource a, RpcTransport a) => [ResourceConfig a -> Spec]
+directTests = [echoTest, multipleFnTest, timeoutTest]
+
+streamingTests :: (Resource a, RpcTransport a) => [ResourceConfig a -> Spec]
+streamingTests =
+  [ echoTest'
+  , multipleFnTest'
+  , multipleConsumeTest'
+  , concurrentTest'
+  , timeoutTest'
+  ]
+
+pubSubTests :: (Resource a, PubSubTransport a) => [ResourceConfig a -> Spec]
+pubSubTests = [pubSubTest']
+
 main :: IO ()
-main =
+main = do
+  let amqpMake = ($ Amqp.localConfig)
+      wsMake = ($ WebSocket.localConfig)
   hspec $ do
-    describe "direct RPC bridge" $ echoTest >> multipleFnTest >> timeoutTest
-    describe "streaming RPC bridge" $
-      echoTest' >> multipleFnTest' >> multipleConsumeTest' >> concurrentTest' >>
-      timeoutTest'
-    describe "publish/subscribe bridge" pubSubTest'
+    describe "AMQP bridge" $ do
+      describe "direct RPC" $ mapM_ amqpMake directTests
+      describe "streaming RPC" $ mapM_ amqpMake streamingTests
+      describe "publish/subscribe" $ mapM_ amqpMake pubSubTests
+    describe "WebSocket bridge" $ do
+      describe "direct RPC" $ mapM_ wsMake directTests
+      describe "streaming RPC" $ mapM_ wsMake streamingTests

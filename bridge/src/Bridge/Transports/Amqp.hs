@@ -1,6 +1,5 @@
 module Bridge.Transports.Amqp
   ( T(..)
-  , Config(..)
   , localConfig
   ) where
 
@@ -82,8 +81,9 @@ _unsubscribe T {chan, subscriberInfo} subscriberId = do
   HashTable.lookup subscriberInfo subscriberId >>= maybeUnsubscribe
   HashTable.delete subscriberInfo subscriberId
 
+type instance ResourceConfig T = Config
+
 instance Resource T where
-  type ResourceConfig T = Config
   hold :: Config -> IO T
     -- Connects to bridge, begins listening on RPC queue.
   hold Config {hostname, virtualHost, username, password} = do
