@@ -1,11 +1,16 @@
+-- Refer to AMQP and WebSocket transports for detailed commentary.
+-- This transport is ONLY to be used for testing purposes!
 module Bridge.Transports.Dummy
   ( T(..)
+  , Config
   , localConfig
   ) where
 
 import Bridge.PubSub
 import Bridge.Rpc
 import qualified Data.HashTable.IO as HashTable
+import qualified Streamly
+import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -18,7 +23,20 @@ localConfig = ()
 data T = T
   { requestVars :: HashTable Route (MVar (Id, Text)) -- Route to request.
   , responseVars :: HashTable Id (MVar Text) -- Call ID to response.
+  , serverThreads :: HashTable Route (Async ()) -- List of serving threads.
+  , publisherThreads :: HashTable Route (Async ()) -- List of publisher threads.
+  , streams :: HashTable Route (Text -> IO (), Streamly.Serial Text) -- PubSub streams.
+  , subscriberInfo :: HashTable Id (Async (), IO ()) -- ID to (thread, close).
   }
+
+_unsubscribe :: T -> Id -> IO ()
+_unsubscribe T {subscriberInfo} subscriberId = do
+  let maybeUnsubscribe =
+        (>|>| \(thread, close) -> do
+                cancel thread
+                close)
+  HashTable.lookup subscriberInfo subscriberId >>= maybeUnsubscribe
+  HashTable.delete subscriberInfo subscriberId
 
 type instance ResourceConfig T = Config
 
@@ -27,24 +45,38 @@ instance Resource T where
   hold _ = do
     requestVars <- HashTable.new
     responseVars <- HashTable.new
-    return T {requestVars, responseVars}
+    serverThreads <- HashTable.new
+    publisherThreads <- HashTable.new
+    streams <- HashTable.new
+    subscriberInfo <- HashTable.new
+    return
+      T
+        { requestVars
+        , responseVars
+        , serverThreads
+        , publisherThreads
+        , streams
+        , subscriberInfo
+        }
   release :: T -> IO ()
-  release _ = return ()
+  release t = do
+    let T {serverThreads, publisherThreads, subscriberInfo} = t
+    HashTable.mapM_ (cancel . snd) serverThreads
+    HashTable.mapM_ (cancel . snd) publisherThreads
+    HashTable.mapM_ (_unsubscribe t . fst) subscriberInfo
 
 instance RpcTransport T where
   _serve ::
        ((Text -> IO ()) -> x -> IO ())
-       -- (publish -> res/Stream res -> IO ())
-       -- Generic publisher on intermediate result x. Should encapsulate serializing the
-       -- intermediate results.
     -> (Text -> Maybe req)
     -> Route
-       -- Should throw if Route is already being served.
     -> T
     -> (req -> IO x)
     -> IO ()
-    -- Should mutate t to store the details necessary for cleanup.
-  _serve publisher deserialize route T {requestVars, responseVars} handler = do
+  _serve publisher deserialize route T { requestVars
+                                       , responseVars
+                                       , serverThreads
+                                       } handler = do
     requestVar <-
       HashTable.lookup requestVars route >>= \case
         Nothing -> do
@@ -54,29 +86,25 @@ instance RpcTransport T where
         Just _ -> throw $ AlreadyServing route
     let pub id x = do
           HashTable.lookup responseVars id >>= \case
-            Nothing -> panic "impossible code path"
+            Nothing -> panic "this is a bug" -- Panic is used here only because this is a dummy
+                                             -- client used in testing. Do not use otherwise!
             Just responseVar -> putMVar responseVar x
-    void . async . forever $ do
-      (id, reqText) <- takeMVar requestVar
-      case deserialize reqText of
-        Nothing -> panic "dummy being used improperly"
-        Just r -> handler r >>= publisher (pub id)
+    serverThread <-
+      async . forever $ do
+        (id, reqText) <- takeMVar requestVar
+        case deserialize reqText of
+          Nothing -> panic "this is a bug"
+          Just r -> handler r >>= publisher (pub id)
+    HashTable.insert serverThreads route serverThread
   _call ::
        IO (res -> IO (), IO x, IO ())
-       -- IO (push, result, done)
-       -- Generic response handler that takes an intermediate result x and defines how to push it
-       -- to the caller.
     -> (req -> Text)
     -> (Text -> IO res)
     -> Route
     -> T
     -> Time Second
-       -- Timeout
     -> req
     -> IO x
-    -- Registers a handler in the waiting RPC call hash table, and deregisters it after done
-    -- resolves.
-    -- Timeouts occur if a result or stream result is not received after the specified time.
   _call handler serialize deserializeUnsafe route T {requestVars, responseVars} _timeout req = do
     id <- newUuid
     responseVar <- newEmptyMVar
@@ -88,7 +116,39 @@ instance RpcTransport T where
         response <- takeMVar responseVar
         renewTimeout >> deserializeUnsafe response >>= push
     HashTable.lookup requestVars route >>= \case
-      Nothing -> panic "dummy being used improperly"
+      Nothing -> panic "this is a bug"
       Just requestVar -> putMVar requestVar (id, serialize req)
     async $ waitForDone >> cancel responseThread
     result
+
+retrieveStream :: T -> Route -> IO (Text -> IO (), Streamly.Serial Text)
+retrieveStream T {streams} route =
+  HashTable.lookup streams route >>= \case
+    Just stream -> return stream
+    Nothing -> do
+      (push, _, results) <- nonRepeatablePushStream
+      HashTable.insert streams route (push, results)
+      return (push, results)
+
+instance PubSubTransport T where
+  _publish :: (a -> Text) -> Route -> T -> Streamly.Serial a -> IO ()
+  _publish serialize route t as = do
+    let T {publisherThreads} = t
+    HashTable.lookup publisherThreads route >>= \case
+      Nothing -> do
+        (push, _) <- retrieveStream t route
+        publisherThread <- async $ Streamly.mapM_ (push . serialize) as
+        HashTable.insert publisherThreads route publisherThread
+      Just _ -> throw $ AlreadyPublishing route
+  _subscribe :: (Text -> IO a) -> Route -> T -> IO (Id, Streamly.Serial a)
+  _subscribe deserializeUnsafe route t = do
+    let T {subscriberInfo} = t
+    (_, stream) <- retrieveStream t route
+    (push, close, results) <- repeatableStream
+    subscriberId <- newUuid
+    subscriberThread <-
+      async $ Streamly.mapM_ (\msg -> deserializeUnsafe msg >>= push) stream
+    HashTable.insert subscriberInfo subscriberId (subscriberThread, close)
+    return (subscriberId, results)
+  unsubscribe :: T -> Id -> IO ()
+  unsubscribe = _unsubscribe

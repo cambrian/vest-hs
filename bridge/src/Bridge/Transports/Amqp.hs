@@ -1,5 +1,6 @@
 module Bridge.Transports.Amqp
   ( T(..)
+  , Config
   , localConfig
   ) where
 
@@ -51,6 +52,7 @@ data T = T
   , responseConsumerTag :: AMQP.ConsumerTag
   , servedRouteTags :: HashTable Route AMQP.ConsumerTag
   , responseHandlers :: HashTable Id (Text -> IO ())
+  , publishedRoutes :: HashTable Route ()
   , subscriberInfo :: HashTable Id (AMQP.ConsumerTag, IO ())
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
@@ -106,6 +108,7 @@ instance Resource T where
            fromAmqpMsg read msg >|>| handleResponse -- Do nothing if response message is malformed.
            AMQP.ackEnv env)
     servedRouteTags <- HashTable.new
+    publishedRoutes <- HashTable.new
     subscriberInfo <- HashTable.new
     return
       T
@@ -115,10 +118,11 @@ instance Resource T where
         , responseConsumerTag
         , servedRouteTags
         , responseHandlers
+        , publishedRoutes
         , subscriberInfo
         }
   release :: T -> IO ()
-    -- Closes AMQP consumers, connection, deletes response queue.
+    -- Closes AMQP consumers, closes connection, and deletes response queue.
     -- Unsubscribes from any subscribed topics.
     -- Not necessary to clear responseHandlers because they automatically time out.
   release t = do
@@ -219,7 +223,10 @@ declarePubSubExchange chan exchangeName =
 
 instance PubSubTransport T where
   _publish :: (a -> Text) -> Route -> T -> Streamly.Serial a -> IO ()
-  _publish serialize (Route exchangeName) T {chan} as = do
+  _publish serialize (Route exchangeName) T {chan, publishedRoutes} as = do
+    HashTable.lookup publishedRoutes (Route exchangeName) >>= \case
+      Nothing -> HashTable.insert publishedRoutes (Route exchangeName) ()
+      Just _ -> throw $ AlreadyPublishing (Route exchangeName)
     declarePubSubExchange chan exchangeName
     void . async $
       Streamly.mapM_

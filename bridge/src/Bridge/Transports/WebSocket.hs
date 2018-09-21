@@ -1,5 +1,6 @@
 module Bridge.Transports.WebSocket
   ( T(..)
+  , Config
   , localConfig
   ) where
 
@@ -69,7 +70,7 @@ type instance ResourceConfig T = Config
 
 instance Resource T where
   hold :: ResourceConfig T -> IO T
-  -- Connects to bridge, begins listening on RPC queue.
+  -- Connects to bridge, begins listening on client connections.
   hold Config {serverPort, pingInterval, clientUri, clientPort, clientPath} = do
     let Port _serverPort = serverPort
     clients <- HashTable.new
@@ -141,10 +142,11 @@ serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = d
   async $ Streamly.mapM_ (WS.sendTextData conn) streamOut
   Monad.forever $ do
     msg <- WS.receiveData conn
-    decode msg >|>|
+    decode msg >|>| -- Do nothing if request message is malformed.
       (\reqMsg -> do
          let RequestMessage {route} = reqMsg
          requestsMaybe <- HashTable.lookup servedRouteRequests route
+         -- If the route is not served, swallow the request. TODO: Maybe error on this?
          requestsMaybe >|>| (\(pushIn, _, _) -> pushIn (clientId, reqMsg)))
 
 instance RpcTransport T where
@@ -174,7 +176,9 @@ instance RpcTransport T where
           let pub response = do
                 outMaybe <- HashTable.lookup servedConnectionResponses clientId
                 case outMaybe of
-                  Nothing -> return () -- Rare but possible edge case.
+                  Nothing -> return () -- Rare but possible edge case. A connection might die while
+                                       -- its request is being serviced, in which case we discard
+                                       -- the response.
                   Just (pushOut, _, _) ->
                     void . pushOut . encode $
                     ResponseMessage {requestId, response}
@@ -196,8 +200,7 @@ instance RpcTransport T where
        -- Timeout
     -> req
     -> IO x
-    -- Registers a handler in the waiting RPC call hash table, and deregisters it after done
-    -- resolves.
+    -- Runs a reader loop on the client connection, streaming results from the response pipe.
     -- Timeouts occur if a result or stream result is not received after the specified time.
   _call handler serialize deserializeUnsafe route T { clientUri
                                                     , clientPort
