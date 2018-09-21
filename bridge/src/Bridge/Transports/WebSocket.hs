@@ -1,6 +1,7 @@
 module Bridge.Transports.WebSocket
   ( T(..)
   , Config(..)
+  , RequestMessage(..)
   , localConfig
   ) where
 
@@ -54,13 +55,15 @@ localConfig =
 data T = T
   { serverThread :: Async ()
   , clients :: HashTable (Id "Client") WS.Connection
-  , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO () -- Request pusher.
-                                           , IO ()
-                                           , Streamly.Serial ( Id "Client"
-                                                             , RequestMessage))
-  , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO () -- Response pusher.
-                                              , IO ()
-                                              , Streamly.Serial Text)
+  -- Value is request push stream.
+  , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO ()
+                                                , IO ()
+                                                , Streamly.Serial ( Id "Client"
+                                                                  , RequestMessage))
+  -- Value is response push stream.
+  , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO ()
+                                                         , IO ()
+                                                         , Streamly.Serial Text)
   , clientUri :: Id "Uri"
   , clientPort :: Port
   , clientPath :: Id "Path"
@@ -207,8 +210,7 @@ instance RpcTransport T where
                                                     , clientPath
                                                     } _timeout req = do
     id <- newUuid
-    let (Id _uri, Port _port, Id _path) =
-          (clientUri, clientPort, clientPath)
+    let (Id _uri, Port _port, Id _path) = (clientUri, clientPort, clientPath)
     let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let request = encode RequestMessage {id, route, reqText = serialize req}
     (push, result, waitForDone) <- handler

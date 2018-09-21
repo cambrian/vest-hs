@@ -1,4 +1,4 @@
-name:                vest-prelude
+name:                bridge-client
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -6,32 +6,18 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            Vest custom prelude (uses Protolude for standard prelude stuff).
-category:            Prelude
+synopsis:            TypeScript types for interfacing with our Haskell-based backend.
+category:            Network
 description:         See README.md.
 
 dependencies:
-- aeson                 >= 1.4  && < 2
-- async                 >= 2.2  && < 3
-- base                  >= 4.10 && < 5
-- beam-core             >= 0.7  && < 1
-- beam-postgres         >= 0.3  && < 1
-- hashable              >= 1.2  && < 2
-- o-clock               >= 1.0  && < 2
-- protolude             >= 0.2  && < 1
-- safe-exceptions       >= 0.1  && < 1
-- safe-money            >= 0.7  && < 1
-- safe-money-aeson      >= 0.1  && < 1
-- singletons            >= 2.4  && < 3
-# - squeal-postgresql     >= 0.4  && < 1
-- stm                   >= 2.4  && < 3
-- streamly              >= 0.5  && < 1
-- text                  >= 1.2  && < 2
-- time                  >= 1.8  && < 2 # Only for SQL formatting time.
-- timers-updatable      >= 0.2  && < 1
-- utf8-string           >= 1.0  && < 2
-- uuid                  >= 1.3  && < 2
-- vector                >= 0.12 && < 1
+- aeson             >= 1.4  && < 2
+- aeson-typescript  >= 0.1  && < 1
+- base              >= 4.10 && < 5
+- bridge
+- text              >= 1.2  && < 2
+- utf8-string       >= 1.0  && < 2
+- vest-prelude
 
 # The default-extensions and ghc-options have been taken from here:
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
@@ -65,9 +51,8 @@ default-extensions:
 - NamedFieldPuns
 - NoImplicitPrelude
 - OverloadedStrings
-- OverloadedLabels
 - PatternSynonyms
-- PolyKinds # Added.
+- PolyKinds
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving
@@ -87,5 +72,6 @@ ghc-options:
 - -Wredundant-constraints
 # - -Wmissing-import-lists
 
-library:
-  source-dirs: src
+executable:
+  main:                Main.hs
+  source-dirs:         bin

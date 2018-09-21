@@ -1,5 +1,8 @@
-module VestPrelude (module VestPrelude, module Reexports)
-where
+module VestPrelude
+  ( module VestPrelude
+  , module Reexports
+  ) where
+
 import Control.Concurrent.Async as Reexports
 import qualified Control.Concurrent.Killable as Killable
 import Control.Concurrent.MVar as Reexports
@@ -49,6 +52,7 @@ import qualified System.Timer.Updatable as UpdatableTimer
 import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
+
 -- Checks if x in xs at type level.
 type family Elem x xs where
   Elem x '[] = 'False
