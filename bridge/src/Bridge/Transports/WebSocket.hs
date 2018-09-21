@@ -1,6 +1,6 @@
 module Bridge.Transports.WebSocket
   ( T(..)
-  , Config
+  , Config(..)
   , localConfig
   ) where
 

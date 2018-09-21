@@ -1,6 +1,6 @@
 module Bridge.Transports.Amqp
   ( T(..)
-  , Config
+  , Config(..)
   , localConfig
   ) where
 
