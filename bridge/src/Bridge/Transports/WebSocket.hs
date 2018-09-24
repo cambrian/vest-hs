@@ -2,6 +2,7 @@ module Bridge.Transports.WebSocket
   ( T(..)
   , Config(..)
   , RequestMessage(..)
+  , ResponseMessage(..)
   , localConfig
   ) where
 

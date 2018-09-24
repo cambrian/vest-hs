@@ -15,6 +15,7 @@ dependencies:
 - aeson-typescript  >= 0.1  && < 1
 - base              >= 4.10 && < 5
 - bridge
+- price-server
 - text              >= 1.2  && < 2
 - template-haskell  >= 2.13 && < 3
 - utf8-string       >= 1.0  && < 2
@@ -73,6 +74,12 @@ ghc-options:
 - -Wredundant-constraints
 # - -Wmissing-import-lists
 
-executable:
-  main:                Main.hs
-  source-dirs:         bin
+executables:
+  ts-callers:
+    main:           Callers.hs
+    other-modules:  []
+    source-dirs:    bin
+  ts-types:
+    main:           Types.hs
+    other-modules:  []
+    source-dirs:    bin
