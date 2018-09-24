@@ -110,7 +110,7 @@ instance RpcTransport T where
     responseVar <- newEmptyMVar
     HashTable.insert responseVars id responseVar
     (push, result, waitForDone) <- handler
-    renewTimeout <- timeoutThrow' waitForDone _timeout
+    (renewTimeout, timeoutDone) <- timeoutRenewable _timeout waitForDone
     responseThread <-
       async . forever $ do
         response <- takeMVar responseVar
@@ -118,7 +118,13 @@ instance RpcTransport T where
     HashTable.lookup requestVars route >>= \case
       Nothing -> panic "this is a bug"
       Just requestVar -> putMVar requestVar (id, serialize req)
-    async $ waitForDone >> cancel responseThread
+    mainThread <- myThreadId
+    async $ do
+      done <- timeoutDone
+      cancel responseThread
+      case done of
+        Nothing -> throwTo mainThread (TimeoutException _timeout)
+        Just () -> return ()
     result
 
 retrieveStream :: T -> Id "Topic" -> IO (Text -> IO (), Streamly.Serial Text)
@@ -140,7 +146,11 @@ instance PubSubTransport T where
         publisherThread <- async $ Streamly.mapM_ (push . serialize) as
         HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
-  _subscribe :: (Text -> IO a) -> Id "Topic" -> T -> IO (Id "Subscriber", Streamly.Serial a)
+  _subscribe ::
+       (Text -> IO a)
+    -> Id "Topic"
+    -> T
+    -> IO (Id "Subscriber", Streamly.Serial a)
   _subscribe deserializeUnsafe topic t = do
     let T {subscriberInfo} = t
     (_, stream) <- retrieveStream t topic

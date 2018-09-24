@@ -11,7 +11,6 @@ description:         See README.md.
 
 dependencies:
 - base               >= 4.10 && < 5
-- generics-sop       >= 0.3  && < 1
 # - stripe-haskell     >= 2.4  && < 3
 - bridge
 - price-server

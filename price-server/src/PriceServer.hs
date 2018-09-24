@@ -2,8 +2,8 @@ module PriceServer
   ( Config(..)
   , T
   , PriceContractRequest(..)
-  , PriceContractEndpoint(..)
-  , PriceFunctionTopic(..)
+  , PriceContractEndpoint
+  , PriceFunctionTopic
   , Priceable()
   , PriceableCurrencies
   , start
@@ -12,7 +12,6 @@ module PriceServer
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import GHC.TypeLits
 import PriceServer.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly

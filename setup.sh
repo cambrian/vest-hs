@@ -12,6 +12,6 @@ echo "Performing HIE troubleshooting fix."
 mv ~/.stack/programs/x86_64-osx/ghc-8.4.3/lib/ghc-8.4.3/integer-gmp-1.0.2.0/HSinteger-gmp-1.0.2.0.o ~/.stack/programs/x86_64-osx/ghc-8.4.3/lib/ghc-8.4.3/integer-gmp-1.0.2.0/HSinteger-gmp-1.0.2.0.o.bak > /dev/null
 echo "Installing IDE-related modules."
 stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log /dev/null
-stack install hindent > ~/.vest-hs/hindent-install.log /dev/null
+stack install hindent cabal-install > ~/.vest-hs/hindent-install.log /dev/null
 echo "Installing external dependencies."
 brew install rabbitmq libpq postgres > ~/.vest-hs/brew-install.log

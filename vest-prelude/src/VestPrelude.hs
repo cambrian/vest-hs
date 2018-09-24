@@ -4,8 +4,8 @@ module VestPrelude
   ) where
 
 import Control.Concurrent.Async as Reexports
-import qualified Control.Concurrent.Killable as Killable
 import Control.Concurrent.MVar as Reexports
+import Control.Concurrent.STM.Delay as Reexports
 import Control.Concurrent.STM.TVar as Reexports
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
@@ -48,7 +48,6 @@ import Protolude as Reexports hiding
   )
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import qualified System.Timer.Updatable as UpdatableTimer
 import qualified Text.Read
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
@@ -78,7 +77,7 @@ newtype Id (t :: Symbol) =
 
 newtype Port =
   Port Int
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Read, Bounded, Generic, Hashable, ToJSON, FromJSON)
 
 data Format
   = Haskell
@@ -223,29 +222,25 @@ repeatableStream = do
           0
   return (push . Just, push Nothing, stream)
 
-timeoutThrow :: IO a -> Time Second -> IO ()
-timeoutThrow action _timeout = do
+-- Returns renewer.
+timeoutRenewable :: Time Second -> IO a -> IO (IO (), IO (Maybe a))
+timeoutRenewable _timeout action = do
   let micros = toNum @Microsecond _timeout
-  timer <-
-    UpdatableTimer.replacer (throw (TimeoutException _timeout) :: IO ()) micros
-  action >> Killable.kill timer
-
--- Returns timeout renewer.
-timeoutThrow' :: IO a -> Time Second -> IO (IO ())
-timeoutThrow' action _timeout = do
-  outerThreadId <- myThreadId
-  let micros = toNum @Microsecond _timeout
-  timer <-
-    UpdatableTimer.replacer
-      (throwTo outerThreadId (TimeoutException _timeout))
-      micros
-  async $ action >> Killable.kill timer
-  return (UpdatableTimer.renewIO timer micros)
+  delay <- newDelay micros
+  resultMVar <- newEmptyMVar
+  async $ do
+    atomically $ waitDelay delay
+    putMVar resultMVar Nothing
+  async $ do
+    result <- action
+    cancelDelay delay
+    putMVar resultMVar (Just result)
+  return (updateDelay delay micros, readMVar resultMVar)
 
 class Resource t where
   hold :: ResourceConfig t -> IO t
   release :: t -> IO ()
-  -- ^ Minimal required definition
+  -- ^ Minimal required definition.
   with :: ResourceConfig t -> (t -> IO ()) -> IO ()
   with config = bracket (hold config) release
   -- TODO: Catch exceptions and reconnect.

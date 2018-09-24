@@ -17,7 +17,6 @@ dependencies:
 - http-types        >= 0.12 && < 1
 - hostname          >= 1.0  && < 2
 - hspec             >= 2.5  && < 3
-- network           >= 2.7  && < 3
 - random            >= 1.1  && < 2
 - streamly          >= 0.5  && < 1
 - text              >= 1.2  && < 2

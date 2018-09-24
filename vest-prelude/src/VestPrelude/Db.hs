@@ -6,45 +6,62 @@ module VestPrelude.Db
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
-import qualified Money
 import Database.Beam as Reexports hiding (insert)
-import qualified Database.Beam.Postgres as Reexports
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.Types
+import Database.Beam.Postgres as Reexports
+import Database.PostgreSQL.Simple.FromField
+import qualified Money
 import VestPrelude
--- -- Provide a bunch of instances to let types be used in SqlRow and SqlType
--- -- instance Bounded (Time rat)
--- -- instance (Typeable rat, KnownUnitName rat) => SqlType (Time rat)
--- -- instance (Typeable rat, KnownUnitName rat) => SqlOrd (Time rat)
--- instance Bounded Timestamp
--- instance Generic Timestamp
--- instance Enum Timestamp
--- In theory you could implement this directly on Timestamp without having to create a UTCTime
--- but that's a bunch of work for what's only a smallish win.
--- Rounds to the nearest second. TODO: get remainder as nanos
+
+-- Postgres serializations for VestPrelude types
 instance HasSqlValueSyntax be Text => HasSqlValueSyntax be (Id a) where
   sqlValueSyntax (Id text) = sqlValueSyntax text
--- instance SqlType Timestamp where
---   mkLit x =
---     let Timestamp seconds = x
---         utcTime =
---           systemToUTCTime $
---           MkSystemTime {systemSeconds = truncate seconds, systemNanoseconds = 0}
---         lit =
---           LCustom .
---           LDateTime . pack . formatTime defaultTimeLocale sqlDateTimeFormat
---      in lit utcTime
---   sqlType _ = TDateTime
---   fromSql (SqlString s) =
---     let utcTime =
---           case parseTimeM True defaultTimeLocale sqlDateTimeFormat (unpack s) of
---             Just t -> t
---             _ -> panic $ "fromSql: bad datetime string: " <> s
---         MkSystemTime {systemSeconds} = utcToSystemTime utcTime
---      in fromUnixTime systemSeconds
---   fromSql v =
---     panic $ "fromSql: datetime column with non-datetime value: " <> show v
---   defaultValue = LCustom $ LDateTime "1970-01-01 00:00:00"
--- instance SqlOrd Timestamp
+
+instance FromField (Id a) where
+  fromField f bs = fromField f bs >>- Id
+
+instance FromBackendRow Postgres (Id a)
+
+-- UTCTime <--> Timestamp
+-- TODO: keep nanos
+utcTimeFromTimestamp :: Timestamp -> UTCTime
+utcTimeFromTimestamp (Timestamp seconds) =
+  systemToUTCTime $
+  MkSystemTime {systemSeconds = truncate seconds, systemNanoseconds = 0}
+
+timestampFromUTCTime :: UTCTime -> Timestamp
+timestampFromUTCTime utcTime =
+  let MkSystemTime {systemSeconds} = utcToSystemTime utcTime
+   in fromUnixTime systemSeconds
+
+-- In theory you could implement this directly on Timestamp without having to create a UTCTime
+-- but that's a bunch of work for what's only a smallish win.
+instance HasSqlValueSyntax be UTCTime => HasSqlValueSyntax be Timestamp where
+  sqlValueSyntax = sqlValueSyntax . utcTimeFromTimestamp
+
+instance FromField Timestamp where
+  fromField f bs = fromField f bs >>- timestampFromUTCTime
+
+instance FromBackendRow Postgres Timestamp
+
+-- No type is provided for Time / interval because for contracts and such we want a nominal
+-- duration instead of a fixed one.
+instance HasSqlValueSyntax be Rational =>
+         HasSqlValueSyntax be (Money.Dense a) where
+  sqlValueSyntax = sqlValueSyntax . toRational
+
+instance FromField (Money.Dense a) where
+  fromField f bs = fromField f bs >>- Money.dense'
+
+instance FromBackendRow Postgres (Money.Dense a)
+-- instance HasSqlValueSyntax be Integer =>
+--          HasSqlValueSyntax be (Money.Discrete' a scale) where
+--   sqlValueSyntax =
+--     sqlValueSyntax . Money.someDiscreteAmount . Money.toSomeDiscrete
+-- instance FromField (Money.Discrete' a scale) where
+--   fromField f bs = fromField f bs >>- Money.discrete @scale
+-- instance FromBackendRow Postgres (Money.Discrete' a scale)
 -- instance Bounded (Money.Dense a)
 -- instance Enum (Money.Dense a)
 -- instance (KnownSymbol a) => SqlType (Money.Dense a)

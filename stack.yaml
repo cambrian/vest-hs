@@ -8,13 +8,10 @@ packages:
 - vest-prelude
 
 extra-deps:
-- aeson-1.4.0.0
+- aeson-1.4.1.0
 - beam-postgres-0.3.2.2
-- network-2.7.0.2
-- records-sop-0.1.0.1
 - safe-money-0.7
 - safe-money-aeson-0.1
-- squeal-postgresql-0.4.0.0
 - streamly-0.5.1
 - stripe-core-2.4.0
 - stripe-haskell-2.4.0

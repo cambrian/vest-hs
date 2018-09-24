@@ -10,7 +10,6 @@ import qualified Control.Exception as Exception
 import qualified Control.Monad as Monad
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
-import qualified Network.Socket.Internal as Socket
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
@@ -214,8 +213,9 @@ instance RpcTransport T where
     let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let request = encode RequestMessage {id, route, reqText = serialize req}
     (push, result, waitForDone) <- handler
-    renewTimeout <- timeoutThrow' waitForDone _timeout
+    (renewTimeout, timeoutDone) <- timeoutRenewable _timeout waitForDone
     -- TODO: Track these threads?
+    mainThread <- myThreadId
     let wsClientApp conn = do
           readerThread <-
             async $ do
@@ -225,12 +225,16 @@ instance RpcTransport T where
                       Nothing -> return () -- Swallow if entire message is garbled.
                       Just ResponseMessage {response} ->
                         case response of
-                          Left exception -> throw exception -- TODO: Throw async?
+                          Left exception -> throwTo mainThread exception
                           Right text ->
                             renewTimeout >> deserializeUnsafe text >>= push
                     readLoop
               readLoop
           WS.sendTextData conn request
-          waitForDone >> cancel readerThread
-    Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
+          done <- timeoutDone
+          cancel readerThread
+          case done of
+            Nothing -> throwTo mainThread (TimeoutException _timeout)
+            Just () -> return ()
+    WS.runClient uriStr _port pathStr wsClientApp
     result
