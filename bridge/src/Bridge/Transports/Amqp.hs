@@ -198,22 +198,28 @@ instance RpcTransport T where
     -- resolves.
     -- Timeouts occur if a result or stream result is not received after the specified time.
   _call handler serialize deserializeUnsafe (Id queueName) T { chan
-                                                                , responseQueue
-                                                                , responseHandlers
-                                                                } _timeout req = do
+                                                             , responseQueue
+                                                             , responseHandlers
+                                                             } _timeout req = do
     id <- newUuid
     let request =
           toAmqpMsg
             show
             RequestMessage {id, responseQueue, reqText = serialize req}
     (push, result, waitForDone) <- handler
-    renewTimeout <- timeoutThrow' waitForDone _timeout
+    (renewTimeout, timeoutDone) <- timeoutRenewable _timeout waitForDone
     HashTable.insert
       responseHandlers
       id
       (\x -> renewTimeout >> deserializeUnsafe x >>= push)
     _ <- AMQP.publishMsg chan "" queueName request
-    async $ waitForDone >> HashTable.delete responseHandlers id
+    mainThread <- myThreadId
+    async $ do
+      done <- timeoutDone
+      HashTable.delete responseHandlers id
+      case done of
+        Nothing -> throwTo mainThread (TimeoutException _timeout)
+        Just () -> return ()
     result
 
 declarePubSubExchange :: AMQP.Channel -> Text -> IO ()
@@ -234,7 +240,11 @@ instance PubSubTransport T where
       Streamly.mapM_
         (AMQP.publishMsg chan exchangeName "" . toAmqpMsg serialize) -- Queue name blank.
         as
-  _subscribe :: (Text -> IO a) -> Id "Topic" -> T -> IO (Id "Subscriber", Streamly.Serial a)
+  _subscribe ::
+       (Text -> IO a)
+    -> Id "Topic"
+    -> T
+    -> IO (Id "Subscriber", Streamly.Serial a)
   -- Returns subscriber ID and result stream as tuple (ID, stream).
   -- Shoud mutate t to store the details necessary for unsubscribe.
   _subscribe deserializeUnsafe (Id exchangeName) T {chan, subscriberInfo} = do

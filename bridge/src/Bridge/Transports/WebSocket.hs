@@ -9,7 +9,6 @@ import qualified Control.Exception as Exception
 import qualified Control.Monad as Monad
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
-import qualified Network.Socket.Internal as Socket
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
@@ -55,12 +54,12 @@ data T = T
   { serverThread :: Async ()
   , clients :: HashTable (Id "Client") WS.Connection
   , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO () -- Request pusher.
-                                           , IO ()
-                                           , Streamly.Serial ( Id "Client"
-                                                             , RequestMessage))
+                                                , IO ()
+                                                , Streamly.Serial ( Id "Client"
+                                                                  , RequestMessage))
   , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO () -- Response pusher.
-                                              , IO ()
-                                              , Streamly.Serial Text)
+                                                         , IO ()
+                                                         , Streamly.Serial Text)
   , clientUri :: Id "Uri"
   , clientPort :: Port
   , clientPath :: Id "Path"
@@ -207,13 +206,13 @@ instance RpcTransport T where
                                                     , clientPath
                                                     } _timeout req = do
     id <- newUuid
-    let (Id _uri, Port _port, Id _path) =
-          (clientUri, clientPort, clientPath)
+    let (Id _uri, Port _port, Id _path) = (clientUri, clientPort, clientPath)
     let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let request = encode RequestMessage {id, route, reqText = serialize req}
     (push, result, waitForDone) <- handler
-    renewTimeout <- timeoutThrow' waitForDone _timeout
+    (renewTimeout, timeoutDone) <- timeoutRenewable _timeout waitForDone
     -- TODO: Track these threads?
+    mainThread <- myThreadId
     let wsClientApp conn = do
           readerThread <-
             async $ do
@@ -223,12 +222,16 @@ instance RpcTransport T where
                       Nothing -> return () -- Swallow if entire message is garbled.
                       Just ResponseMessage {response} ->
                         case response of
-                          Left exception -> throw exception -- TODO: Throw async?
+                          Left exception -> throwTo mainThread exception
                           Right text ->
                             renewTimeout >> deserializeUnsafe text >>= push
                     readLoop
               readLoop
           WS.sendTextData conn request
-          waitForDone >> cancel readerThread
-    Socket.withSocketsDo $ WS.runClient uriStr _port pathStr wsClientApp
+          done <- timeoutDone
+          cancel readerThread
+          case done of
+            Nothing -> throwTo mainThread (TimeoutException _timeout)
+            Just () -> return ()
+    WS.runClient uriStr _port pathStr wsClientApp
     result

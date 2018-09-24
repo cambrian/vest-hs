@@ -20,4 +20,6 @@
   "editor.wordWrap": "wordWrapColumn",
   "editor.wordWrapColumn": 100,
   "editor.wrappingIndent": "indent",
+  "languageServerHaskell.useCustomHieWrapper": true,
+  "languageServerHaskell.useCustomHieWrapperPath": "hie-wrapper"
 }

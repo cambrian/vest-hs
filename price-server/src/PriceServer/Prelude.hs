@@ -1,7 +1,7 @@
 module PriceServer.Prelude
   ( PriceContractRequest(..)
-  , PriceContractEndpoint(..)
-  , PriceFunctionTopic(..)
+  , PriceContractEndpoint
+  , PriceFunctionTopic
   , Priceable(..)
   , Config(..)
   , T(..)
@@ -12,7 +12,6 @@ import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 import GHC.TypeLits
 import qualified Streamly
-import qualified Streamly.Prelude as Streamly
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
@@ -38,7 +37,6 @@ type PriceFunctionRoute currency = AppendSymbol "priceFunctions/" currency
 
 type PriceFunctionTopic currency = Topic (PriceFunctionRoute currency) Text
 
--- | @t should contain the necessary state to price @a
 class ( KnownSymbol a
       , KnownSymbol (PriceContractRoute a)
       , KnownSymbol (PriceFunctionRoute a)
@@ -46,7 +44,7 @@ class ( KnownSymbol a
       Priceable a
   where
   priceContract :: T -> Money.Dense a -> Time Day -> IO (Money.Dense "USD")
-  priceFunctionsInJavascript :: T -> Proxy a -> Streamly.Serial (Text)
+  priceFunctionsInJavascript :: T -> Proxy a -> Streamly.Serial Text
   -- ^ Get a stream of serialized Javascript price functions for this currency
   priceContract' :: T -> PriceContractRequest a -> IO (Money.Dense "USD")
   priceContract' t PriceContractRequest {size, duration} =
