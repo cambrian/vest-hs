@@ -1,6 +1,7 @@
 module Bridge.Transports.WebSocket
   ( T(..)
   , Config(..)
+  , RequestMessage(..)
   , localConfig
   ) where
 
@@ -53,11 +54,13 @@ localConfig =
 data T = T
   { serverThread :: Async ()
   , clients :: HashTable (Id "Client") WS.Connection
-  , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO () -- Request pusher.
+  -- Value is request push stream.
+  , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO ()
                                                 , IO ()
                                                 , Streamly.Serial ( Id "Client"
                                                                   , RequestMessage))
-  , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO () -- Response pusher.
+  -- Value is response push stream.
+  , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO ()
                                                          , IO ()
                                                          , Streamly.Serial Text)
   , clientUri :: Id "Uri"
