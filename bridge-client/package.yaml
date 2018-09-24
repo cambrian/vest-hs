@@ -16,6 +16,7 @@ dependencies:
 - base              >= 4.10 && < 5
 - bridge
 - text              >= 1.2  && < 2
+- template-haskell  >= 2.13 && < 3
 - utf8-string       >= 1.0  && < 2
 - vest-prelude
 

@@ -1,14 +1,14 @@
 import Bridge.Transports.WebSocket (RequestMessage)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
+import Language.Haskell.TH.Syntax
 import VestPrelude
 
-newtype Test =
-  Test Text
-
-$(deriveTypeScript defaultOptions ''Test)
+-- $(mconcat <$>
+--   traverse (deriveTypeScript defaultOptions) [mkName "VestPrelude.Id \"Rpc\""])
+$(mconcat <$> traverse (deriveTypeScript defaultOptions) [''Id])
 
 main :: IO ()
-main = do
+main =
   putStrLn $
-    formatTSDeclarations (getTypeScriptDeclarations (Proxy :: Proxy Test))
+  formatTSDeclarations (getTypeScriptDeclarations (Proxy :: Proxy Id))

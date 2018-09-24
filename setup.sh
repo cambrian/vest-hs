@@ -1,15 +1,17 @@
 #!/bin/bash
 mkdir -p ~/.vest-hs
 echo "Updating Cabal package list."
-cabal update > ~/.vest-hs/cabal-update.log 2>&1
+cabal update > ~/.vest-hs/cabal-update.log
 echo "Installing Haskell IDE engine."
 echo "This might take a while."
-git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive > /dev/null 2>&1
-cd ~/.haskell-ide-engine > /dev/null 2>&1
-stack install > ~/.vest-hs/hie-install.log 2>&1
-cd - > /dev/null 2>&1
+git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive > /dev/null
+cd ~/.haskell-ide-engine > /dev/null
+stack install > ~/.vest-hs/hie-install.log
+cd - > /dev/null
+echo "Performing HIE troubleshooting fix."
+mv ~/.stack/programs/x86_64-osx/ghc-8.4.3/lib/ghc-8.4.3/integer-gmp-1.0.2.0/HSinteger-gmp-1.0.2.0.o ~/.stack/programs/x86_64-osx/ghc-8.4.3/lib/ghc-8.4.3/integer-gmp-1.0.2.0/HSinteger-gmp-1.0.2.0.o.bak > /dev/null
 echo "Installing IDE-related modules."
-stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log /dev/null 2>&1
-stack install hindent > ~/.vest-hs/hindent-install.log /dev/null 2>&1
+stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log /dev/null
+stack install hindent > ~/.vest-hs/hindent-install.log /dev/null
 echo "Installing external dependencies."
-brew install rabbitmq libpq postgres > ~/.vest-hs/brew-install.log 2>&1
+brew install rabbitmq libpq postgres > ~/.vest-hs/brew-install.log
