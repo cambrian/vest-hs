@@ -5,7 +5,8 @@ module VestPrelude.Money
 
 import Money as Reexports
 import Money.Aeson as Reexports ()
--- use: import qualified VestPrelude.Money as Money
+
+-- Use: import qualified VestPrelude.Money as Money.
 import VestPrelude
 
 type instance Scale "XTZ" "XTZ" = '(1000000, 1)

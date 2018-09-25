@@ -2,18 +2,15 @@ module Bridge.Rpc.Client
   ( module Bridge.Rpc.Client
   ) where
 
+import Bridge.Prelude
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
-data RpcClientException =
-  BadCall Text
-  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
-
 type family ClientBindings spec where
-  ClientBindings (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = Time Second -> a -> IO b
-  ClientBindings (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = Time Second -> a -> IO (Streamly.Serial b)
+  ClientBindings (Endpoint 'Direct _ (s :: Symbol) a b) = Time Second -> Headers -> a -> IO b
+  ClientBindings (Endpoint 'Streaming _ (s :: Symbol) a b) = Time Second -> Headers -> a -> IO (Streamly.Serial b)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -37,70 +34,80 @@ instance (Client a transport, Client b transport) =>
     makeClient (Proxy :: Proxy (a, transport)) transport :<|>
     makeClient (Proxy :: Proxy (b, transport)) transport
 
-instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
-         Client (DirectEndpoint route req res) transport where
-  makeClient ::
-       Proxy (DirectEndpoint route req res, transport)
-    -> transport
-    -> (Time Second -> req -> IO res)
-  makeClient _ =
-    _call
-      (do resultVar <- newEmptyMVar
-          let push = putMVar resultVar
-              result = readMVar resultVar
-              done = void result
-          return (push, result, done))
-      show
-      readUnsafe
-      (Id $ proxyText (Proxy :: Proxy route))
+directPusher :: IO ((ResultItem res) -> IO (), IO res, IO ())
+directPusher = do
+  resultVar <- newEmptyMVar
+  let push (Result res) = putMVar resultVar res
+      push EndOfResults = throw BadEndOfResults
+      result = readMVar resultVar
+      waitForDone = void result
+  return (push, result, waitForDone)
 
-instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
-         Client (StreamingEndpoint route req res) transport where
-  makeClient ::
-       Proxy (StreamingEndpoint route req res, transport)
-    -> transport
-    -> (Time Second -> req -> IO (Streamly.Serial res))
-  makeClient _ =
-    _call
-      (do (_push, close, results) <- pushStream
-          let push (Result res) = _push res
-              push EndOfResults = close
-              done = Streamly.mapM_ return results
-          return (push, return results, done))
-      show
-      readUnsafe
-      (Id $ proxyText (Proxy :: Proxy route))
+streamingPusher ::
+     IO ((ResultItem res) -> IO (), IO (Streamly.Serial res), IO ())
+streamingPusher = do
+  (_push, close, results) <- repeatableStream
+  let push (Result res) = _push res
+      push EndOfResults = close
+      waitForDone = Streamly.mapM_ return results
+  return (push, return results, waitForDone)
 
-instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =>
-         Client (DirectEndpointJSON route req res) transport where
-  makeClient ::
-       Proxy (DirectEndpointJSON route req res, transport)
-    -> transport
-    -> (Time Second -> req -> IO res)
-  makeClient _ =
-    _call
-      (do resultVar <- newEmptyMVar
-          let push = putMVar resultVar
-              result = readMVar resultVar
-              done = void result
-          return (push, result, done))
-      encode
-      decodeUnsafe
-      (Id $ proxyText (Proxy :: Proxy route))
+clientProcessor ::
+     (Show req, ToJSON req, Read res, FromJSON res)
+  => IO ((ResultItem res) -> IO (), IO x, IO ())
+  -> (Text -> IO ())
+  -> Time Second
+  -> Headers
+  -> req
+  -> IO (Text -> IO (), IO x, IO ())
+clientProcessor pusher send _timeout headers req = do
+  let Headers {format} = headers
+  let deserializeUnsafe = deserializeUnsafeOf format
+      serialize = serializeOf format
+  (_push, result, waitForDone) <- pusher
+  (renewTimeout, timeoutDone) <- timeoutRenewable _timeout waitForDone
+  send . serialize $ req
+  let push resOrExcText = do
+        resOrExc <- deserializeUnsafe resOrExcText
+        case resOrExc of
+          Left exc -> throw (exc :: RpcClientException)
+          Right res -> _push res
+        renewTimeout
+  -- TODO: Debug timeouts.
+  mainThread <- myThreadId
+  async $ do
+    timeoutResult <- timeoutDone
+    case timeoutResult of
+      Nothing -> throwTo mainThread (TimeoutException _timeout)
+      Just () -> return ()
+  return (push, result, waitForDone)
 
-instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =>
-         Client (StreamingEndpointJSON route req res) transport where
+instance ( KnownSymbol s
+         , Show a
+         , ToJSON a
+         , Read b
+         , FromJSON b
+         , RpcTransport transport
+         ) =>
+         Client (Endpoint 'Direct (h :: Auth) (s :: Symbol) a b) transport where
   makeClient ::
-       Proxy (StreamingEndpointJSON route req res, transport)
+       Proxy (Endpoint 'Direct h s a b, transport)
     -> transport
-    -> (Time Second -> req -> IO (Streamly.Serial res))
+    -> (Time Second -> Headers -> a -> IO b)
   makeClient _ =
-    _call
-      (do (_push, close, results) <- pushStream
-          let push (Result res) = _push res
-              push EndOfResults = close
-              done = Streamly.mapM_ return results
-          return (push, return results, done))
-      encode
-      decodeUnsafe
-      (Id $ proxyText (Proxy :: Proxy route))
+    _call (clientProcessor directPusher) (Id $ proxyText (Proxy :: Proxy s))
+
+instance ( KnownSymbol s
+         , Show a
+         , ToJSON a
+         , Read b
+         , FromJSON b
+         , RpcTransport transport
+         ) =>
+         Client (Endpoint 'Streaming (h :: Auth) (s :: Symbol) a b) transport where
+  makeClient ::
+       Proxy (Endpoint 'Streaming h s a b, transport)
+    -> transport
+    -> (Time Second -> Headers -> a -> IO (Streamly.Serial b))
+  makeClient _ =
+    _call (clientProcessor streamingPusher) (Id $ proxyText (Proxy :: Proxy s))

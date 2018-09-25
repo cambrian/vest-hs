@@ -84,11 +84,6 @@ newtype Port =
   Port Int
   deriving (Eq, Ord, Show, Read, Bounded, Generic, Hashable, ToJSON, FromJSON)
 
-data Format
-  = Haskell
-  | JSON
-  deriving (Eq, Ord, Show, Read, Enum, Generic, Hashable, ToJSON, FromJSON)
-
 newtype Exception' (a :: Symbol) =
   Exception Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)

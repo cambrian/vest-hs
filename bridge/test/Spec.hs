@@ -56,7 +56,7 @@ increment =
             else Nothing
    in Streamly.unfoldrM f 0
 
-type IncrementTopic = Topic "increment" Int
+type IncrementTopic = Topic Haskell "increment" Int
 
 type PubSubApi = IncrementTopic
 
