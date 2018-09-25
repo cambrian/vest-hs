@@ -84,10 +84,10 @@ instance (Typeable f, Typeable s, Typeable a, Typeable b) =>
   collect fn _ =
     [ fn
         False
-        ( typeRep $ (Proxy :: Proxy f)
-        , typeRep $ (Proxy :: Proxy s)
-        , typeRep $ (Proxy :: Proxy a)
-        , typeRep $ (Proxy :: Proxy b))
+        ( typeRep (Proxy :: Proxy f)
+        , typeRep (Proxy :: Proxy s)
+        , typeRep (Proxy :: Proxy a)
+        , typeRep (Proxy :: Proxy b))
     ]
 
 instance (Typeable f, Typeable s, Typeable a, Typeable b) =>
@@ -99,10 +99,10 @@ instance (Typeable f, Typeable s, Typeable a, Typeable b) =>
   collect fn _ =
     [ fn
         True
-        ( typeRep $ (Proxy :: Proxy f)
-        , typeRep $ (Proxy :: Proxy s)
-        , typeRep $ (Proxy :: Proxy a)
-        , typeRep $ (Proxy :: Proxy b))
+        ( typeRep (Proxy :: Proxy f)
+        , typeRep (Proxy :: Proxy s)
+        , typeRep (Proxy :: Proxy a)
+        , typeRep (Proxy :: Proxy b))
     ]
 
 data Streaming a
