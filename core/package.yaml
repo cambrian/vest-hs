@@ -11,7 +11,7 @@ description:         See README.md.
 
 dependencies:
 - base               >= 4.10 && < 5
-# - stripe-haskell     >= 2.4  && < 3
+- postgresql-simple     >= 0.5  && < 1
 - bridge
 - price-server
 - vest-prelude

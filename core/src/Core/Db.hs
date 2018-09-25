@@ -1,191 +1,165 @@
 module Core.Db
-  ( module Reexports
-  , Config (..)
-  , Schema
-  , tryCreateTables
-  , tryInsertUser
-  , userBalance
-  , insertStakingContract
-  , insertCollection
-  , insertStakingReward
+  ( module Core.Db
   ) where
 
-import VestPrelude hiding (from)
-import VestPrelude.Db as Reexports
+import qualified Database.PostgreSQL.Simple as Pg
+import VestPrelude
+import VestPrelude.Db
+import qualified VestPrelude.Money as Money
 
--- The db user == currency. This is because squeal does not provide a way to specify the
--- (postgres) schema per query, so we rely on the fact that a user's schema search path is
--- ["#user", public].
--- Number of stripes is left at 1.
-data Config (currency :: Symbol) = Config
-  { host :: Host
-  , port :: Port
-  , database :: Id
-  , currency :: Proxy currency
-  , password :: Id
-  , idleTime :: Time Second
-  , connectionPoolSize :: Int
-  }
+newtype T =
+  T Pg.Connection
 
-connectionString :: (KnownSymbol a) => Config a -> Text
-connectionString Config {host, port, database, currency, password} =
-  let Host h = host
-      Port p = port
-      Id db = database
-      user = proxyText currency
-      Id pwd = password
-   in "host="<>h<>" port="<>show p<>" dbname="<>db<>" user="<>user<>" password="<>pwd
+type instance ResourceConfig T = Pg.ConnectInfo
 
--- TODO: God awful formatting in this file, probably thanks to hindent's inability to recognize
--- type-level operators. Disable formatting somehow and just do it manually if possible.
---
--- Each of these tables are per-currency. We have one postgres schema per currency, as defined in
--- Stakeable
---
--- We are overloading the prefix 'try' to indicate that a manipulation does nothing if some
--- condition is not met.
+instance Resource T where
+  hold cfg = Pg.connect cfg >>- T
+  release (T conn) = Pg.close conn
 
+-- TODO: could be better to use Money.Discrete
+data UserT (currency :: Symbol) f = User
+  { _userAddress :: Columnar f (Id "Address")
+  , _userBalance :: Columnar f (Money.Dense currency)
+  } deriving (Generic, Beamable)
 
--- | Schema uses NO default values, such that no information flows from db -> server during inserts
-type Schema =
-  '[ "users" ::: 'Table (
-        '[ "pk_users" ::: 'PrimaryKey '[ "hash"]] :=>
-        '[ "hash" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "balance" ::: 'NoDef :=> 'NotNull 'PGnumeric
-        ])
-    , "staking_contracts" ::: 'Table (
-        '[ "pk_staking_contracts" ::: 'PrimaryKey '["id"]
-         , "fk_owner" ::: 'ForeignKey '["owner"] "users" '["hash"]
-         ] :=>
-        '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "owner" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
-         , "start_time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
-         , "duration" ::: 'NoDef :=> 'NotNull 'PGinterval
-         , "price" ::: 'NoDef :=> 'NotNull 'PGnumeric
-         ])
-    , "collections" ::: 'Table (
-        '[ "pk_collections" ::: 'PrimaryKey '["tx_hash"]
-         , "fk_owner" ::: 'ForeignKey '["owner"] "users" '["hash"]
-         ] :=>
-        '[ "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "owner" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "recipient" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
-         , "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
-         ])
-    , "staking_rewards" ::: 'Table (
-        '[ "pk_staking_rewards" ::: 'PrimaryKey '["id"]
-        , "fk_staking_contract" ::: 'ForeignKey '["staking_contract"] "staking_contracts" '["id"]
-         ] :=>
-        '[ "id" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "tx_hash" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "staking_contract" ::: 'NoDef :=> 'NotNull 'PGbytea
-         , "size" ::: 'NoDef :=> 'NotNull 'PGnumeric
-         , "time" ::: 'NoDef :=> 'NotNull 'PGtimestamp
-         ])
-    ]
+type User c = UserT c Identity
 
-tryCreateTables :: Definition Schema Schema
-tryCreateTables =
-  createTableIfNotExists
-    #users
-    ((bytea & notNullable) `as` #hash :*
-    (numeric & notNullable) `as` #balance)
-    (primaryKey #hash `as` #pk_users) >>>
-  createTableIfNotExists
-    #staking_contracts
-    ((bytea & notNullable) `as` #id :*
-     (bytea & notNullable) `as` #owner :*
-     (numeric & notNullable) `as`
-     #size :*
-     (timestamp & notNullable) `as`
-     #start_time :*
-     (interval & notNullable) `as`
-     #duration :*
-     (numeric & notNullable) `as`
-     #price)
-    (primaryKey #id `as` #pk_staking_contracts :*
-     foreignKey #owner #users #hash OnDeleteCascade OnUpdateRestrict `as`
-     #fk_owner) >>>
-  createTableIfNotExists
-    #collections
-    ((bytea & notNullable) `as` #tx_hash :* (bytea & notNullable) `as` #owner :*
-     (bytea & notNullable) `as`
-     #recipient :*
-     (numeric & notNullable) `as`
-     #size :*
-     (timestamp & notNullable) `as`
-     #time)
-    (primaryKey #tx_hash `as` #pk_collections :*
-     foreignKey #owner #users #hash OnDeleteCascade OnUpdateRestrict `as`
-     #fk_owner) >>>
-  createTableIfNotExists
-    #staking_rewards
-    ((bytea & notNullable) `as` #id :* (bytea & notNullable) `as` #tx_hash :*
-     (bytea & notNullable) `as`
-     #staking_contract :*
-     (numeric & notNullable) `as`
-     #size :*
-     (timestamp & notNullable) `as`
-     #time)
-    (primaryKey #id `as` #pk_staking_rewards :*
-     foreignKey
-       #staking_contract
-       #staking_contracts
-       #id
-       OnDeleteCascade
-       OnUpdateRestrict `as`
-     #fk_staking_contract)
+deriving instance Eq (User c)
 
-tryInsertUser ::
-     Manipulation Schema '[ 'NotNull 'PGbytea, 'NotNull 'PGnumeric] '[]
-tryInsertUser =
-  insertRow
-    #users
-    (Set (param @1) `as` #hash :* Set (param @2) `as` #balance)
-    OnConflictDoNothing
-    (Returning Nil)
+deriving instance (KnownSymbol c) => Read (User c)
 
-userBalance :: Query Schema '[ 'NotNull 'PGbytea] '[ "balance" ::: 'NotNull 'PGnumeric]
-userBalance =
-  select #balance $ from (table #users) & where_ (#hash .== param @1)
+deriving instance (KnownSymbol c) => Show (User c)
 
-insertStakingContract ::
-     Manipulation Schema '[ 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGnumeric, 'NotNull 'PGtimestamp, 'NotNull 'PGinterval, 'NotNull 'PGnumeric] '[]
-insertStakingContract =
-  insertRow_
-    #staking_contracts
-    (Set (param @1) `as` #id :* Set (param @2) `as` #owner :* Set (param @3) `as`
-     #size :*
-     Set (param @4) `as`
-     #start_time :*
-     Set (param @5) `as`
-     #duration :*
-     Set (param @6) `as`
-     #price)
+instance (KnownSymbol c) => ToJSON (User c)
 
-insertCollection ::
-     Manipulation Schema '[ 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGnumeric, 'NotNull 'PGtimestamp] '[]
-insertCollection =
-  insertRow_
-    #collections
-    (Set (param @1) `as` #tx_hash :* Set (param @2) `as` #owner :*
-     Set (param @3) `as`
-     #recipient :*
-     Set (param @4) `as`
-     #size :*
-     Set (param @5) `as`
-     #time)
+instance (KnownSymbol c) => FromJSON (User c)
 
-insertStakingReward ::
-     Manipulation Schema '[ 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGbytea, 'NotNull 'PGnumeric, 'NotNull 'PGtimestamp] '[]
-insertStakingReward =
-  insertRow_
-    #staking_rewards
-    (Set (param @1) `as` #id :* Set (param @2) `as` #tx_hash :* Set (param @3) `as`
-     #staking_contract :*
-     Set (param @4) `as`
-     #size :*
-     Set (param @5) `as`
-     #time)
+instance (KnownSymbol c) => Table (UserT c) where
+  data PrimaryKey (UserT c) f = UserAddress (Columnar f
+                                             (Id "Address"))
+                                deriving (Generic, Beamable)
+  primaryKey = UserAddress . _userAddress
+
+deriving instance Eq (PrimaryKey (UserT c) Identity)
+
+deriving instance Read (PrimaryKey (UserT c) Identity)
+
+deriving instance Show (PrimaryKey (UserT c) Identity)
+
+data VirtualStakeT (currency :: Symbol) f = VirtualStake
+  { _virtualStakeId :: Columnar f (Id "VirtualStake")
+  , _virtualStakeOwner :: PrimaryKey (UserT currency) f
+  , _virtualStakeSize :: Columnar f (Money.Dense currency)
+  , _virtualStakeStartTime :: Columnar f Timestamp
+  , _virtualStakeEndTime :: Columnar f Timestamp -- Not storing duration
+  , _virtualStakePrice :: Columnar f (Money.Discrete "USD" "cent")
+  } deriving (Generic, Beamable)
+
+type VirtualStake c = VirtualStakeT c Identity
+
+deriving instance Eq (VirtualStake c)
+
+deriving instance (KnownSymbol c) => Read (VirtualStake c)
+
+deriving instance (KnownSymbol c) => Show (VirtualStake c)
+
+-- can't add these because o-clock's aeson flag isn't being set properly
+-- instance (KnownSymbol c) => ToJSON (VirtualStake c)
+-- instance (KnownSymbol c) => FromJSON (VirtualStake c)
+instance (KnownSymbol c) => Table (VirtualStakeT c) where
+  data PrimaryKey (VirtualStakeT c) f = VirtualStakeId (Columnar f
+                                                        (Id "VirtualStake"))
+                                        deriving (Generic, Beamable)
+  primaryKey = VirtualStakeId . _virtualStakeId
+
+deriving instance Eq (PrimaryKey (VirtualStakeT c) Identity)
+
+deriving instance Read (PrimaryKey (VirtualStakeT c) Identity)
+
+deriving instance Show (PrimaryKey (VirtualStakeT c) Identity)
+
+-- A collection transaction, made on behalf of the owner to an arbitrary recipient address
+data CollectionT (currency :: Symbol) f = Collection
+  { _collectionTxHash :: Columnar f (Id "TxHash")
+  , _collectionOwner :: PrimaryKey (UserT currency) f
+  , _collectionRecipient :: Columnar f (Id "Address")
+  , _collectionSize :: Columnar f (Money.Dense currency)
+  , _collectionTime :: Columnar f Timestamp
+  } deriving (Generic, Beamable)
+
+type Collection c = CollectionT c Identity
+
+deriving instance Eq (Collection c)
+
+deriving instance (KnownSymbol c) => Read (Collection c)
+
+deriving instance (KnownSymbol c) => Show (Collection c)
+
+-- instance (KnownSymbol c) => ToJSON (Collection c)
+-- instance (KnownSymbol c) => FromJSON (Collection c)
+instance (KnownSymbol c) => Table (CollectionT c) where
+  data PrimaryKey (CollectionT c) f = CollectionTxHash (Columnar f
+                                                        (Id "TxHash"))
+                                      deriving (Generic, Beamable)
+  primaryKey = CollectionTxHash . _collectionTxHash
+
+deriving instance Eq (PrimaryKey (CollectionT c) Identity)
+
+deriving instance Read (PrimaryKey (CollectionT c) Identity)
+
+deriving instance Show (PrimaryKey (CollectionT c) Identity)
+
+-- A staking reward event, for a specific staking contract
+data StakingRewardT (currency :: Symbol) f = StakingReward
+  { _stakingRewardId :: Columnar f (Id "StakingReward")
+  , _stakingRewardTxHash :: Columnar f (Id "TxHash") -- ^ the staking reward transaction that this reward is part of
+  , _stakingRewardStakingContract :: PrimaryKey (VirtualStakeT currency) f
+  , _stakingRewardSize :: Columnar f (Money.Dense currency)
+  , _stakingRewardTime :: Columnar f Timestamp
+  } deriving (Generic, Beamable)
+
+type StakingReward c = StakingRewardT c Identity
+
+deriving instance Eq (StakingReward c)
+
+deriving instance (KnownSymbol c) => Read (StakingReward c)
+
+deriving instance (KnownSymbol c) => Show (StakingReward c)
+
+-- instance (KnownSymbol c) => ToJSON (StakingReward c)
+-- instance (KnownSymbol c) => FromJSON (StakingReward c)
+instance (KnownSymbol c) => Table (StakingRewardT c) where
+  data PrimaryKey (StakingRewardT c) f = StakingRewardId (Columnar f
+                                                          (Id "StakingReward"))
+                                         deriving (Generic, Beamable)
+  primaryKey = StakingRewardId . _stakingRewardId
+
+deriving instance Eq (PrimaryKey (StakingRewardT c) Identity)
+
+deriving instance Read (PrimaryKey (StakingRewardT c) Identity)
+
+deriving instance Show (PrimaryKey (StakingRewardT c) Identity)
+
+data CoreDb (currency :: Symbol) f = CoreDb
+  { _coreUsers :: f (TableEntity (UserT currency))
+  , _coreVirtualStakes :: f (TableEntity (VirtualStakeT currency))
+  , _coreCollections :: f (TableEntity (VirtualStakeT currency))
+  , _coreStakingRewards :: f (TableEntity (StakingRewardT currency))
+  } deriving (Generic)
+
+instance (KnownSymbol c) => Database be (CoreDb c)
+
+-- Database spec with explicit schema prefixing for the currency c
+-- each table "table" is referred to by "c.table"
+coreDb :: (KnownSymbol c) => Proxy c -> DatabaseSettings be (CoreDb c)
+coreDb pxy =
+  defaultDbSettings `withDbModification`
+  dbModification
+    { _coreUsers = modifyTable prefixCurrencySchema tableModification
+    , _coreVirtualStakes = modifyTable prefixCurrencySchema tableModification
+    , _coreCollections = modifyTable prefixCurrencySchema tableModification
+    } `withDbModification` -- for some reason you can't put all of these renames together
+  dbModification
+    {_coreStakingRewards = modifyTable prefixCurrencySchema tableModification}
+  where
+    prefixCurrencySchema = ((proxyText pxy <> ".") <>)

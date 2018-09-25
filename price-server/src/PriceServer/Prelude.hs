@@ -45,18 +45,17 @@ class ( KnownSymbol a
   where
   priceContract :: T -> Money.Dense a -> Time Day -> IO (Money.Dense "USD")
   priceFunctionsInJavascript :: T -> Proxy a -> Streamly.Serial Text
-  -- ^ Get a stream of serialized Javascript price functions for this currency
   priceContract' :: T -> PriceContractRequest a -> IO (Money.Dense "USD")
   priceContract' t PriceContractRequest {size, duration} =
     priceContract t size duration
 
 type family Currencies currencies where
-  Currencies (SymbolT c) = '[ c]
+  Currencies (Proxy c) = '[ c]
   Currencies (a
               :<|> b) = Currencies a :++ Currencies b
 
 type family NubCurrencies currencies where
-  NubCurrencies (SymbolT c) = '[ c]
+  NubCurrencies (Proxy c) = '[ c]
   NubCurrencies (a
                  :<|> b) = Nub (NubCurrencies a :++ NubCurrencies b)
 
@@ -90,8 +89,8 @@ instance ( HasUniqueCurrencies (a
     start rpcTransport amqpTransport (Proxy :: Proxy a) t
     start rpcTransport amqpTransport (Proxy :: Proxy b) t
 
-instance (Priceable currency) => PriceServer (SymbolT currency) where
-  start :: Amqp.T -> Amqp.T -> Proxy (SymbolT currency) -> T -> IO ()
+instance (Priceable currency) => PriceServer (Proxy currency) where
+  start :: Amqp.T -> Amqp.T -> Proxy (Proxy currency) -> T -> IO ()
   start rpcTransport pubSubTransport _ t = do
     serve
       (Proxy :: Proxy (PriceContractEndpoint currency, Amqp.T))

@@ -138,7 +138,7 @@ disconnectClient T {clients, servedConnectionResponses} clientId = do
 
 serveClient :: T -> Id "Client" -> WS.Connection -> IO ()
 serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = do
-  responses <- nonRepeatablePushStream
+  responses <- singleUsePushStream
   HashTable.insert servedConnectionResponses clientId responses
   let (_, _, streamOut) = responses
   -- Thread dies on its own when the response is complete.
@@ -171,7 +171,7 @@ instance RpcTransport T where
     (_, _, streamIn) <-
       HashTable.lookup servedRouteRequests route >>= \case
         Nothing -> do
-          requests <- nonRepeatablePushStream
+          requests <- singleUsePushStream
           HashTable.insert servedRouteRequests route requests
           return requests
         Just _ -> throw $ AlreadyServing route

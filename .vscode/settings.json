@@ -11,7 +11,7 @@
     "commands": [
       {
         "match": "\\.hs$",
-        "cmd": "~/.local/bin/hindent ${file} && ./test.sh",
+        "cmd": "bash -c \"~/.local/bin/hindent ${file} && ./test.sh\"",
         "useShortcut": false,
         "silent": false
       }

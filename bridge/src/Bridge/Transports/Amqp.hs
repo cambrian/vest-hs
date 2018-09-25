@@ -252,7 +252,7 @@ instance PubSubTransport T where
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
     AMQP.bindQueue chan queueName exchangeName "" -- Routing key blank.
-    (push, close, results) <- repeatableStream
+    (push, close, results) <- pushStream
     consumerTag <-
       AMQP.consumeMsgs
         chan

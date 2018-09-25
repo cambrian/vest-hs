@@ -37,4 +37,4 @@ instance Priceable "XTZ" where
         price = mutez * xtzUsdRaw
     return $ Money.dense' price
 
-type PriceableCurrencies = SymbolT "XTZ"
+type PriceableCurrencies = Proxy "XTZ" -- extend with `:<|> SymbolT "ETH"`

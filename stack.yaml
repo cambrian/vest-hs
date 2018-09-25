@@ -2,7 +2,6 @@ resolver: lts-12.10
 
 packages:
 - bridge
-- bridge-client
 # - core
 - price-server
 - vest-prelude
@@ -16,7 +15,6 @@ extra-deps:
 - stripe-core-2.4.0
 - stripe-haskell-2.4.0
 - stripe-http-client-2.4.0
-- timers-updatable-0.2.0.2
 
 flags:
   o-clock:

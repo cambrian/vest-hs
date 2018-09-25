@@ -132,7 +132,7 @@ retrieveStream T {streams} topic =
   HashTable.lookup streams topic >>= \case
     Just stream -> return stream
     Nothing -> do
-      (push, _, results) <- nonRepeatablePushStream
+      (push, _, results) <- singleUsePushStream
       HashTable.insert streams topic (push, results)
       return (push, results)
 
@@ -154,7 +154,7 @@ instance PubSubTransport T where
   _subscribe deserializeUnsafe topic t = do
     let T {subscriberInfo} = t
     (_, stream) <- retrieveStream t topic
-    (push, close, results) <- repeatableStream
+    (push, close, results) <- pushStream
     subscriberId <- newUuid
     subscriberThread <-
       async $ Streamly.mapM_ (\msg -> deserializeUnsafe msg >>= push) stream

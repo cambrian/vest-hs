@@ -13,14 +13,18 @@ import Data.Aeson as Reexports (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
+import Data.Pool
+import Data.Pool as Reexports (tryWithResource, withResource)
 import Data.Proxy as Reexports
 import Data.Text as Reexports (pack, unpack)
+import Data.Time.Clock (NominalDiffTime, UTCTime)
+import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Type.Bool as Reexports
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Data.Vector as Vector
 import qualified Foreign.StablePtr as StablePtr
-import GHC.TypeLits
+import GHC.TypeLits as Reexports (AppendSymbol)
 import Protolude as Reexports hiding
   ( Exception
   , bracket
@@ -49,6 +53,7 @@ import Protolude as Reexports hiding
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import qualified Text.Read
+import Time.Rational (KnownDivRat)
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
 
@@ -71,7 +76,7 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
 -- For all of these wrapper types, you can extract the base Text by deconstructing:
 -- show (Id "x") == "Id \"x\""
 -- let Id text = (Id "x") -> text == "x"
-newtype Id (t :: Symbol) =
+newtype Id (a :: Symbol) =
   Id Text
   deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -83,6 +88,10 @@ data Format
   = Haskell
   | JSON
   deriving (Eq, Ord, Show, Read, Enum, Generic, Hashable, ToJSON, FromJSON)
+
+newtype Exception' (a :: Symbol) =
+  Exception Text
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 newtype DecodeException =
   DecodeException Text
@@ -103,9 +112,6 @@ newtype TimeoutException =
 instance Exception TimeoutException where
   fromException = asyncExceptionFromException
   toException = asyncExceptionToException
-
--- Wrapper to get a kind Symbol as a *
-data SymbolT (s :: Symbol)
 
 data a :<|> b =
   a :<|> b
@@ -176,20 +182,43 @@ newUuid :: IO (Id a)
 newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
 -- Returns (push, close, stream).
--- Push does nothing after close is bound.
-nonRepeatablePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
-nonRepeatablePushStream = do
+-- Push does nothing after close is bound. TODO: It should probably throw.
+-- Does not support fanout.
+singleUsePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
+singleUsePushStream = do
   resultVar <- newEmptyMVar
   let push = putMVar resultVar
+      stream = Streamly.unfoldrM (\() -> fmap (, ()) <$> takeMVar resultVar) ()
+  return (push . Just, push Nothing, stream)
+
+-- Returns (push, close, stream).
+-- Push throws if called after close is bound.
+-- Close does nothing on repeated binds.
+-- Remembers the most recent item pushed. A new consumption from this stream will see the most
+-- recently pushed item, even if it is already closed.
+pushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
+pushStream = do
+  t <- newTVarIO (Nothing, False, 0 :: Integer) -- stores (Maybe value, closed, counter)
+  let push a =
+        atomically $ do
+          (_, closed, counter) <- readTVar t
+          when closed (throwSTM $ Exception @"StreamAlreadyClosed" "")
+          writeTVar t (Just a, False, counter + 1)
+      close =
+        atomically $ modifyTVar' t (\(x, _, counter) -> (x, True, counter))
       stream =
         Streamly.unfoldrM
-          (\(idx :: Int) -> do
-             resultMaybe <- takeMVar resultVar
-             case resultMaybe of
-               Nothing -> return Nothing
-               Just result -> return $ Just (result, idx + 1))
+          (\highestSeen ->
+             atomically $ do
+               (value, closed, counter) <- readTVar t
+               unless (closed || counter > highestSeen) retry
+               if (counter > highestSeen)
+                 then case value of
+                        Just x -> return $ Just (x, counter)
+                        Nothing -> throwSTM $ Exception @"Bug" "impossible"
+                 else return Nothing)
           0
-  return (push . Just, push Nothing, stream)
+  return (push, close, stream)
 
 proxyText :: (KnownSymbol a) => Proxy a -> Text
 proxyText = pack . symbolVal
@@ -237,16 +266,49 @@ timeoutRenewable _timeout action = do
     putMVar resultMVar (Just result)
   return (updateDelay delay micros, readMVar resultMVar)
 
-class Resource t where
-  hold :: ResourceConfig t -> IO t
-  release :: t -> IO ()
+-- UTCTime <--> Timestamp
+-- TODO: keep nanos
+utcTimeFromTimestamp :: Timestamp -> UTCTime
+utcTimeFromTimestamp (Timestamp seconds) =
+  systemToUTCTime $
+  MkSystemTime {systemSeconds = truncate seconds, systemNanoseconds = 0}
+
+timestampFromUTCTime :: UTCTime -> Timestamp
+timestampFromUTCTime utcTime =
+  let MkSystemTime {systemSeconds} = utcToSystemTime utcTime
+   in fromUnixTime systemSeconds
+
+nominalDiffTimeFromTime ::
+     (KnownDivRat unit Second) => Time unit -> NominalDiffTime
+nominalDiffTimeFromTime = fromRational . toNum @Second
+
+data PoolConfig = PoolConfig
+  { idleTime :: Time Second
+  , numResources :: Word
+  -- NumResources is technically per-stripe, but we just use 1 stripe
+  }
+
+class Resource a where
+  hold :: ResourceConfig a -> IO a
+  release :: a -> IO ()
   -- ^ Minimal required definition.
-  with :: ResourceConfig t -> (t -> IO ()) -> IO ()
+  with :: ResourceConfig a -> (a -> IO ()) -> IO ()
   with config = bracket (hold config) release
   -- TODO: Catch exceptions and reconnect.
-  withForever :: ResourceConfig t -> (t -> IO ()) -> IO ()
-  withForever config action =
-    bracket (hold config) release (\t -> action t >> blockForever)
+  withForever :: ResourceConfig a -> (a -> IO ()) -> IO ()
+  withForever config action = with config (\a -> action a >> blockForever)
+  withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO ()) -> IO ()
+  withPool PoolConfig {idleTime, numResources} config =
+    bracket
+      (createPool (hold config) release 1 idleTime_ numResources_)
+      destroyAllResources
+    where
+      idleTime_ = nominalDiffTimeFromTime idleTime
+      numResources_ = fromIntegral numResources
+  withPoolForever ::
+       PoolConfig -> ResourceConfig a -> (Pool a -> IO ()) -> IO ()
+  withPoolForever poolconfig config action =
+    withPool poolconfig config (\pool -> action pool >> blockForever)
 
 -- Make type family injective.
-type family ResourceConfig t = g | g -> t
+type family ResourceConfig a = cfg | cfg -> a

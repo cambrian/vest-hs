@@ -62,7 +62,7 @@ instance (KnownSymbol route, Show req, Read res, RpcTransport transport) =>
     -> (Time Second -> req -> IO (Streamly.Serial res))
   makeClient _ =
     _call
-      (do (_push, close, results) <- repeatableStream
+      (do (_push, close, results) <- pushStream
           let push (Result res) = _push res
               push EndOfResults = close
               done = Streamly.mapM_ return results
@@ -96,7 +96,7 @@ instance (KnownSymbol route, ToJSON req, FromJSON res, RpcTransport transport) =
     -> (Time Second -> req -> IO (Streamly.Serial res))
   makeClient _ =
     _call
-      (do (_push, close, results) <- repeatableStream
+      (do (_push, close, results) <- pushStream
           let push (Result res) = _push res
               push EndOfResults = close
               done = Streamly.mapM_ return results
