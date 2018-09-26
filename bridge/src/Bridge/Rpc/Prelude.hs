@@ -25,11 +25,31 @@ class RpcTransport t where
     -> req
     -> IO x
 
-data Arity
+data DirectOrStreaming
   = Direct
   | Streaming
 
-data Endpoint (r :: Arity) (a :: Maybe *) (s :: k) (req :: *) (res :: *)
+type family Claims auth = claims | claims -> auth
+
+class AuthScheme t where
+  verify :: Headers -> Id "RequestText" -> IO (Maybe (Claims t))
+
+type instance Claims () = ()
+
+data Headers = Headers
+  { format :: Format
+  , token :: Maybe Text -- JWT.
+  -- TODO: Signatures and such.
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+verifyEmpty :: Headers -> Id "RequestText" -> IO (Maybe ())
+verifyEmpty _ _ = return (Just ())
+
+data Auth a
+  = NoAuth
+  | Auth a
+
+data Endpoint (t :: DirectOrStreaming) (auth :: Auth *) (route :: k) (req :: *) (res :: *)
 
 data ResultItem a
   = Result a

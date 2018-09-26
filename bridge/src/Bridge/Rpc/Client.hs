@@ -9,8 +9,8 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type family ClientBindings spec where
-  ClientBindings (Endpoint 'Direct _ (s :: Symbol) a b) = Time Second -> Headers -> a -> IO b
-  ClientBindings (Endpoint 'Streaming _ (s :: Symbol) a b) = Time Second -> Headers -> a -> IO (Streamly.Serial b)
+  ClientBindings (Endpoint 'Direct _ _ req res) = Time Second -> Headers -> req -> IO res
+  ClientBindings (Endpoint 'Streaming _ _ req res) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -79,32 +79,34 @@ callProcessor pusher send timeout_ headers req = do
       Just () -> return ()
   return (push, result, waitForDone)
 
-instance ( KnownSymbol s
-         , Show a
-         , ToJSON a
-         , Read b
-         , FromJSON b
+instance ( KnownSymbol route
+         , Show req
+         , ToJSON req
+         , Read res
+         , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint 'Direct h (s :: Symbol) a b) transport where
+         Client (Endpoint 'Direct h (route :: Symbol) req res) transport where
   makeClient ::
-       Proxy (Endpoint 'Direct h s a b, transport)
+       Proxy (Endpoint 'Direct h route req res, transport)
     -> transport
-    -> (Time Second -> Headers -> a -> IO b)
+    -> (Time Second -> Headers -> req -> IO res)
   makeClient _ =
-    _call (callProcessor directPusher) (Id $ proxyText (Proxy :: Proxy s))
+    _call (callProcessor directPusher) (Id $ proxyText (Proxy :: Proxy route))
 
-instance ( KnownSymbol s
-         , Show a
-         , ToJSON a
-         , Read b
-         , FromJSON b
+instance ( KnownSymbol route
+         , Show req
+         , ToJSON req
+         , Read res
+         , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint 'Streaming h (s :: Symbol) a b) transport where
+         Client (Endpoint 'Streaming h (route :: Symbol) req res) transport where
   makeClient ::
-       Proxy (Endpoint 'Streaming h s a b, transport)
+       Proxy (Endpoint 'Streaming h route req res, transport)
     -> transport
-    -> (Time Second -> Headers -> a -> IO (Streamly.Serial b))
+    -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
   makeClient _ =
-    _call (callProcessor streamingPusher) (Id $ proxyText (Proxy :: Proxy s))
+    _call
+      (callProcessor streamingPusher)
+      (Id $ proxyText (Proxy :: Proxy route))

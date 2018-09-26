@@ -2,7 +2,6 @@ module Bridge
   ( module Reexports
   ) where
 
-import Bridge.Auth as Reexports
 import Bridge.Prelude as Reexports
 import Bridge.PubSub as Reexports
 import Bridge.Rpc as Reexports

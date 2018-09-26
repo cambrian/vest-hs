@@ -1,8 +1,8 @@
-module Bridge.Auth.Token
-  ( module Bridge.Auth.Token
+module Bridge.Rpc.AuthSchemes.Token
+  ( module Bridge.Rpc.AuthSchemes.Token
   ) where
 
-import Bridge.Prelude
+import Bridge.Rpc.Prelude
 import VestPrelude
 
 -- TODO:
@@ -13,6 +13,6 @@ data TokenClaims =
 
 type instance Claims TokenAuth = TokenClaims
 
-instance Auth TokenAuth where
+instance AuthScheme TokenAuth where
   verify :: Headers -> Id "RequestText" -> IO (Maybe TokenClaims)
   verify _ _ = return $ Just TokenClaims

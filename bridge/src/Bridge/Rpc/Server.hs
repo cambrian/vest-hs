@@ -9,12 +9,12 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type family Routes spec where
-  Routes (Endpoint (r :: Arity) (auth :: Maybe *) (s :: Symbol) a b) = '[ s]
+  Routes (Endpoint _ _ (route :: Symbol) _ _) = '[ route]
   Routes (a
           :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
-  NubRoutes (Endpoint (r :: Arity) (auth :: Maybe *) (s :: Symbol) a b) = '[ s]
+  NubRoutes (Endpoint _ _ (route :: Symbol) _ _) = '[ route]
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
@@ -25,10 +25,10 @@ data RpcServerException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
-  Handlers (Endpoint 'Direct 'Nothing (s :: Symbol) a b) = a -> IO b
-  Handlers (Endpoint 'Streaming 'Nothing (s :: Symbol) a b) = a -> IO (Streamly.Serial b)
-  Handlers (Endpoint 'Direct ('Just auth) (s :: Symbol) a b) = Claims auth -> a -> IO b
-  Handlers (Endpoint 'Streaming ('Just auth) (s :: Symbol) a b) = Claims auth -> a -> IO (Streamly.Serial b)
+  Handlers (Endpoint 'Direct 'NoAuth _ req res) = req -> IO res
+  Handlers (Endpoint 'Streaming 'NoAuth _ req res) = req -> IO (Streamly.Serial res)
+  Handlers (Endpoint 'Direct ('Auth auth) _ req res) = Claims auth -> req -> IO res
+  Handlers (Endpoint 'Streaming ('Auth auth) _ req res) = Claims auth -> req -> IO (Streamly.Serial res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -86,76 +86,76 @@ serveProcessor auth sender handler send headers reqText = do
     (\(e :: RpcClientException) ->
        send . Id @"ResponseText" . serialize . Left $ e)
 
-instance ( KnownSymbol s
-         , Read a
-         , Show b
-         , FromJSON a
-         , ToJSON b
+instance ( KnownSymbol route
+         , Read req
+         , Show res
+         , FromJSON req
+         , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Streaming 'Nothing (s :: Symbol) a b) transport where
+         Server (Endpoint 'Streaming 'NoAuth (route :: Symbol) req res) transport where
   serve ::
-       Proxy (Endpoint 'Streaming 'Nothing s a b, transport)
-    -> (a -> IO (Streamly.Serial b))
+       Proxy (Endpoint 'Streaming 'NoAuth route req res, transport)
+    -> (req -> IO (Streamly.Serial res))
     -> transport
     -> IO ()
   serve _ handler =
     _serve
       (serveProcessor verifyEmpty streamingSender (const handler))
-      (Id $ proxyText (Proxy :: Proxy s))
+      (Id $ proxyText (Proxy :: Proxy route))
 
-instance ( KnownSymbol s
-         , Read a
-         , Show b
-         , FromJSON a
-         , ToJSON b
+instance ( KnownSymbol route
+         , Read req
+         , Show res
+         , FromJSON req
+         , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Direct 'Nothing (s :: Symbol) a b) transport where
+         Server (Endpoint 'Direct 'NoAuth (route :: Symbol) req res) transport where
   serve ::
-       Proxy (Endpoint 'Direct 'Nothing s a b, transport)
-    -> (a -> IO b)
+       Proxy (Endpoint 'Direct 'NoAuth route req res, transport)
+    -> (req -> IO res)
     -> transport
     -> IO ()
   serve _ handler =
     _serve
       (serveProcessor verifyEmpty directSender (const handler))
-      (Id $ proxyText (Proxy :: Proxy s))
+      (Id $ proxyText (Proxy :: Proxy route))
 
-instance ( KnownSymbol s
-         , Auth auth
-         , Read a
-         , Show b
-         , FromJSON a
-         , ToJSON b
+instance ( KnownSymbol route
+         , AuthScheme auth
+         , Read req
+         , Show res
+         , FromJSON req
+         , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Streaming ('Just auth) (s :: Symbol) a b) transport where
+         Server (Endpoint 'Streaming ('Auth auth) (route :: Symbol) req res) transport where
   serve ::
-       Proxy (Endpoint 'Streaming ('Just auth) s a b, transport)
-    -> (Claims auth -> a -> IO (Streamly.Serial b))
+       Proxy (Endpoint 'Streaming ('Auth auth) route req res, transport)
+    -> (Claims auth -> req -> IO (Streamly.Serial res))
     -> transport
     -> IO ()
   serve _ handler =
     _serve
       (serveProcessor verify streamingSender handler)
-      (Id $ proxyText (Proxy :: Proxy s))
+      (Id $ proxyText (Proxy :: Proxy route))
 
-instance ( KnownSymbol s
-         , Auth auth
-         , Read a
-         , Show b
-         , FromJSON a
-         , ToJSON b
+instance ( KnownSymbol route
+         , AuthScheme auth
+         , Read req
+         , Show res
+         , FromJSON req
+         , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Direct ('Just auth) (s :: Symbol) a b) transport where
+         Server (Endpoint 'Direct ('Auth auth) (route :: Symbol) req res) transport where
   serve ::
-       Proxy (Endpoint 'Direct ('Just auth) s a b, transport)
-    -> (Claims auth -> a -> IO b)
+       Proxy (Endpoint 'Direct ('Auth auth) route req res, transport)
+    -> (Claims auth -> req -> IO res)
     -> transport
     -> IO ()
   serve _ handler =
     _serve
       (serveProcessor verify directSender handler)
-      (Id $ proxyText (Proxy :: Proxy s))
+      (Id $ proxyText (Proxy :: Proxy route))

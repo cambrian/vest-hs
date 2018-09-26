@@ -10,16 +10,16 @@ import Test.Hspec
 import VestPrelude
 
 type EchoIntsDirectEndpoint
-   = Endpoint 'Direct 'Nothing "echoIntsDirect" [Int] [Int]
+   = Endpoint 'Direct 'NoAuth "echoIntsDirect" [Int] [Int]
 
 type EchoTextsDirectEndpoint
-   = Endpoint 'Direct 'Nothing "echoTextDirect" [Text] [Text]
+   = Endpoint 'Direct 'NoAuth "echoTextDirect" [Text] [Text]
 
 type EchoIntsStreamingEndpoint
-   = Endpoint 'Streaming ('Just TokenAuth) "echoIntsStreaming" [Int] Int
+   = Endpoint 'Streaming ('Auth TokenAuth) "echoIntsStreaming" [Int] Int
 
 type EchoTextsStreamingEndpoint
-   = Endpoint 'Streaming ('Just TokenAuth) "echoTextsStreaming" [Text] Text
+   = Endpoint 'Streaming ('Auth TokenAuth) "echoTextsStreaming" [Text] Text
 
 type RpcApi
    = EchoIntsDirectEndpoint
