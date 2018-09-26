@@ -41,7 +41,7 @@ subscribeProcessor ::
   => Format
   -> IO (Text -> IO (), IO (), Streamly.Serial a)
 subscribeProcessor format = do
-  (_push, close, stream) <- repeatableStream
+  (_push, close, stream) <- pushStream
   let push a = deserializeUnsafeOf format a >>= _push
   return (push, close, stream)
 

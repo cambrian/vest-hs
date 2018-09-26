@@ -46,7 +46,7 @@ directPusher = do
 streamingPusher ::
      IO ((ResultItem res) -> IO (), IO (Streamly.Serial res), IO ())
 streamingPusher = do
-  (_push, close, results) <- repeatableStream
+  (_push, close, results) <- pushStream
   let push (Result res) = _push res
       push EndOfResults = close
       waitForDone = Streamly.mapM_ return results
@@ -73,12 +73,11 @@ callProcessor pusher send _timeout headers req = do
           Left exc -> throw (exc :: RpcClientException)
           Right res -> _push res
         renewTimeout
-  -- TODO: Debug timeouts.
   mainThread <- myThreadId
   async $ do
     timeoutResult <- timeoutDone
     case timeoutResult of
-      Nothing -> throwTo mainThread (TimeoutException _timeout)
+      Nothing -> evilThrowTo mainThread $ TimeoutException _timeout -- Don't do this at home.
       Just () -> return ()
   return (push, result, waitForDone)
 

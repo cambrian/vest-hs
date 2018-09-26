@@ -221,8 +221,8 @@ instance PubSubTransport T where
     -> T
     -- ^ transport (should be mutated to store cleanup details)
     -> IO (Id "Subscriber", Streamly.Serial a)
-  _subscribe pushStream (Id exchangeName) T {chan, subscriberInfo} = do
-    (push, close, results) <- pushStream
+  _subscribe processor (Id exchangeName) T {chan, subscriberInfo} = do
+    (push, close, results) <- processor
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
