@@ -22,24 +22,17 @@ data UserT (c :: Symbol) (u :: Symbol) f = User
 
 type User c u = UserT c u Identity
 
-deriving instance
-         Money.GoodScale (Money.Scale c u) => Eq (User c u)
+deriving instance Money.Unit c u => Eq (User c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Read (User c u)
+deriving instance Money.Unit c u => Read (User c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Show (User c u)
+deriving instance Money.Unit c u => Show (User c u)
 
-instance (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         ToJSON (User c u)
+instance Money.Unit c u => ToJSON (User c u)
 
-instance (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         FromJSON (User c u)
+instance Money.Unit c u => FromJSON (User c u)
 
-instance (KnownSymbol c, KnownSymbol u) => Table (UserT c u) where
+instance Money.Unit c u => Table (UserT c u) where
   data PrimaryKey (UserT c u) f = UserAddress (Columnar f
                                                (Id "Address"))
                                   deriving (Generic, Beamable)
@@ -62,21 +55,16 @@ data VirtualStakeT (c :: Symbol) (u :: Symbol) f = VirtualStake
 
 type VirtualStake c u = VirtualStakeT c u Identity
 
-deriving instance
-         Money.GoodScale (Money.Scale c u) => Eq (VirtualStake c u)
+deriving instance Money.Unit c u => Eq (VirtualStake c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Read (VirtualStake c u)
+deriving instance Money.Unit c u => Read (VirtualStake c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Show (VirtualStake c u)
+deriving instance Money.Unit c u => Show (VirtualStake c u)
 
 -- can't add these because o-clock's aeson flag isn't being set properly
 -- instance (KnownSymbol c) => ToJSON (VirtualStake c)
 -- instance (KnownSymbol c) => FromJSON (VirtualStake c)
-instance (KnownSymbol c, KnownSymbol u) => Table (VirtualStakeT c u) where
+instance Money.Unit c u => Table (VirtualStakeT c u) where
   data PrimaryKey (VirtualStakeT c u) f = VirtualStakeId (Columnar f
                                                           (Id "VirtualStake"))
                                           deriving (Generic, Beamable)
@@ -99,20 +87,15 @@ data CollectionT (c :: Symbol) (u :: Symbol) f = Collection
 
 type Collection c u = CollectionT c u Identity
 
-deriving instance
-         Money.GoodScale (Money.Scale c u) => Eq (Collection c u)
+deriving instance Money.Unit c u => Eq (Collection c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Read (Collection c u)
+deriving instance Money.Unit c u => Read (Collection c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Show (Collection c u)
+deriving instance Money.Unit c u => Show (Collection c u)
 
 -- instance (KnownSymbol c) => ToJSON (Collection c)
 -- instance (KnownSymbol c) => FromJSON (Collection c)
-instance (KnownSymbol c, KnownSymbol u) => Table (CollectionT c u) where
+instance Money.Unit c u => Table (CollectionT c u) where
   data PrimaryKey (CollectionT c u) f = CollectionTxHash (Columnar f
                                                           (Id "TxHash"))
                                         deriving (Generic, Beamable)
@@ -135,20 +118,15 @@ data StakingRewardT (c :: Symbol) (u :: Symbol) f = StakingReward
 
 type StakingReward c u = StakingRewardT c u Identity
 
-deriving instance
-         Money.GoodScale (Money.Scale c u) => Eq (StakingReward c u)
+deriving instance Money.Unit c u => Eq (StakingReward c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Read (StakingReward c u)
+deriving instance Money.Unit c u => Read (StakingReward c u)
 
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Show (StakingReward c u)
+deriving instance Money.Unit c u => Show (StakingReward c u)
 
 -- instance (KnownSymbol c) => ToJSON (StakingReward c)
 -- instance (KnownSymbol c) => FromJSON (StakingReward c)
-instance (KnownSymbol c, KnownSymbol u) => Table (StakingRewardT c u) where
+instance Money.Unit c u => Table (StakingRewardT c u) where
   data PrimaryKey (StakingRewardT c u) f = StakingRewardId (Columnar
                                                             f
                                                             (Id "StakingReward"))
@@ -168,12 +146,12 @@ data CoreDb (c :: Symbol) (u :: Symbol) f = CoreDb
   , _coreStakingRewards :: f (TableEntity (StakingRewardT c u))
   } deriving (Generic)
 
-instance (KnownSymbol c, KnownSymbol u) => Database be (CoreDb c u)
+instance Money.Unit c u => Database be (CoreDb c u)
 
 -- Database spec with explicit schema prefixing for the c c
 -- such that each table "table" is referred to by "c.table"
 coreDb ::
-     forall c u be. (KnownSymbol c, KnownSymbol u)
+     forall c u be. Money.Unit c u
   => DatabaseSettings be (CoreDb c u)
 coreDb =
   defaultDbSettings `withDbModification`
@@ -189,8 +167,7 @@ coreDb =
     prefixCurrencySchema = ((proxyText (Proxy :: Proxy c) <> ".") <>)
 
 storeVirtualStake ::
-     forall c u.
-     (KnownSymbol c, KnownSymbol u, Money.GoodScale (Money.Scale c u))
+     forall c u. Money.Unit c u
   => Id "VirtualStake"
   -> Id "Address"
   -> Money.Discrete c u
