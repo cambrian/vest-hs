@@ -5,6 +5,14 @@ module Bridge.Auth.Token
 import Bridge.Prelude
 import VestPrelude
 
--- TODO: Actually implement this!
-verifyToken :: Headers -> Text -> (Claims -> IO ()) -> IO () -> IO ()
-verifyToken _ _ action _ = action Claims
+-- TODO:
+data TokenAuth
+
+data TokenClaims =
+  TokenClaims
+
+type instance Claims TokenAuth = TokenClaims
+
+instance Auth TokenAuth where
+  verify :: Headers -> Id "RequestText" -> IO (Maybe TokenClaims)
+  verify _ _ = return $ Just TokenClaims

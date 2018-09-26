@@ -15,7 +15,7 @@ import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import Data.Hashable as Reexports (Hashable)
 import Data.Pool
-import Data.Pool as Reexports (tryWithResource, withResource)
+import Data.Pool as Reexports (Pool, tryWithResource, withResource)
 import Data.Proxy as Reexports
 import Data.Text as Reexports (pack, unpack)
 import Data.Time.Clock (NominalDiffTime, UTCTime)
@@ -85,20 +85,16 @@ newtype Port =
   Port Int
   deriving (Eq, Ord, Show, Read, Bounded, Generic, Hashable, ToJSON, FromJSON)
 
-newtype Exception' (a :: Symbol) =
-  Exception Text
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
-
 newtype DecodeException =
   DecodeException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-data NothingException =
-  NothingException
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
-
 newtype ReadException =
   ReadException Text
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
+data BugException =
+  BugException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 newtype TimeoutException =
@@ -141,7 +137,7 @@ infixl 1 >|>|
 (>|>|) :: (Foldable t, Monad m) => t a -> (a -> m b) -> m ()
 (>|>|) = forM_
 
-blockForever :: IO ()
+blockForever :: IO Void
 blockForever = do
   _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
                                              -- is blocked forever by creating a stable reference
@@ -163,9 +159,9 @@ decodeUnsafe text =
 encode :: (ToJSON a) => a -> Text
 encode = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
 
-fromJustUnsafe :: Maybe a -> IO a
-fromJustUnsafe Nothing = throw NothingException
-fromJustUnsafe (Just a) = return a
+fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a
+fromJustUnsafe e Nothing = throw e
+fromJustUnsafe _ (Just a) = return a
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar is Nothing until the first value is received.
@@ -196,6 +192,10 @@ singleUsePushStream = do
       stream = Streamly.unfoldrM (\() -> fmap (, ()) <$> takeMVar resultVar) ()
   return (push . Just, push Nothing, stream)
 
+data StreamPushAfterCloseException =
+  StreamPushAfterCloseException
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
 -- Returns (push, close, stream).
 -- Push throws if called after close is bound.
 -- Close does nothing on repeated binds.
@@ -207,7 +207,7 @@ pushStream = do
   let push a =
         atomically $ do
           (_, closed, counter) <- readTVar t
-          when closed (throwSTM $ Exception @"StreamAlreadyClosed" "")
+          when closed (throwSTM $ StreamPushAfterCloseException)
           writeTVar t (Just a, False, counter + 1)
       close =
         atomically $ modifyTVar' t (\(x, _, counter) -> (x, True, counter))
@@ -220,7 +220,7 @@ pushStream = do
                if (counter > highestSeen)
                  then case value of
                         Just x -> return $ Just (x, counter)
-                        Nothing -> throwSTM $ Exception @"Bug" "impossible"
+                        Nothing -> throwSTM $ BugException
                  else return Nothing)
           0
   return (push, close, stream)
@@ -297,12 +297,12 @@ class Resource a where
   hold :: ResourceConfig a -> IO a
   release :: a -> IO ()
   -- ^ Minimal required definition.
-  with :: ResourceConfig a -> (a -> IO ()) -> IO ()
+  with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config = bracket (hold config) release
   -- TODO: Catch exceptions and reconnect.
-  withForever :: ResourceConfig a -> (a -> IO ()) -> IO ()
+  withForever :: ResourceConfig a -> (a -> IO b) -> IO Void
   withForever config action = with config (\a -> action a >> blockForever)
-  withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO ()) -> IO ()
+  withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
   withPool PoolConfig {idleTime, numResources} config =
     bracket
       (createPool (hold config) release 1 idleTime_ numResources_)
@@ -311,9 +311,21 @@ class Resource a where
       idleTime_ = nominalDiffTimeFromTime idleTime
       numResources_ = fromIntegral numResources
   withPoolForever ::
-       PoolConfig -> ResourceConfig a -> (Pool a -> IO ()) -> IO ()
+       PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO Void
   withPoolForever poolconfig config action =
     withPool poolconfig config (\pool -> action pool >> blockForever)
 
 -- Make type family injective.
 type family ResourceConfig a = cfg | cfg -> a
+
+type family Symbols symbols where
+  Symbols (Proxy c) = '[ c]
+  Symbols (a
+           :<|> b) = Symbols a :++ Symbols b
+
+type family NubSymbols symbols where
+  NubSymbols (Proxy c) = '[ c]
+  NubSymbols (a
+              :<|> b) = Nub (NubSymbols a :++ NubSymbols b)
+
+type HasUniqueSymbols symbols = Symbols symbols ~ NubSymbols symbols

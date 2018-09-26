@@ -10,8 +10,7 @@ synopsis:            Internal coordination server for Vest derivatives.
 description:         See README.md.
 
 dependencies:
-- base               >= 4.10 && < 5
-- postgresql-simple     >= 0.5  && < 1
+- base                  >= 4.10 && < 5
 - bridge
 - price-server
 - vest-prelude

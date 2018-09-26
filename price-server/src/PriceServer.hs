@@ -1,8 +1,8 @@
 module PriceServer
   ( Config(..)
   , T
-  , PriceContractRequest(..)
-  , PriceContractEndpoint
+  , PriceVirtualStakeRequest(..)
+  , PriceVirtualStakeEndpoint
   , PriceFunctionTopic
   , Priceable()
   , PriceableCurrencies
@@ -30,11 +30,9 @@ make Config {} amqp = do
   return $ T {tezosPrice}
 
 instance Priceable "XTZ" where
-  priceContract T {tezosPrice} size duration = do
+  priceVirtualStake T {tezosPrice} size duration = do
     xtzUsd <- readTVarIO tezosPrice
-    let mutez = toRational size
-        xtzUsdRaw = Money.exchangeRateToRational xtzUsd
-        price = mutez * xtzUsdRaw
-    return $ Money.dense' price
+    let price = Money.exchange xtzUsd size
+    return price
 
-type PriceableCurrencies = Proxy "XTZ" -- extend with `:<|> SymbolT "ETH"`
+type PriceableCurrencies = (Proxy "XTZ", Proxy "mutez") -- extend with `:<|> (Proxy "ETH", Proxy "wei")

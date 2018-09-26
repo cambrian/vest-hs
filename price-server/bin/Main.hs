@@ -8,7 +8,7 @@ config = Config {}
 amqpConfig :: Amqp.Config
 amqpConfig = Amqp.localConfig
 
-main :: IO ()
+main :: IO Void
 main =
   withForever
     amqpConfig

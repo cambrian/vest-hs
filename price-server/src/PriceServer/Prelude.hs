@@ -1,6 +1,6 @@
 module PriceServer.Prelude
-  ( PriceContractRequest(..)
-  , PriceContractEndpoint
+  ( PriceVirtualStakeRequest(..)
+  , PriceVirtualStakeEndpoint
   , PriceFunctionTopic
   , Priceable(..)
   , Config(..)
@@ -10,15 +10,29 @@ module PriceServer.Prelude
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import GHC.TypeLits
 import qualified Streamly
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data PriceContractRequest (a :: Symbol) = PriceContractRequest
-  { size :: Money.Dense a
+data PriceVirtualStakeRequest (currency :: Symbol) (unit :: Symbol) = PriceVirtualStakeRequest
+  { size :: Money.Discrete currency unit
   , duration :: Time Day
-  } deriving (Eq, Ord, Show, Read, Generic, ToJSON, FromJSON, Hashable)
+  } deriving (Generic)
+
+instance Money.GoodScale (Money.Scale currency unit) =>
+         Eq (PriceVirtualStakeRequest currency unit)
+
+instance Money.GoodScale (Money.Scale currency unit) =>
+         Read (PriceVirtualStakeRequest currency unit)
+
+instance Money.GoodScale (Money.Scale currency unit) =>
+         Show (PriceVirtualStakeRequest currency unit)
+
+instance (KnownSymbol currency, Money.GoodScale (Money.Scale currency unit)) =>
+         ToJSON (PriceVirtualStakeRequest currency unit)
+
+instance (KnownSymbol currency, Money.GoodScale (Money.Scale currency unit)) =>
+         FromJSON (PriceVirtualStakeRequest currency unit)
 
 data Config = Config
   {
@@ -28,39 +42,31 @@ data T = T
   { tezosPrice :: TVar (Money.ExchangeRate "XTZ" "USD")
   }
 
-type PriceContractRoute currency = AppendSymbol "priceContract/" currency
+type PriceVirtualStakeRoute currency
+   = AppendSymbol "priceVirtualStake/" currency
 
-type PriceContractEndpoint currency
-   = DirectEndpoint (PriceContractRoute currency) (PriceContractRequest currency) (Money.Dense "USD")
+type PriceVirtualStakeEndpoint currency unit
+   = ( DirectEndpoint (PriceVirtualStakeRoute currency) (PriceVirtualStakeRequest currency unit) (Money.Discrete "USD" "cent")
+     , Amqp.T)
 
 type PriceFunctionRoute currency = AppendSymbol "priceFunctions/" currency
 
-type PriceFunctionTopic currency = Topic (PriceFunctionRoute currency) Text
+type PriceFunctionTopic currency
+   = (Topic (PriceFunctionRoute currency) Text, Amqp.T)
 
-class ( KnownSymbol a
-      , KnownSymbol (PriceContractRoute a)
-      , KnownSymbol (PriceFunctionRoute a)
-      ) =>
-      Priceable a
-  where
-  priceContract :: T -> Money.Dense a -> Time Day -> IO (Money.Dense "USD")
-  priceFunctionsInJavascript :: T -> Proxy a -> Streamly.Serial Text
-  priceContract' :: T -> PriceContractRequest a -> IO (Money.Dense "USD")
-  priceContract' t PriceContractRequest {size, duration} =
-    priceContract t size duration
-
-type family Currencies currencies where
-  Currencies (Proxy c) = '[ c]
-  Currencies (a
-              :<|> b) = Currencies a :++ Currencies b
-
-type family NubCurrencies currencies where
-  NubCurrencies (Proxy c) = '[ c]
-  NubCurrencies (a
-                 :<|> b) = Nub (NubCurrencies a :++ NubCurrencies b)
-
-type HasUniqueCurrencies currencies
-   = Currencies currencies ~ NubCurrencies currencies
+class Priceable currency where
+  priceVirtualStake ::
+       T -> Money.Dense currency -> Time Day -> IO (Money.Dense "USD")
+  priceFunctionsInJavascript :: T -> Proxy currency -> Streamly.Serial Text
+  priceVirtualStake' ::
+       (Money.GoodScale (Money.Scale currency unit))
+    => T
+    -> PriceVirtualStakeRequest currency unit
+    -> IO (Money.Discrete "USD" "cent")
+  priceVirtualStake' t PriceVirtualStakeRequest {size, duration} = do
+    let denseSize = Money.denseFromDiscrete size
+    densePrice <- priceVirtualStake t denseSize duration
+    return $ fst $ Money.discreteFromDense Money.Truncate densePrice
 
 class PriceServer currencies where
   start ::
@@ -71,8 +77,8 @@ class PriceServer currencies where
     -> IO ()
   -- ^ Takes separate rpcTransport and pubSubTransports even though they're both Amqp.T for now
 
-instance ( HasUniqueCurrencies (a
-                                :<|> b)
+instance ( HasUniqueSymbols (a
+                             :<|> b)
          , PriceServer a
          , PriceServer b
          ) =>
@@ -89,14 +95,19 @@ instance ( HasUniqueCurrencies (a
     start rpcTransport amqpTransport (Proxy :: Proxy a) t
     start rpcTransport amqpTransport (Proxy :: Proxy b) t
 
-instance (Priceable currency) => PriceServer (Proxy currency) where
-  start :: Amqp.T -> Amqp.T -> Proxy (Proxy currency) -> T -> IO ()
+instance ( Priceable currency
+         , Money.GoodScale (Money.Scale currency unit)
+         , KnownSymbol (PriceVirtualStakeRoute currency)
+         , KnownSymbol (PriceFunctionRoute currency)
+         ) =>
+         PriceServer (Proxy currency, Proxy unit) where
+  start :: Amqp.T -> Amqp.T -> Proxy (Proxy currency, Proxy unit) -> T -> IO ()
   start rpcTransport pubSubTransport _ t = do
     serve
-      (Proxy :: Proxy (PriceContractEndpoint currency, Amqp.T))
+      (Proxy :: Proxy (PriceVirtualStakeEndpoint currency unit))
       rpcTransport
-      (priceContract' t)
+      (priceVirtualStake' t)
     publish
-      (Proxy :: Proxy (PriceFunctionTopic currency, Amqp.T))
+      (Proxy :: Proxy (PriceFunctionTopic currency))
       pubSubTransport
       (priceFunctionsInJavascript t (Proxy :: Proxy currency))

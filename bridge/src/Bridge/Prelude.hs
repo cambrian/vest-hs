@@ -4,15 +4,15 @@ module Bridge.Prelude
 
 import VestPrelude
 
-data Auth
-  = OpenAuth
-  | TokenAuth
-  deriving (Eq, Ord, Show, Read, Enum, Generic, Hashable, ToJSON, FromJSON)
+type family Claims auth = claims | claims -> auth
 
--- TODO: Fill me in.
-data Claims = Claims
-  {
-  }
+class Auth t where
+  verify :: Headers -> Id "RequestText" -> IO (Maybe (Claims t))
+
+type instance Claims () = ()
+
+verifyEmpty :: Headers -> Id "RequestText" -> IO (Maybe ())
+verifyEmpty _ _ = return (Just ())
 
 data Format
   = Haskell
@@ -26,19 +26,13 @@ data Headers = Headers
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 deserializeOf :: (Read a, FromJSON a) => Format -> (Text -> Maybe a)
-deserializeOf =
-  \case
-    Haskell -> read
-    JSON -> decode
+deserializeOf Haskell = read
+deserializeOf JSON = decode
 
 deserializeUnsafeOf :: (Read a, FromJSON a) => Format -> (Text -> IO a)
-deserializeUnsafeOf =
-  \case
-    Haskell -> readUnsafe
-    JSON -> decodeUnsafe
+deserializeUnsafeOf Haskell = readUnsafe
+deserializeUnsafeOf JSON = decodeUnsafe
 
 serializeOf :: (Show a, ToJSON a) => Format -> (a -> Text)
-serializeOf =
-  \case
-    Haskell -> show
-    JSON -> encode
+serializeOf Haskell = show
+serializeOf JSON = encode

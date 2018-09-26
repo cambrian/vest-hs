@@ -11,8 +11,6 @@ description:         See README.md.
 
 dependencies:
 - base               >= 4.10 && < 5
-- safe-money         >= 0.7  && < 1
-- stm                >= 2.4  && < 3
 - streamly           >= 0.5  && < 1
 - bridge
 - vest-prelude
@@ -21,6 +19,7 @@ dependencies:
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
 
 default-extensions:
+- AllowAmbiguousTypes
 - ApplicativeDo
 - BangPatterns
 - ConstraintKinds

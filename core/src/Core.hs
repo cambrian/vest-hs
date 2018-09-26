@@ -14,46 +14,43 @@ data Config = Config
   {
   } deriving (Eq, Show, Read, Generic)
 
-data T = T
-  {
+data T currency = T
+  { priceVirtualStake :: PriceServer.PriceVirtualStakeRequest currency -> IO (Money.Discrete "USD" "cent")
+  , dbPool :: Pool Db.T
   }
 
-class (PriceServer.Priceable a) =>
-      Stakeable a
-  -- storeNewContract ::
-  --      (MonadSelda m)
-  --   => Proxy a
-  --   -> SeldaConnection
-  --   -> Hash
-  --   -> Money.Dense a
-  --   -> Timestamp
-  --   -> Days
-  --   -> Money.Discrete "USD" "cent"
-  --   -> m Id
-  -- storeNewContract _ db owner size startTime duration price = do
-  --   id <- liftIO newUuid
-  --   insert_ users (Db.Contract {id, owner, size, startTime})
-  --   return id
+class (PriceServer.Priceable currency) =>
+      Stakeable currency
   where
-  handleStake :: Amqp.T -> VirtualStakeRequest a -> IO (VirtualStakeResponse a)
-  handleStake priceServerRpcTransport VirtualStakeRequest { user
+  make :: Amqp.T -> Pool Db.T -> Config -> IO (T currency)
+  make amqp dbPool _config =
+    let priceVirtualStake =
+          makeClient
+            (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint currency))
+            amqp $
+          (sec 1)
+     in return T {priceVirtualStake, dbPool}
+  stake ::
+       T currency
+    -> VirtualStakeRequest currency
+    -> IO (VirtualStakeResponse currency)
+  stake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
                                                           , size
                                                           , duration
                                                           , payment
                                                           } = do
-    let priceContract =
-          makeClient
-            (Proxy :: Proxy (PriceServer.PriceContractEndpoint a, Amqp.T)) -- TODO: export with transport from priceServer
-            priceServerRpcTransport
     price <-
-      priceContract $ PriceServer.PriceContractRequest {size, duration, payment}
+      priceVirtualStake $ PriceServer.PriceVirtualStakeRequest {size, duration}
+    -- TODO: process payment
     id <- newUuid @"VirtualStake"
+    withResource
+      dbPool
+      (\conn -> do conn $ runInsert $ insert (Db._coreUsers Db.coreDb))
     -- save to db
     return $ VirtualStakeResponse {}
-
-make :: Config -> Amqp.T -> IO T
-make Config {} bridge = do
-  return $ T {}
+-- make :: Config -> Amqp.T -> IO T
+-- make Config {} bridge = do
+--   return $ T {}
 -- start :: Db.PGConnectInfo -> Bridge.Config -> Config -> IO ()
 -- start dbConfig bridgeConfig config =
 --   Db.withForever

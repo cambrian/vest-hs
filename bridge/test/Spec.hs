@@ -10,16 +10,16 @@ import Test.Hspec
 import VestPrelude
 
 type EchoIntsDirectEndpoint
-   = Endpoint 'Direct 'OpenAuth "echoIntsDirect" [Int] [Int]
+   = Endpoint 'Direct 'Nothing "echoIntsDirect" [Int] [Int]
 
 type EchoTextsDirectEndpoint
-   = Endpoint 'Direct 'OpenAuth "echoTextDirect" [Text] [Text]
+   = Endpoint 'Direct 'Nothing "echoTextDirect" [Text] [Text]
 
 type EchoIntsStreamingEndpoint
-   = Endpoint 'Streaming 'TokenAuth "echoIntsStreaming" [Int] Int
+   = Endpoint 'Streaming ('Just TokenAuth) "echoIntsStreaming" [Int] Int
 
 type EchoTextsStreamingEndpoint
-   = Endpoint 'Streaming 'TokenAuth "echoTextsStreaming" [Text] Text
+   = Endpoint 'Streaming ('Just TokenAuth) "echoTextsStreaming" [Text] Text
 
 type RpcApi
    = EchoIntsDirectEndpoint
@@ -30,7 +30,7 @@ type RpcApi
 echoDirect :: a -> IO a
 echoDirect x = threadDelay (sec 0.01) >> return x
 
-echoStreaming :: Claims -> [a] -> IO (Streamly.Serial a)
+echoStreaming :: Claims auth -> [a] -> IO (Streamly.Serial a)
 echoStreaming _ xs =
   return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
 

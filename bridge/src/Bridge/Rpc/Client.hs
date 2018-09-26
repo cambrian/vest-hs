@@ -34,50 +34,48 @@ instance (Client a transport, Client b transport) =>
     makeClient (Proxy :: Proxy (a, transport)) transport :<|>
     makeClient (Proxy :: Proxy (b, transport)) transport
 
-directPusher :: IO ((ResultItem res) -> IO (), IO res, IO ())
+directPusher :: IO (res -> IO (), IO res, IO ())
 directPusher = do
   resultVar <- newEmptyMVar
-  let push (Result res) = putMVar resultVar res
-      push EndOfResults = throw BadEndOfResults
+  let push = putMVar resultVar
       result = readMVar resultVar
       waitForDone = void result
   return (push, result, waitForDone)
 
-streamingPusher ::
-     IO ((ResultItem res) -> IO (), IO (Streamly.Serial res), IO ())
+streamingPusher :: IO (ResultItem res -> IO (), IO (Streamly.Serial res), IO ())
 streamingPusher = do
-  (_push, close, results) <- pushStream
-  let push (Result res) = _push res
+  (push_, close, results) <- pushStream
+  let push (Result res) = push_ res
       push EndOfResults = close
       waitForDone = Streamly.mapM_ return results
   return (push, return results, waitForDone)
 
 callProcessor ::
      (Show req, ToJSON req, Read res, FromJSON res)
-  => IO ((ResultItem res) -> IO (), IO x, IO ())
-  -> (Text -> IO ())
+  => IO (res -> IO (), IO x, IO ())
+  -> (Headers -> Id "RequestText" -> IO ())
   -> Time Second
   -> Headers
   -> req
-  -> IO (Text -> IO (), IO x, IO ())
-callProcessor pusher send _timeout headers req = do
+  -> IO (Id "ResponseText" -> IO (), IO x, IO ())
+callProcessor pusher send timeout_ headers req = do
   let Headers {format} = headers
   let deserializeUnsafe = deserializeUnsafeOf format
       serialize = serializeOf format
-  (_push, result, waitForDone) <- pusher
-  (renewTimeout, timeoutDone) <- timeoutRenewable _timeout waitForDone
-  send . serialize $ req
-  let push resOrExcText = do
+  (push_, result, waitForDone) <- pusher
+  (renewTimeout, timeoutDone) <- timeoutRenewable timeout_ waitForDone
+  send headers (Id @"RequestText" $ serialize req)
+  let push (Id resOrExcText) = do
         resOrExc <- deserializeUnsafe resOrExcText
         case resOrExc of
           Left exc -> throw (exc :: RpcClientException)
-          Right res -> _push res
+          Right res -> push_ res
         renewTimeout
   mainThread <- myThreadId
   async $ do
     timeoutResult <- timeoutDone
     case timeoutResult of
-      Nothing -> evilThrowTo mainThread $ TimeoutException _timeout -- Don't do this at home.
+      Nothing -> evilThrowTo mainThread $ TimeoutException timeout_ -- Don't do this at home.
       Just () -> return ()
   return (push, result, waitForDone)
 
@@ -88,7 +86,7 @@ instance ( KnownSymbol s
          , FromJSON b
          , RpcTransport transport
          ) =>
-         Client (Endpoint 'Direct (h :: Auth) (s :: Symbol) a b) transport where
+         Client (Endpoint 'Direct h (s :: Symbol) a b) transport where
   makeClient ::
        Proxy (Endpoint 'Direct h s a b, transport)
     -> transport
@@ -103,7 +101,7 @@ instance ( KnownSymbol s
          , FromJSON b
          , RpcTransport transport
          ) =>
-         Client (Endpoint 'Streaming (h :: Auth) (s :: Symbol) a b) transport where
+         Client (Endpoint 'Streaming h (s :: Symbol) a b) transport where
   makeClient ::
        Proxy (Endpoint 'Streaming h s a b, transport)
     -> transport

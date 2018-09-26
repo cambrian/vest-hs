@@ -20,13 +20,13 @@ data RequestMessage = RequestMessage
   { id :: Id "RpcRequest"
   , headers :: Headers -- Metadata.
   , responseQueue :: Id "ResponseQueue"
-  , reqText :: Text -- Should be the serialization of a request object, but this is not guaranteed.
+  , reqText :: Id "RequestText" -- Should be the serialization of a request object, but this is not guaranteed.
   } deriving (Eq, Show, Read)
 
 data ResponseMessage = ResponseMessage
   { requestId :: Id "RpcRequest"
     -- Other metadata.
-  , resText :: Text
+  , resText :: Id "ResponseText"
   } deriving (Eq, Show, Read)
 
 data Config = Config
@@ -51,7 +51,7 @@ data T = T
   , responseQueue :: Id "ResponseQueue"
   , responseConsumerTag :: AMQP.ConsumerTag
   , servedRouteTags :: HashTable (Id "Rpc") AMQP.ConsumerTag
-  , responseHandlers :: HashTable (Id "RpcRequest") (Text -> IO ())
+  , responseHandlers :: HashTable (Id "RpcRequest") (Id "ResponseText" -> IO ())
   , publishedTopics :: HashTable (Id "Topic") ()
   , subscriberInfo :: HashTable (Id "Subscriber") (AMQP.ConsumerTag, IO ())
     -- ^ Key: subscriberId to Value: (consumerTag, close)
@@ -125,7 +125,10 @@ instance Resource T where
 
 instance RpcTransport T where
   _serve ::
-       ((Text -> IO ()) -> Headers -> Text -> IO ()) -> Id "Rpc" -> T -> IO ()
+       ((Id "ResponseText" -> IO ()) -> Headers -> Id "RequestText" -> IO ())
+    -> Id "Rpc"
+    -> T
+    -> IO ()
   _serve processor route T {chan, servedRouteTags} = do
     HashTable.lookup servedRouteTags route >>= \case
       Nothing -> return ()
@@ -157,9 +160,9 @@ instance RpcTransport T where
              AMQP.ackEnv env)
     HashTable.insert servedRouteTags route consumerTag
   _call ::
-       ((Text -> IO ()) -> Time Second -> Headers -> req -> IO ( Text -> IO ()
-                                                               , IO x
-                                                               , IO ()))
+       ((Headers -> Id "RequestText" -> IO ()) -> Time Second -> Headers -> req -> IO ( Id "ResponseText" -> IO ()
+                                                                                      , IO x
+                                                                                      , IO ()))
     -> Id "Rpc"
     -> T
     -> Time Second
@@ -168,7 +171,7 @@ instance RpcTransport T where
     -> IO x
   _call processor (Id queueName) T {chan, responseQueue, responseHandlers} _timeout headers req = do
     id <- newUuid
-    let send reqText =
+    let send headers reqText =
           void $
           AMQP.publishMsg
             chan

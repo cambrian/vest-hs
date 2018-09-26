@@ -8,6 +8,7 @@ import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Database.Beam as Reexports hiding (insert)
 import Database.Beam.Backend.SQL
 import Database.Beam.Postgres as Reexports
+import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
 import qualified Money
 import VestPrelude
@@ -24,7 +25,7 @@ instance FromBackendRow Postgres (Id a)
 -- In theory you could implement this directly on Timestamp without having to create a UTCTime
 -- but that's a bunch of work for what's only a smallish win.
 -- No type is provided for Time / interval yet because postgresql-simple doesn't support DiffTime or
--- NominalDiffTime and the implementation is complicated
+-- NominalDiffTime and implementing it would be complicated
 instance HasSqlValueSyntax be UTCTime => HasSqlValueSyntax be Timestamp where
   sqlValueSyntax = sqlValueSyntax . utcTimeFromTimestamp
 
