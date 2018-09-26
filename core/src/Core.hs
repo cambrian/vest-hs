@@ -14,44 +14,37 @@ data Config = Config
   {
   } deriving (Eq, Show, Read, Generic)
 
-data T currency unit = T
-  { priceVirtualStake :: PriceServer.PriceVirtualStakeRequest currency unit -> IO (Money.Discrete "USD" "cent")
+data T c u = T
+  { priceVirtualStake :: PriceServer.PriceVirtualStakeRequest c u -> IO (Money.Discrete "USD" "cent")
   , dbPool :: Pool Db.T
   }
 
-class (PriceServer.Priceable currency) =>
-      Stakeable currency unit
+class (PriceServer.Priceable c, Money.Unit c u) =>
+      Stakeable c u
   where
-  make :: Amqp.T -> Pool Db.T -> Config -> IO (T currency unit)
+  make :: Amqp.T -> Pool Db.T -> Config -> IO (T c u)
   make amqp dbPool _config =
     let priceVirtualStake =
-          makeClient
-            (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint currency unit))
-            amqp $
-          (sec 1)
+          (makeClient
+             (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint c u))
+             amqp)
+            (sec 1)
+            defaultHeaders
      in return T {priceVirtualStake, dbPool}
-  stake ::
-       T currency unit
-    -> VirtualStakeRequest currency unit
-    -> IO (VirtualStakeResponse currency unit)
+  stake :: T c u -> VirtualStakeRequest c u -> IO (VirtualStakeResponse c u)
   stake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
                                                           , size
                                                           , duration
                                                           , payment
                                                           } = do
+    time <- now
     price <-
       priceVirtualStake $ PriceServer.PriceVirtualStakeRequest {size, duration}
     -- TODO: process payment
     id <- newUuid @"VirtualStake"
     withResource
       dbPool
-      (\(Db.T conn) ->
-         runBeamPostgres conn $
-         runInsert $
-         insert
-           (_coreUsers coreDb)
-           (insertValues [user])
-           (onConflict anyConflict onConflictDoNothing))
+      (Db.storeVirtualStake @c @u id user size time duration price)
     -- save to db
     return $ VirtualStakeResponse {}
 -- make :: Config -> Amqp.T -> IO T

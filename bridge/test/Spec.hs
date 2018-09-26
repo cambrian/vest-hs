@@ -81,9 +81,6 @@ withSubscribed config _ action =
        publish (Proxy :: Proxy (PubSubApi, transport)) streams transport
        action subscribed)
 
-noAuthHaskell :: Headers
-noAuthHaskell = Headers {format = Haskell, token = Nothing}
-
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {format = JSON, token = Just ""}
 
@@ -92,10 +89,10 @@ singleDirectTest config =
   around (withRpcClient config (Proxy :: Proxy (EchoIntsDirectEndpoint, a))) $
   context "with a single direct RPC" $ do
     it "makes a single call" $ \call -> do
-      result <- call (sec 1) noAuthHaskell [1, 2, 3]
+      result <- call (sec 1) defaultHeaders [1, 2, 3]
       result `shouldBe` [1, 2, 3]
     it "times out for a single call" $ \call ->
-      call (sec 0) noAuthHaskell [1, 2, 3] `shouldThrow`
+      call (sec 0) defaultHeaders [1, 2, 3] `shouldThrow`
       (== TimeoutException (sec 0))
 
 singleStreamingTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
@@ -126,8 +123,8 @@ multipleDirectTest config =
                        , a))) $
   context "when running multiple direct RPCs" $
   it "makes one call to each" $ \(echoInts :<|> echoTexts) -> do
-    resultInts <- echoInts (sec 1) noAuthHaskell [1, 2, 3]
-    resultTexts <- echoTexts (sec 1) noAuthHaskell ["a", "b", "c"]
+    resultInts <- echoInts (sec 1) defaultHeaders [1, 2, 3]
+    resultTexts <- echoTexts (sec 1) defaultHeaders ["a", "b", "c"]
     resultInts `shouldBe` [1, 2, 3]
     resultTexts `shouldBe` ["a", "b", "c"]
 

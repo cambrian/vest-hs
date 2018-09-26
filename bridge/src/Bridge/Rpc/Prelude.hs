@@ -42,6 +42,9 @@ data Headers = Headers
   -- TODO: Signatures and such.
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
+defaultHeaders :: Headers
+defaultHeaders = Headers {format = Haskell, token = Nothing}
+
 verifyEmpty :: Headers -> Id "RequestText" -> IO (Maybe ())
 verifyEmpty _ _ = return (Just ())
 

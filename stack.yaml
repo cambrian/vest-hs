@@ -3,7 +3,7 @@ resolver: lts-12.10
 packages:
 - bridge
 # - bridge-client
-# - core
+- core
 - price-server
 - vest-prelude
 

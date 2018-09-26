@@ -18,7 +18,7 @@ import Data.Pool
 import Data.Pool as Reexports (Pool, tryWithResource, withResource)
 import Data.Proxy as Reexports
 import Data.Text as Reexports (pack, unpack)
-import Data.Time.Clock (NominalDiffTime, UTCTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Type.Bool as Reexports
 import qualified Data.UUID as UUID
@@ -286,6 +286,9 @@ timestampFromUTCTime utcTime =
 nominalDiffTimeFromTime ::
      (KnownDivRat unit Second) => Time unit -> NominalDiffTime
 nominalDiffTimeFromTime = fromRational . toNum @Second
+
+now :: IO Timestamp
+now = getCurrentTime >>- timestampFromUTCTime
 
 data PoolConfig = PoolConfig
   { idleTime :: Time Second

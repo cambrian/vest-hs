@@ -13,24 +13,17 @@ data VirtualStakeRequest (currency :: Symbol) (unit :: Symbol) = VirtualStakeReq
   , payment :: ()
   } deriving (Generic)
 
-deriving instance
-         Money.GoodScale (Money.Scale c u) => Eq (VirtualStakeRequest c u)
+deriving instance Money.Unit c u => Eq (VirtualStakeRequest c u)
+
+deriving instance Money.Unit c u => Read (VirtualStakeRequest c u)
+
+deriving instance Money.Unit c u => Show (VirtualStakeRequest c u)
 
 deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Read (VirtualStakeRequest c u)
+         Money.Unit c u => ToJSON (VirtualStakeRequest c u)
 
 deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Show (VirtualStakeRequest c u)
-
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         ToJSON (VirtualStakeRequest c u)
-
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         FromJSON (VirtualStakeRequest c u)
+         Money.Unit c u => FromJSON (VirtualStakeRequest c u)
 
 data VirtualStakeResponse (currency :: Symbol) (unit :: Symbol) = VirtualStakeResponse
   { id :: Id "VirtualStake"
@@ -39,24 +32,17 @@ data VirtualStakeResponse (currency :: Symbol) (unit :: Symbol) = VirtualStakeRe
   , payment :: ()
   } deriving (Generic)
 
-deriving instance
-         Money.GoodScale (Money.Scale c u) => Eq (VirtualStakeResponse c u)
+deriving instance Money.Unit c u => Eq (VirtualStakeResponse c u)
+
+deriving instance Money.Unit c u => Read (VirtualStakeResponse c u)
+
+deriving instance Money.Unit c u => Show (VirtualStakeResponse c u)
 
 deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Read (VirtualStakeResponse c u)
+         Money.Unit c u => ToJSON (VirtualStakeResponse c u)
 
 deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         Show (VirtualStakeResponse c u)
-
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         ToJSON (VirtualStakeResponse c u)
-
-deriving instance
-         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
-         FromJSON (VirtualStakeResponse c u)
+         Money.Unit c u => FromJSON (VirtualStakeResponse c u)
 
 type VirtualStakeRoute currency = AppendSymbol "virtualStake/" currency
 
