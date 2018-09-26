@@ -12,7 +12,7 @@ import VestPrelude
 -- conjunction with subscribe' to get one-off values from a published topic.
 class PubSubTransport t where
   _publish ::
-       ((Text -> IO ()) -> Streamly.Serial a -> IO ())
+       ((Id "PublishText" -> IO ()) -> Streamly.Serial a -> IO ())
     -- ^ (send publish object text to wire -> stream of publish objects)
     -> Id "Topic"
     -- ^ route to send wire-message on
@@ -21,7 +21,7 @@ class PubSubTransport t where
     -- ^ transport
     -> IO ()
   _subscribe ::
-       IO (Text -> IO (), IO (), Streamly.Serial a)
+       IO (Id "PublishText" -> IO (), IO (), Streamly.Serial a)
     -- ^ (push subscribe object text, close, result stream)
     -> Id "Topic"
     -- ^ route to listen for wire-messages on

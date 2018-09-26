@@ -39,10 +39,10 @@ instance (Subscriber a transport, Subscriber b transport) =>
 subscribeProcessor ::
      (Read a, FromJSON a)
   => Format
-  -> IO (Text -> IO (), IO (), Streamly.Serial a)
+  -> IO (Id "PublishText" -> IO (), IO (), Streamly.Serial a)
 subscribeProcessor format = do
   (_push, close, stream) <- pushStream
-  let push a = deserializeUnsafeOf format a >>= _push
+  let push (Id a) = deserializeUnsafeOf format a >>= _push
   return (push, close, stream)
 
 instance (KnownSymbol s, Read a, FromJSON a, PubSubTransport transport) =>

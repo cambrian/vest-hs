@@ -1,8 +1,8 @@
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 
--- import qualified Bridge.Transports.Dummy as Dummy
--- import qualified Bridge.Transports.WebSocket as WebSocket
+import qualified Bridge.Transports.Dummy as Dummy
+import qualified Bridge.Transports.WebSocket as WebSocket
 import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -173,17 +173,17 @@ pubSubTests = [pubSubTest']
 main :: IO ()
 main = do
   let amqpMake = ($ Amqp.localConfig)
-      -- dummyMake = ($ Dummy.localConfig)
-      -- wsMake = ($ WebSocket.localConfig)
+      dummyMake = ($ Dummy.localConfig)
+      wsMake = ($ WebSocket.localConfig)
   hspec $ do
     describe "AMQP bridge" $ do
       describe "Direct RPC" $ mapM_ amqpMake directTests
       describe "Streaming RPC" $ mapM_ amqpMake streamingTests
       describe "Pub/Sub" $ mapM_ amqpMake pubSubTests
-    -- describe "Dummy bridge" $ do
-    --   describe "Direct RPC" $ mapM_ dummyMake directTests
-    --   describe "Streaming RPC" $ mapM_ dummyMake streamingTests
-    --   describe "Pub/Sub" $ mapM_ dummyMake pubSubTests
-    -- describe "WebSocket bridge" $ do
-    --   describe "Direct RPC" $ mapM_ wsMake directTests
-    --   describe "Streaming RPC" $ mapM_ wsMake streamingTests
+    describe "Dummy bridge" $ do
+      describe "Direct RPC" $ mapM_ dummyMake directTests
+      describe "Streaming RPC" $ mapM_ dummyMake streamingTests
+      describe "Pub/Sub" $ mapM_ dummyMake pubSubTests
+    describe "WebSocket bridge" $ do
+      describe "Direct RPC" $ mapM_ wsMake directTests
+      describe "Streaming RPC" $ mapM_ wsMake streamingTests
