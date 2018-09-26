@@ -14,26 +14,26 @@ data Config = Config
   {
   } deriving (Eq, Show, Read, Generic)
 
-data T currency = T
-  { priceVirtualStake :: PriceServer.PriceVirtualStakeRequest currency -> IO (Money.Discrete "USD" "cent")
+data T currency unit = T
+  { priceVirtualStake :: PriceServer.PriceVirtualStakeRequest currency unit -> IO (Money.Discrete "USD" "cent")
   , dbPool :: Pool Db.T
   }
 
 class (PriceServer.Priceable currency) =>
-      Stakeable currency
+      Stakeable currency unit
   where
-  make :: Amqp.T -> Pool Db.T -> Config -> IO (T currency)
+  make :: Amqp.T -> Pool Db.T -> Config -> IO (T currency unit)
   make amqp dbPool _config =
     let priceVirtualStake =
           makeClient
-            (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint currency))
+            (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint currency unit))
             amqp $
           (sec 1)
      in return T {priceVirtualStake, dbPool}
   stake ::
-       T currency
-    -> VirtualStakeRequest currency
-    -> IO (VirtualStakeResponse currency)
+       T currency unit
+    -> VirtualStakeRequest currency unit
+    -> IO (VirtualStakeResponse currency unit)
   stake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
                                                           , size
                                                           , duration
@@ -45,7 +45,13 @@ class (PriceServer.Priceable currency) =>
     id <- newUuid @"VirtualStake"
     withResource
       dbPool
-      (\conn -> do conn $ runInsert $ insert (Db._coreUsers Db.coreDb))
+      (\(Db.T conn) ->
+         runBeamPostgres conn $
+         runInsert $
+         insert
+           (_coreUsers coreDb)
+           (insertValues [user])
+           (onConflict anyConflict onConflictDoNothing))
     -- save to db
     return $ VirtualStakeResponse {}
 -- make :: Config -> Amqp.T -> IO T

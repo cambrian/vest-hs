@@ -46,13 +46,13 @@ type PriceVirtualStakeRoute currency
    = AppendSymbol "priceVirtualStake/" currency
 
 type PriceVirtualStakeEndpoint currency unit
-   = ( DirectEndpoint (PriceVirtualStakeRoute currency) (PriceVirtualStakeRequest currency unit) (Money.Discrete "USD" "cent")
+   = ( Endpoint Direct NoAuth (PriceVirtualStakeRoute currency) (PriceVirtualStakeRequest currency unit) (Money.Discrete "USD" "cent")
      , Amqp.T)
 
 type PriceFunctionRoute currency = AppendSymbol "priceFunctions/" currency
 
 type PriceFunctionTopic currency
-   = (Topic (PriceFunctionRoute currency) Text, Amqp.T)
+   = (Topic Haskell (PriceFunctionRoute currency) Text, Amqp.T)
 
 class Priceable currency where
   priceVirtualStake ::
@@ -97,6 +97,7 @@ instance ( HasUniqueSymbols (a
 
 instance ( Priceable currency
          , Money.GoodScale (Money.Scale currency unit)
+         , KnownSymbol currency
          , KnownSymbol (PriceVirtualStakeRoute currency)
          , KnownSymbol (PriceFunctionRoute currency)
          ) =>
@@ -105,9 +106,9 @@ instance ( Priceable currency
   start rpcTransport pubSubTransport _ t = do
     serve
       (Proxy :: Proxy (PriceVirtualStakeEndpoint currency unit))
-      rpcTransport
       (priceVirtualStake' t)
+      rpcTransport
     publish
       (Proxy :: Proxy (PriceFunctionTopic currency))
-      pubSubTransport
       (priceFunctionsInJavascript t (Proxy :: Proxy currency))
+      pubSubTransport

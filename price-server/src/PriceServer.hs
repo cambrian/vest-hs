@@ -19,11 +19,12 @@ import VestPrelude
 import qualified VestPrelude.Money as Money
 
 -- Eventually this will live inside the exchanger
-type TezosPriceTopic = Topic "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
+type TezosPriceTopic
+   = Topic Haskell "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
 
 make :: Config -> Amqp.T -> IO T
 make Config {} amqp = do
-  dummyTezosExchangeRate <- fromJustUnsafe $ Money.exchangeRate 1
+  dummyTezosExchangeRate <- fromJustUnsafe BugException (Money.exchangeRate 1)
   (_, tezosPriceStream) <-
     subscribe (Proxy :: Proxy (TezosPriceTopic, amqp)) amqp
   tezosPrice <- makeStreamVar' dummyTezosExchangeRate tezosPriceStream

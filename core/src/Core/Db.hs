@@ -15,7 +15,6 @@ instance Resource T where
   hold cfg = connect cfg >>- T
   release (T conn) = close conn
 
--- TODO: could be better to use Money.Discrete
 data UserT (c :: Symbol) (u :: Symbol) f = User
   { _userAddress :: Columnar f (Id "Address")
   , _userBalance :: Columnar f (Money.Discrete c u)
@@ -63,16 +62,21 @@ data VirtualStakeT (c :: Symbol) (u :: Symbol) f = VirtualStake
 
 type VirtualStake c u = VirtualStakeT c u Identity
 
-deriving instance Eq (VirtualStake c u)
+deriving instance
+         Money.GoodScale (Money.Scale c u) => Eq (VirtualStake c u)
 
-deriving instance (KnownSymbol c) => Read (VirtualStake c u)
+deriving instance
+         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
+         Read (VirtualStake c u)
 
-deriving instance (KnownSymbol c) => Show (VirtualStake c u)
+deriving instance
+         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
+         Show (VirtualStake c u)
 
 -- can't add these because o-clock's aeson flag isn't being set properly
 -- instance (KnownSymbol c) => ToJSON (VirtualStake c)
 -- instance (KnownSymbol c) => FromJSON (VirtualStake c)
-instance (KnownSymbol c) => Table (VirtualStakeT c u) where
+instance (KnownSymbol c, KnownSymbol u) => Table (VirtualStakeT c u) where
   data PrimaryKey (VirtualStakeT c u) f = VirtualStakeId (Columnar f
                                                           (Id "VirtualStake"))
                                           deriving (Generic, Beamable)
@@ -95,15 +99,20 @@ data CollectionT (c :: Symbol) (u :: Symbol) f = Collection
 
 type Collection c u = CollectionT c u Identity
 
-deriving instance Eq (Collection c u)
+deriving instance
+         Money.GoodScale (Money.Scale c u) => Eq (Collection c u)
 
-deriving instance (KnownSymbol c) => Read (Collection c u)
+deriving instance
+         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
+         Read (Collection c u)
 
-deriving instance (KnownSymbol c) => Show (Collection c u)
+deriving instance
+         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
+         Show (Collection c u)
 
 -- instance (KnownSymbol c) => ToJSON (Collection c)
 -- instance (KnownSymbol c) => FromJSON (Collection c)
-instance (KnownSymbol c) => Table (CollectionT c u) where
+instance (KnownSymbol c, KnownSymbol u) => Table (CollectionT c u) where
   data PrimaryKey (CollectionT c u) f = CollectionTxHash (Columnar f
                                                           (Id "TxHash"))
                                         deriving (Generic, Beamable)
@@ -126,15 +135,20 @@ data StakingRewardT (c :: Symbol) (u :: Symbol) f = StakingReward
 
 type StakingReward c u = StakingRewardT c u Identity
 
-deriving instance Eq (StakingReward c u)
+deriving instance
+         Money.GoodScale (Money.Scale c u) => Eq (StakingReward c u)
 
-deriving instance (KnownSymbol c) => Read (StakingReward c u)
+deriving instance
+         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
+         Read (StakingReward c u)
 
-deriving instance (KnownSymbol c) => Show (StakingReward c u)
+deriving instance
+         (KnownSymbol c, Money.GoodScale (Money.Scale c u)) =>
+         Show (StakingReward c u)
 
 -- instance (KnownSymbol c) => ToJSON (StakingReward c)
 -- instance (KnownSymbol c) => FromJSON (StakingReward c)
-instance (KnownSymbol c) => Table (StakingRewardT c u) where
+instance (KnownSymbol c, KnownSymbol u) => Table (StakingRewardT c u) where
   data PrimaryKey (StakingRewardT c u) f = StakingRewardId (Columnar
                                                             f
                                                             (Id "StakingReward"))
@@ -154,12 +168,12 @@ data CoreDb (c :: Symbol) (u :: Symbol) f = CoreDb
   , _coreStakingRewards :: f (TableEntity (StakingRewardT c u))
   } deriving (Generic)
 
-instance (KnownSymbol c) => Database be (CoreDb c u)
+instance (KnownSymbol c, KnownSymbol u) => Database be (CoreDb c u)
 
 -- Database spec with explicit schema prefixing for the c c
 -- such that each table "table" is referred to by "c.table"
 coreDb ::
-     forall c u be. KnownSymbol c
+     forall c u be. (KnownSymbol c, KnownSymbol u)
   => DatabaseSettings be (CoreDb c u)
 coreDb =
   defaultDbSettings `withDbModification`
@@ -168,17 +182,42 @@ coreDb =
     , _coreVirtualStakes = modifyTable prefixCurrencySchema tableModification
     , _coreCollections = modifyTable prefixCurrencySchema tableModification
     } `withDbModification`
-    -- for some reason the compiler complains if you put all of these renames in one dbModification
+  -- for some reason the compiler complains if you put all of these renames into one dbModification
   dbModification
     {_coreStakingRewards = modifyTable prefixCurrencySchema tableModification}
   where
     prefixCurrencySchema = ((proxyText (Proxy :: Proxy c) <> ".") <>)
 
-tryInsertUser :: (KnownSymbol c) => T -> User c u -> IO ()
-tryInsertUser (T conn) user =
+storeVirtualStake ::
+     forall c u.
+     (KnownSymbol c, KnownSymbol u, Money.GoodScale (Money.Scale c u))
+  => Id "VirtualStake"
+  -> Id "Address"
+  -> Money.Discrete c u
+  -> Timestamp
+  -> Time Day
+  -> Money.Discrete "USD" "cent"
+  -> T
+  -> IO ()
+storeVirtualStake id ownerAddress size startTime duration price (T conn) = do
+  let owner = User @c @u ownerAddress (Money.discrete 0)
+      virtualStake =
+        VirtualStake
+          id
+          (pk owner)
+          size
+          startTime
+          (timeAdd duration startTime)
+          price
   runBeamPostgres conn $
-  runInsert $
-  insert
-    (_coreUsers coreDb)
-    (insertValues [user])
-    (onConflict anyConflict onConflictDoNothing)
+    runInsert $
+    insert
+      (_coreUsers coreDb)
+      (insertValues [owner])
+      (onConflict anyConflict onConflictDoNothing)
+  runBeamPostgres conn $
+    runInsert $
+    insert
+      (_coreVirtualStakes coreDb)
+      (insertValues [virtualStake])
+      onConflictDefault

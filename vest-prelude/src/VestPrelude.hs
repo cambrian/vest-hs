@@ -203,7 +203,7 @@ data StreamPushAfterCloseException =
 -- recently pushed item, even if it is already closed.
 pushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
 pushStream = do
-  t <- newTVarIO (Nothing, False, 0 :: Integer) -- stores (Maybe value, closed, counter)
+  t <- newTVarIO (Nothing, False, 0 :: Word64) -- stores (Maybe value, closed, counter)
   let push a =
         atomically $ do
           (_, closed, counter) <- readTVar t

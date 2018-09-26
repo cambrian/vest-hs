@@ -77,7 +77,7 @@ callProcessor pusher send timeout_ headers req = do
     case timeoutResult of
       Nothing -> evilThrowTo mainThread $ TimeoutException timeout_ -- Don't do this at home.
       Just () -> return ()
-  return (push, result, waitForDone)
+  return (push, result, timeoutDone >>- const ())
 
 instance ( KnownSymbol route
          , Show req
