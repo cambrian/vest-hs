@@ -19,7 +19,8 @@ data RequestMessage = RequestMessage
   { id :: Id "RpcRequest"
   , headers :: Headers -- Metadata.
   , responseQueue :: Id "ResponseQueue"
-  , reqText :: Id "RequestText" -- Should be the serialization of a request object, but this is not guaranteed.
+  , reqText :: Id "RequestText" -- Should be the serialization of a request object, but this is not
+                                -- guaranteed.
   } deriving (Eq, Show, Read)
 
 data ResponseMessage = ResponseMessage
@@ -51,7 +52,7 @@ data T = T
   , responseConsumerTag :: AMQP.ConsumerTag
   , servedRouteTags :: HashTable (Id "Rpc") AMQP.ConsumerTag
   , responseHandlers :: HashTable (Id "RpcRequest") (Id "ResponseText" -> IO ())
-  , publishedTopics :: HashTable (Id "Topic") ()
+  , publisherThreads :: HashTable (Id "Topic") (Async ())
   , subscriberInfo :: HashTable (Id "Subscriber") (AMQP.ConsumerTag, IO ())
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
@@ -91,7 +92,7 @@ instance Resource T where
            (read . fromAmqpMsg $ msg) >|>| handleMsg -- Do nothing if response message malformed.
            AMQP.ackEnv env)
     servedRouteTags <- HashTable.new
-    publishedTopics <- HashTable.new
+    publisherThreads <- HashTable.new
     subscriberInfo <- HashTable.new
     return
       T
@@ -101,7 +102,7 @@ instance Resource T where
         , responseConsumerTag
         , servedRouteTags
         , responseHandlers
-        , publishedTopics
+        , publisherThreads
         , subscriberInfo
         }
   release :: T -> IO ()
@@ -113,11 +114,13 @@ instance Resource T where
           , responseQueue
           , responseConsumerTag
           , servedRouteTags
+          , publisherThreads
           , subscriberInfo
           } = t
         Id _responseQueue = responseQueue
     AMQP.cancelConsumer chan responseConsumerTag
     HashTable.mapM_ (AMQP.cancelConsumer chan . snd) servedRouteTags
+    HashTable.mapM_ (cancel . snd) publisherThreads
     HashTable.mapM_ (_unsubscribe t . fst) subscriberInfo
     _ <- AMQP.deleteQueue chan _responseQueue
     AMQP.closeConnection conn -- Also closes chan.
@@ -202,26 +205,29 @@ _unsubscribe T {chan, subscriberInfo} subscriberId = do
 
 instance PubSubTransport T where
   _publish ::
-       ((Text -> IO ()) -> Streamly.Serial a -> IO ())
+       ((Id "PublishText" -> IO ()) -> Streamly.Serial a -> IO ())
     -> Id "Topic"
     -> Streamly.Serial a
     -> T
     -> IO ()
-  _publish processor topic as T {chan, publishedTopics} = do
-    HashTable.lookup publishedTopics topic >>= \case
-      Nothing -> HashTable.insert publishedTopics topic ()
+  _publish processor topic as T {chan, publisherThreads} = do
+    HashTable.lookup publisherThreads topic >>= \case
+      Nothing -> do
+        let Id exchangeName = topic
+        declarePubSubExchange chan exchangeName
+        publisherThread <-
+          async $
+          processor
+            (\(Id a) ->
+               void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
+             )
+            as
+        HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
-    let Id exchangeName = topic
-    declarePubSubExchange chan exchangeName
-    void . async $
-      processor (void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as -- Queue name blank.
   _subscribe ::
-       IO (Text -> IO (), IO (), Streamly.Serial a)
-    -- ^ (push subscribe object text, result stream, close)
+       IO (Id "PublishText" -> IO (), IO (), Streamly.Serial a)
     -> Id "Topic"
-    -- ^ route to listen for wire-messages on
     -> T
-    -- ^ transport (should be mutated to store cleanup details)
     -> IO (Id "Subscriber", Streamly.Serial a)
   _subscribe processor (Id exchangeName) T {chan, subscriberInfo} = do
     (push, close, results) <- processor
@@ -230,7 +236,7 @@ instance PubSubTransport T where
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
     AMQP.bindQueue chan queueName exchangeName "" -- Routing key blank.
     consumerTag <-
-      AMQP.consumeMsgs chan queueName AMQP.NoAck (push . fromAmqpMsg . fst)
+      AMQP.consumeMsgs chan queueName AMQP.NoAck (push . Id . fromAmqpMsg . fst)
     let subscriberId = Id queueName
     HashTable.insert subscriberInfo subscriberId (consumerTag, close)
     return (subscriberId, results)

@@ -184,7 +184,7 @@ newUuid = UUID.nextRandom >>- (Id . UUID.toText)
 
 -- Returns (push, close, stream).
 -- Push does nothing after close is bound. TODO: It should probably throw.
--- Does not support fanout.
+-- Does not support persistent fanout.
 singleUsePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
 singleUsePushStream = do
   resultVar <- newEmptyMVar

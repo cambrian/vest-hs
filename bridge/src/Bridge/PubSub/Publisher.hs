@@ -57,10 +57,10 @@ instance ( HasUniqueTopics (a
 publishProcessor ::
      (Show a, ToJSON a)
   => Format
-  -> (Text -> IO ())
+  -> (Id "PublishText" -> IO ())
   -> Streamly.Serial a
   -> IO ()
-publishProcessor format send = Streamly.mapM_ (send . serializeOf format)
+publishProcessor format send = Streamly.mapM_ (send . Id . serializeOf format)
 
 instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
          Publisher (Topic 'Haskell (s :: Symbol) a) transport where
