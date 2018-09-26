@@ -7,7 +7,7 @@ import Control.Concurrent.Async as Reexports
 import Control.Concurrent.MVar as Reexports
 import Control.Concurrent.STM.Delay as Reexports
 import Control.Concurrent.STM.TVar as Reexports
-import qualified Control.Exception as Unsafe (Exception, throwTo)
+import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON)
@@ -108,15 +108,15 @@ newtype TimeoutException =
            , Show
            , Read
            , Generic
-           , Unsafe.Exception
+           , Evil.Exception
            , Hashable
            , FromJSON
            , ToJSON
            )
 
 -- DO NOT USE unless you really really know what you're doing.
-evilThrowTo :: (Unsafe.Exception e) => ThreadId -> e -> IO ()
-evilThrowTo = Unsafe.throwTo
+evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
+evilThrowTo = Evil.throwTo
 
 data a :<|> b =
   a :<|> b
