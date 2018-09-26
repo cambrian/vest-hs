@@ -94,9 +94,9 @@ singleDirectTest config =
     it "makes a single call" $ \call -> do
       result <- call (sec 1) noAuthHaskell [1, 2, 3]
       result `shouldBe` [1, 2, 3]
-    it "times out for a single call" $ \call -> do
+    it "times out for a single call" $ \call ->
       call (sec 0) noAuthHaskell [1, 2, 3] `shouldThrow`
-        (== TimeoutException (sec 0))
+      (== TimeoutException (sec 0))
 
 singleStreamingTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
 singleStreamingTest config =
@@ -147,8 +147,8 @@ multipleStreamingTest config =
       (Streamly.toList resultsInt >>- elem 3) `shouldReturn` True
       (Streamly.toList resultsText >>- elem "c") `shouldReturn` True
     it "handles concurrent calls" $ \(echoInts :<|> _) -> do
-      results1 <- echoInts (sec 1) tokenAuthJSON $ take 3 $ repeat 1
-      results2 <- echoInts (sec 1) tokenAuthJSON $ take 3 $ repeat 2
+      results1 <- echoInts (sec 1) tokenAuthJSON $ replicate 3 1
+      results2 <- echoInts (sec 1) tokenAuthJSON $ replicate 3 2
       resultList1 <- Streamly.toList results1
       resultList2 <- Streamly.toList results2
       resultList1 `shouldSatisfy` Data.List.all (== 1)
