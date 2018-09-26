@@ -78,7 +78,7 @@ withSubscribed config _ action =
     config
     (\transport -> do
        subscribed <- subscribe (Proxy :: Proxy (spec, transport)) transport
-       publish (Proxy :: Proxy (PubSubApi, transport)) transport streams
+       publish (Proxy :: Proxy (PubSubApi, transport)) streams transport
        action subscribed)
 
 noAuthHaskell :: Headers

@@ -16,9 +16,9 @@ class PubSubTransport t where
     -- ^ (send publish object text to wire -> stream of publish objects)
     -> Id "Topic"
     -- ^ route to send wire-message on
+    -> Streamly.Serial a
     -> t
     -- ^ transport
-    -> Streamly.Serial a
     -> IO ()
   _subscribe ::
        IO (Text -> IO (), IO (), Streamly.Serial a)

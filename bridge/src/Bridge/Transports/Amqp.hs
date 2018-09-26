@@ -4,7 +4,6 @@ module Bridge.Transports.Amqp
   , localConfig
   ) where
 
-import Bridge.Prelude
 import Bridge.PubSub
 import Bridge.Rpc
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
@@ -171,14 +170,14 @@ instance RpcTransport T where
     -> IO x
   _call processor (Id queueName) T {chan, responseQueue, responseHandlers} _timeout headers req = do
     id <- newUuid
-    let send headers reqText =
+    let send _headers reqText =
           void $
           AMQP.publishMsg
             chan
             ""
             queueName
             (toAmqpMsg . show $
-             RequestMessage {id, headers, responseQueue, reqText})
+             RequestMessage {id, headers = _headers, responseQueue, reqText})
     (push, result, waitForDone) <- processor send _timeout headers req
     HashTable.insert responseHandlers id push
     async $ waitForDone >> HashTable.delete responseHandlers id
@@ -205,10 +204,10 @@ instance PubSubTransport T where
   _publish ::
        ((Text -> IO ()) -> Streamly.Serial a -> IO ())
     -> Id "Topic"
-    -> T
     -> Streamly.Serial a
+    -> T
     -> IO ()
-  _publish processor topic T {chan, publishedTopics} as = do
+  _publish processor topic as T {chan, publishedTopics} = do
     HashTable.lookup publishedTopics topic >>= \case
       Nothing -> HashTable.insert publishedTopics topic ()
       Just _ -> throw $ AlreadyPublishing topic

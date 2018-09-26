@@ -33,7 +33,7 @@ type family Streams spec where
 class (PubSubTransport transport) =>
       Publisher spec transport
   where
-  publish :: Proxy (spec, transport) -> transport -> Streams spec -> IO ()
+  publish :: Proxy (spec, transport) -> Streams spec -> transport -> IO ()
 
 instance ( HasUniqueTopics (a
                             :<|> b)
@@ -46,13 +46,13 @@ instance ( HasUniqueTopics (a
        Proxy ( a
                :<|> b
              , transport)
-    -> transport
     -> (Streams a
         :<|> Streams b)
+    -> transport
     -> IO ()
-  publish _ transport (aStreams :<|> bStreams) = do
-    publish (Proxy :: Proxy (a, transport)) transport aStreams
-    publish (Proxy :: Proxy (b, transport)) transport bStreams
+  publish _ (aStreams :<|> bStreams) transport = do
+    publish (Proxy :: Proxy (a, transport)) aStreams transport
+    publish (Proxy :: Proxy (b, transport)) bStreams transport
 
 publishProcessor ::
      (Show a, ToJSON a)
@@ -66,8 +66,8 @@ instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
          Publisher (Topic 'Haskell (s :: Symbol) a) transport where
   publish ::
        Proxy (Topic 'Haskell s a, transport)
-    -> transport
     -> Streamly.Serial a
+    -> transport
     -> IO ()
   publish _ =
     _publish (publishProcessor Haskell) (Id $ proxyText (Proxy :: Proxy s))
@@ -76,8 +76,8 @@ instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
          Publisher (Topic 'JSON (s :: Symbol) a) transport where
   publish ::
        Proxy (Topic 'JSON s a, transport)
-    -> transport
     -> Streamly.Serial a
+    -> transport
     -> IO ()
   publish _ =
     _publish (publishProcessor JSON) (Id $ proxyText (Proxy :: Proxy s))
