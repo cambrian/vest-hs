@@ -7,6 +7,10 @@
     100
   ],
   "editor.formatOnSave": false,
+  "editor.wordWrap": "wordWrapColumn",
+  "editor.wordWrapColumn": 100,
+  "editor.wrappingIndent": "indent",
+  "languageServerHaskell.hieExecutablePath": "~/.local/bin/hie",
   "saveAndRun": {
     "commands": [
       {
@@ -17,9 +21,4 @@
       }
     ]
   },
-  "editor.wordWrap": "wordWrapColumn",
-  "editor.wordWrapColumn": 100,
-  "editor.wrappingIndent": "indent",
-  "languageServerHaskell.useCustomHieWrapper": true,
-  "languageServerHaskell.useCustomHieWrapperPath": "hie-wrapper"
 }

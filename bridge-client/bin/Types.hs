@@ -2,7 +2,8 @@
 -- instance definitions are erroneously marked as orphans.
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-import Bridge.Rpc.Client (RpcClientException)
+import Bridge.Prelude (Format)
+import Bridge.Rpc.Prelude (Headers, RpcClientException)
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
@@ -15,6 +16,10 @@ instance (KnownSymbol s) => TypeScript (s :: Symbol) where
 -- This is repetitive, but since the splicing happens at compile time and certain types depend on
 -- other types having instances of TypeScript, we separate out the derivation splices.
 $(deriveTypeScript defaultOptions ''Id)
+
+$(deriveTypeScript defaultOptions ''Format)
+
+$(deriveTypeScript defaultOptions ''Headers)
 
 $(deriveTypeScript defaultOptions ''RpcClientException)
 
