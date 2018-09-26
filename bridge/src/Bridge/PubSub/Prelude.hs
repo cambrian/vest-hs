@@ -18,10 +18,11 @@ class PubSubTransport t where
     -- ^ route to send wire-message on
     -> t
     -- ^ transport
+    -> Streamly.Serial a
     -> IO ()
   _subscribe ::
-       (Text -> IO (), IO (Streamly.Serial a), IO ())
-    -- ^ (push subscribe object text, result stream, close)
+       IO (Text -> IO (), IO (), Streamly.Serial a)
+    -- ^ (push subscribe object text, close, result stream)
     -> Id "Topic"
     -- ^ route to listen for wire-messages on
     -> t

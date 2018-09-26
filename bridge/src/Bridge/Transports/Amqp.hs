@@ -12,7 +12,6 @@ import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
 import qualified Streamly
-import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -64,12 +63,12 @@ newQueueName = do
   myHostName <- Network.HostName.getHostName >>- pack
   return $ myHostName <> "." <> id
 
-fromAmqpMsg :: AMQP.Message -> a
+fromAmqpMsg :: AMQP.Message -> Text
 fromAmqpMsg = pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
 
-toAmqpMsg :: a -> AMQP.Message
+toAmqpMsg :: Text -> AMQP.Message
 toAmqpMsg x =
-  AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack . x}
+  AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack $ x}
 
 type instance ResourceConfig T = Config
 
@@ -82,7 +81,7 @@ instance Resource T where
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
     responseHandlers <- HashTable.new
-    let handle ResponseMessage {requestId, resText} =
+    let handleMsg ResponseMessage {requestId, resText} =
           HashTable.lookup responseHandlers requestId >>= mapM_ ($ resText)
     responseConsumerTag <-
       AMQP.consumeMsgs
@@ -90,7 +89,7 @@ instance Resource T where
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           (read . fromAmqpMsg $ msg) >|>| handle -- Do nothing if response message is malformed.
+           (read . fromAmqpMsg $ msg) >|>| handleMsg -- Do nothing if response message malformed.
            AMQP.ackEnv env)
     servedRouteTags <- HashTable.new
     publishedTopics <- HashTable.new
@@ -126,13 +125,17 @@ instance Resource T where
 
 instance RpcTransport T where
   _serve ::
-       ((Text -> IO ()) -> Headers -> Text -> IO ()) -> Id "Rpc" -> t -> IO ()
+       ((Text -> IO ()) -> Headers -> Text -> IO ()) -> Id "Rpc" -> T -> IO ()
   _serve processor route T {chan, servedRouteTags} = do
     HashTable.lookup servedRouteTags route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
     let Id queueName = route
-        handle RequestMessage {id = requestId, headers, responseQueue, reqText} = do
+        handleMsg RequestMessage { id = requestId
+                                 , headers
+                                 , responseQueue
+                                 , reqText
+                                 } = do
           let Id _responseQueue = responseQueue
               send resText =
                 void $
@@ -150,7 +153,7 @@ instance RpcTransport T where
         AMQP.Ack
         (\(msg, env) ->
            void . async $ do
-             (read . fromAmqpMsg $ msg) >|>| handle -- Do nothing if request message is malformed.
+             (read . fromAmqpMsg $ msg) >|>| handleMsg -- Do nothing if request message malformed.
              AMQP.ackEnv env)
     HashTable.insert servedRouteTags route consumerTag
   _call ::
@@ -158,7 +161,7 @@ instance RpcTransport T where
                                                                , IO x
                                                                , IO ()))
     -> Id "Rpc"
-    -> t
+    -> T
     -> Time Second
     -> Headers
     -> req
@@ -166,6 +169,7 @@ instance RpcTransport T where
   _call processor (Id queueName) T {chan, responseQueue, responseHandlers} _timeout headers req = do
     id <- newUuid
     let send reqText =
+          void $
           AMQP.publishMsg
             chan
             ""
@@ -208,16 +212,17 @@ instance PubSubTransport T where
     let Id exchangeName = topic
     declarePubSubExchange chan exchangeName
     void . async $
-      processor (AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as -- Queue name blank.
+      processor (void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg) as -- Queue name blank.
   _subscribe ::
-       (Text -> IO (), IO (Streamly.Serial a), IO ())
+       IO (Text -> IO (), IO (), Streamly.Serial a)
     -- ^ (push subscribe object text, result stream, close)
     -> Id "Topic"
     -- ^ route to listen for wire-messages on
-    -> t
+    -> T
     -- ^ transport (should be mutated to store cleanup details)
     -> IO (Id "Subscriber", Streamly.Serial a)
-  _subscribe (push, results, close) (Id exchangeName) T {chan, subscriberInfo} = do
+  _subscribe pushStream (Id exchangeName) T {chan, subscriberInfo} = do
+    (push, close, results) <- pushStream
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}

@@ -1,62 +1,83 @@
 module Bridge.PubSub.Publisher
   ( module Bridge.PubSub.Publisher
   ) where
--- import Bridge.Prelude
--- import Bridge.PubSub.Prelude
--- import qualified Streamly
--- import VestPrelude
--- type family Topics spec where
---   Topics (Topic (f :: Format) (s :: Symbol) a) = '[ s]
---   Topics (a
---           :<|> b) = Topics a :++ Topics b
--- type family NubTopics spec where
---   NubTopics (Topic (f :: Format) (s :: Symbol) a) = '[ s]
---   NubTopics (a
---              :<|> b) = Nub (NubTopics a :++ NubTopics b)
--- type HasUniqueTopics spec = Topics spec ~ NubTopics spec
--- data PubSubPublisherException =
---   AlreadyPublishing (Id "Topic")
---   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
--- type family Streams spec where
---   Streams (Topic (f :: Format) (s :: Symbol) a) = Streamly.Serial a
---   Streams (a
---            :<|> b) = (Streams a
---                       :<|> Streams b)
--- class (PubSubTransport transport) =>
---       Publisher spec transport
---   where
---   publish :: Proxy (spec, transport) -> transport -> Streams spec -> IO ()
--- instance ( HasUniqueTopics (a
---                             :<|> b)
---          , Publisher a transport
---          , Publisher b transport
---          ) =>
---          Publisher (a
---                     :<|> b) transport where
---   publish ::
---        Proxy ( a
---                :<|> b
---              , transport)
---     -> transport
---     -> (Streams a
---         :<|> Streams b)
---     -> IO ()
---   publish _ transport (aStreams :<|> bStreams) = do
---     publish (Proxy :: Proxy (a, transport)) transport aStreams
---     publish (Proxy :: Proxy (b, transport)) transport bStreams
--- instance (KnownSymbol route, Show a, PubSubTransport transport) =>
---          Publisher (Topic 'Haskell (route :: Symbol) a) transport where
---   publish ::
---        Proxy (Topic 'Haskell route a, transport)
---     -> transport
---     -> Streamly.Serial a
---     -> IO ()
---   publish _ = _publish show (Id $ proxyText (Proxy :: Proxy route))
--- instance (KnownSymbol route, ToJSON a, PubSubTransport transport) =>
---          Publisher (Topic 'JSON (route :: Symbol) a) transport where
---   publish ::
---        Proxy (Topic 'JSON route a, transport)
---     -> transport
---     -> Streamly.Serial a
---     -> IO ()
---   publish _ = _publish encode (Id $ proxyText (Proxy :: Proxy route))
+
+import Bridge.Prelude
+import Bridge.PubSub.Prelude
+import qualified Streamly
+import qualified Streamly.Prelude as Streamly
+import VestPrelude
+
+type family Topics spec where
+  Topics (Topic (f :: Format) (s :: Symbol) a) = '[ s]
+  Topics (a
+          :<|> b) = Topics a :++ Topics b
+
+type family NubTopics spec where
+  NubTopics (Topic (f :: Format) (s :: Symbol) a) = '[ s]
+  NubTopics (a
+             :<|> b) = Nub (NubTopics a :++ NubTopics b)
+
+type HasUniqueTopics spec = Topics spec ~ NubTopics spec
+
+data PubSubPublisherException =
+  AlreadyPublishing (Id "Topic")
+  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
+
+type family Streams spec where
+  Streams (Topic (f :: Format) (s :: Symbol) a) = Streamly.Serial a
+  Streams (a
+           :<|> b) = (Streams a
+                      :<|> Streams b)
+
+class (PubSubTransport transport) =>
+      Publisher spec transport
+  where
+  publish :: Proxy (spec, transport) -> transport -> Streams spec -> IO ()
+
+instance ( HasUniqueTopics (a
+                            :<|> b)
+         , Publisher a transport
+         , Publisher b transport
+         ) =>
+         Publisher (a
+                    :<|> b) transport where
+  publish ::
+       Proxy ( a
+               :<|> b
+             , transport)
+    -> transport
+    -> (Streams a
+        :<|> Streams b)
+    -> IO ()
+  publish _ transport (aStreams :<|> bStreams) = do
+    publish (Proxy :: Proxy (a, transport)) transport aStreams
+    publish (Proxy :: Proxy (b, transport)) transport bStreams
+
+publishProcessor ::
+     (Show a, ToJSON a)
+  => Format
+  -> (Text -> IO ())
+  -> Streamly.Serial a
+  -> IO ()
+publishProcessor format send = Streamly.mapM_ (send . serializeOf format)
+
+instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
+         Publisher (Topic 'Haskell (s :: Symbol) a) transport where
+  publish ::
+       Proxy (Topic 'Haskell s a, transport)
+    -> transport
+    -> Streamly.Serial a
+    -> IO ()
+  publish _ =
+    _publish (publishProcessor Haskell) (Id $ proxyText (Proxy :: Proxy s))
+
+instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
+         Publisher (Topic 'JSON (s :: Symbol) a) transport where
+  publish ::
+       Proxy (Topic 'JSON s a, transport)
+    -> transport
+    -> Streamly.Serial a
+    -> IO ()
+  publish _ =
+    _publish (publishProcessor JSON) (Id $ proxyText (Proxy :: Proxy s))

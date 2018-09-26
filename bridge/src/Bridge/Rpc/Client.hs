@@ -52,7 +52,7 @@ streamingPusher = do
       waitForDone = Streamly.mapM_ return results
   return (push, return results, waitForDone)
 
-clientProcessor ::
+callProcessor ::
      (Show req, ToJSON req, Read res, FromJSON res)
   => IO ((ResultItem res) -> IO (), IO x, IO ())
   -> (Text -> IO ())
@@ -60,7 +60,7 @@ clientProcessor ::
   -> Headers
   -> req
   -> IO (Text -> IO (), IO x, IO ())
-clientProcessor pusher send _timeout headers req = do
+callProcessor pusher send _timeout headers req = do
   let Headers {format} = headers
   let deserializeUnsafe = deserializeUnsafeOf format
       serialize = serializeOf format
@@ -95,7 +95,7 @@ instance ( KnownSymbol s
     -> transport
     -> (Time Second -> Headers -> a -> IO b)
   makeClient _ =
-    _call (clientProcessor directPusher) (Id $ proxyText (Proxy :: Proxy s))
+    _call (callProcessor directPusher) (Id $ proxyText (Proxy :: Proxy s))
 
 instance ( KnownSymbol s
          , Show a
@@ -110,4 +110,4 @@ instance ( KnownSymbol s
     -> transport
     -> (Time Second -> Headers -> a -> IO (Streamly.Serial b))
   makeClient _ =
-    _call (clientProcessor streamingPusher) (Id $ proxyText (Proxy :: Proxy s))
+    _call (callProcessor streamingPusher) (Id $ proxyText (Proxy :: Proxy s))
