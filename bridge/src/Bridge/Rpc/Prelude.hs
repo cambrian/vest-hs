@@ -2,51 +2,47 @@ module Bridge.Rpc.Prelude
   ( module Bridge.Rpc.Prelude
   ) where
 
+import Bridge.Prelude
 import VestPrelude
 
 class RpcTransport t where
   _serve ::
-       ((Text -> IO ()) -> x -> IO ())
-    -- ^ (publish -> res/Stream res -> IO ())
-    -- Generic publisher on intermediate result x. Should encapsulate serializing the intermediate
-    -- results.
-    -> (Text -> Maybe req)
+       ((Text -> IO ()) -> Headers -> Text -> IO ())
+    -- ^ (send response object text to wire -> headers -> request object text)
     -> Id "Rpc"
-    -- ^ Should throw if route is already being served.
+    -- ^ route to listen for wire-messages on
     -> t
-    -> (req -> IO x)
+    -- ^ transport (should be mutated to store cleanup details)
     -> IO ()
-  -- ^ Should mutate t to store the details necessary for cleanup.
   _call ::
-       IO (res -> IO (), IO x, IO ())
-    -- ^ IO (push, result, done)
-    -- Generic response handler that takes an intermediate result x and defines how to push it to
-    -- the caller.
-    -> (req -> Text)
-    -> (Text -> IO res)
+       ((Text -> IO ()) -> Time Second -> Headers -> req -> IO ( Text -> IO ()
+                                                               , IO x
+                                                               , IO ()))
+    -- ^ (add headers and send request object text to wire -> timeout -> request object)
+    -- to IO (push response object text, result stream or item, wait-for-done)
     -> Id "Rpc"
+    -- ^ route to send wire-message on
     -> t
+    -- ^ transport (should be mutated to store cleanup details)
     -> Time Second
     -- ^ timeout
+    -> Headers
     -> req
     -> IO x
-  -- ^ Registers a handler in the waiting RPC call hash table, and deregisters it after done
-  -- resolves.
-  -- Timeouts occur if a result or stream result is not received after the specified time.
 
-data DirectEndpointAs (f :: Format) (s :: k) (a :: *) (b :: *)
+data Arity
+  = Direct
+  | Streaming
 
-type DirectEndpoint = DirectEndpointAs 'Haskell
+data Endpoint (r :: Arity) (h :: Auth) (s :: k) (a :: *) (b :: *)
 
-type DirectEndpointJSON = DirectEndpointAs 'JSON
-
-data StreamingEndpointAs (f :: Format) (s :: k) (a :: *) (b :: *)
-
-type StreamingEndpoint = StreamingEndpointAs 'Haskell
-
-type StreamingEndpointJSON = StreamingEndpointAs 'JSON
-
-data Streaming a
+data ResultItem a
   = Result a
   | EndOfResults
-  deriving (Read, Show, Generic, ToJSON, FromJSON)
+  deriving (Generic, Read, Show, ToJSON, FromJSON)
+
+data RpcClientException
+  = BadAuth
+  | BadCall Text
+  | BadEndOfResults
+  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)

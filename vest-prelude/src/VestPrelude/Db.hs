@@ -12,7 +12,7 @@ import Database.PostgreSQL.Simple.FromField
 import qualified Money
 import VestPrelude
 
--- Postgres serializations for VestPrelude types
+-- Postgres serializations for VestPrelude types.
 instance HasSqlValueSyntax be Text => HasSqlValueSyntax be (Id a) where
   sqlValueSyntax (Id txt) = sqlValueSyntax txt
 

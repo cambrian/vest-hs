@@ -2,14 +2,15 @@ module Bridge.PubSub.Subscriber
   ( module Bridge.PubSub.Subscriber
   ) where
 
+import Bridge.Prelude
 import Bridge.PubSub.Prelude
 import qualified Streamly
 import VestPrelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
-  SubscriberBindings (TopicAs (f :: Format) (s :: Symbol) a) = ( Id "Subscriber"
-                                                               , Streamly.Serial a)
+  SubscriberBindings (Topic (f :: Format) (s :: Symbol) a) = ( Id "Subscriber"
+                                                             , Streamly.Serial a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -35,20 +36,29 @@ instance (Subscriber a transport, Subscriber b transport) =>
     bStreams <- subscribe (Proxy :: Proxy (b, transport)) transport
     return $ aStreams :<|> bStreams
 
-instance (KnownSymbol route, Read a, PubSubTransport transport) =>
-         Subscriber (Topic (route :: Symbol) a) transport where
-  subscribe ::
-       Proxy (Topic route a, transport)
-    -> transport
-    -> IO (Id "Subscriber", Streamly.Serial a)
-  subscribe _ =
-    _subscribe readUnsafe (Id $ proxyText (Proxy :: Proxy route))
+subscribeProcessor ::
+     (Read a, FromJSON a)
+  => Format
+  -> IO (Text -> IO (), IO (), Streamly.Serial a)
+subscribeProcessor format = do
+  (_push, close, stream) <- pushStream
+  let push a = deserializeUnsafeOf format a >>= _push
+  return (push, close, stream)
 
-instance (KnownSymbol route, FromJSON a, PubSubTransport transport) =>
-         Subscriber (TopicJSON (route :: Symbol) a) transport where
+instance (KnownSymbol s, Read a, FromJSON a, PubSubTransport transport) =>
+         Subscriber (Topic 'Haskell (s :: Symbol) a) transport where
   subscribe ::
-       Proxy (TopicJSON route a, transport)
+       Proxy (Topic 'Haskell s a, transport)
     -> transport
     -> IO (Id "Subscriber", Streamly.Serial a)
   subscribe _ =
-    _subscribe decodeUnsafe (Id $ proxyText (Proxy :: Proxy route))
+    _subscribe (subscribeProcessor Haskell) (Id $ proxyText (Proxy :: Proxy s))
+
+instance (KnownSymbol s, Read a, FromJSON a, PubSubTransport transport) =>
+         Subscriber (Topic 'JSON (s :: Symbol) a) transport where
+  subscribe ::
+       Proxy (Topic 'JSON s a, transport)
+    -> transport
+    -> IO (Id "Subscriber", Streamly.Serial a)
+  subscribe _ =
+    _subscribe (subscribeProcessor JSON) (Id $ proxyText (Proxy :: Proxy s))

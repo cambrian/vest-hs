@@ -2,20 +2,20 @@ module Bridge.Rpc.Server
   ( module Bridge.Rpc.Server
   ) where
 
+import Bridge.Auth
+import Bridge.Prelude
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type family Routes spec where
-  Routes (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
-  Routes (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
+  Routes (Endpoint (r :: Arity) (h :: Auth) (s :: Symbol) a b) = '[ s]
   Routes (a
           :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
-  NubRoutes (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
-  NubRoutes (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = '[ s]
+  NubRoutes (Endpoint (r :: Arity) (h :: Auth) (s :: Symbol) a b) = '[ s]
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
@@ -26,8 +26,10 @@ data RpcServerException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
-  Handlers (DirectEndpointAs (f :: Format) (s :: Symbol) a b) = a -> IO b
-  Handlers (StreamingEndpointAs (f :: Format) (s :: Symbol) a b) = a -> IO (Streamly.Serial b)
+  Handlers (Endpoint 'Direct 'OpenAuth (s :: Symbol) a b) = a -> IO b
+  Handlers (Endpoint 'Direct _ (s :: Symbol) a b) = Claims -> a -> IO b
+  Handlers (Endpoint 'Streaming 'OpenAuth (s :: Symbol) a b) = a -> IO (Streamly.Serial b)
+  Handlers (Endpoint 'Streaming _ (s :: Symbol) a b) = Claims -> a -> IO (Streamly.Serial b)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -35,7 +37,7 @@ type family Handlers spec where
 class (RpcTransport transport) =>
       Server spec transport
   where
-  serve :: Proxy (spec, transport) -> transport -> Handlers spec -> IO ()
+  serve :: Proxy (spec, transport) -> Handlers spec -> transport -> IO ()
 
 instance ( HasUniqueRoutes (a
                             :<|> b)
@@ -48,58 +50,126 @@ instance ( HasUniqueRoutes (a
        Proxy ( a
                :<|> b
              , transport)
-    -> transport
     -> (Handlers a
         :<|> Handlers b)
-    -> IO ()
-  serve _ transport (aHandlers :<|> bHandlers) = do
-    serve (Proxy :: Proxy (a, transport)) transport aHandlers
-    serve (Proxy :: Proxy (b, transport)) transport bHandlers
-
-instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
-         Server (DirectEndpoint (s :: Symbol) a b) transport where
-  serve ::
-       Proxy (DirectEndpoint s a b, transport)
     -> transport
+    -> IO ()
+  serve _ (aHandlers :<|> bHandlers) transport = do
+    serve (Proxy :: Proxy (a, transport)) aHandlers transport
+    serve (Proxy :: Proxy (b, transport)) bHandlers transport
+
+authenticatorOf ::
+     Auth -> (Headers -> Text -> (Claims -> IO ()) -> IO () -> IO ())
+authenticatorOf =
+  \case
+    OpenAuth -> verifyOpen
+    TokenAuth -> verifyToken
+
+directSender :: (ResultItem res -> IO ()) -> res -> IO ()
+directSender send = send . Result
+
+streamingSender :: (ResultItem res -> IO ()) -> Streamly.Serial res -> IO ()
+streamingSender send resStream = do
+  Streamly.mapM_ (send . Result) resStream
+  send EndOfResults
+
+serveProcessor ::
+     (Read req, FromJSON req, Show res, ToJSON res)
+  => (Headers -> Text -> (Claims -> IO ()) -> IO () -> IO ())
+  -> (Claims -> req -> IO x) -- For OpenAuth endpoints, pass a wrapped handler that ignores claims.
+  -> ((ResultItem res -> IO ()) -> x -> IO ()) -- Type x contains one or many of type r.
+  -> (Text -> IO ())
+  -> Headers
+  -> Text
+  -> IO ()
+serveProcessor authenticator handler sender send headers reqText = do
+  let Headers {format} = headers
+  let deserialize = deserializeOf format
+      serialize = serializeOf format
+  catch
+    (authenticator
+       headers
+       reqText
+       (\claims ->
+          case deserialize reqText of
+            Nothing -> throw $ BadCall reqText
+            Just req -> do
+              res <- handler claims req
+              -- ResultItem is Either Exception Text.
+              sender (send . serialize . Right) res)
+       (throw BadAuth))
+    (\e -> do
+       let exc = (e :: RpcClientException)
+       send . serialize . Left $ exc)
+
+instance ( KnownSymbol s
+         , Read a
+         , Show b
+         , FromJSON a
+         , ToJSON b
+         , RpcTransport transport
+         ) =>
+         Server (Endpoint 'Direct 'OpenAuth (s :: Symbol) a b) transport where
+  serve ::
+       Proxy (Endpoint 'Direct 'OpenAuth s a b, transport)
     -> (a -> IO b)
-    -> IO ()
-  serve _ = _serve (. show) read (Id $ proxyText (Proxy :: Proxy s))
-
-instance (KnownSymbol s, Read a, Show b, RpcTransport transport) =>
-         Server (StreamingEndpoint (s :: Symbol) a b) transport where
-  serve ::
-       Proxy (StreamingEndpoint s a b, transport)
     -> transport
-    -> (a -> IO (Streamly.Serial b))
     -> IO ()
-  serve _ =
+  serve _ handler =
     _serve
-      (\pub xs -> do
-         Streamly.mapM_ (pub . show . Result) xs
-         pub $ show $ EndOfResults @b)
-      read
+      (serveProcessor (authenticatorOf OpenAuth) (\_ -> handler) directSender)
       (Id $ proxyText (Proxy :: Proxy s))
 
-instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
-         Server (DirectEndpointJSON (s :: Symbol) a b) transport where
+instance ( KnownSymbol s
+         , Read a
+         , Show b
+         , FromJSON a
+         , ToJSON b
+         , RpcTransport transport
+         ) =>
+         Server (Endpoint 'Streaming 'OpenAuth (s :: Symbol) a b) transport where
   serve ::
-       Proxy (DirectEndpointJSON s a b, transport)
-    -> transport
-    -> (a -> IO b)
-    -> IO ()
-  serve _ = _serve (. encode) decode (Id $ proxyText (Proxy :: Proxy s))
-
-instance (KnownSymbol s, FromJSON a, ToJSON b, RpcTransport transport) =>
-         Server (StreamingEndpointJSON (s :: Symbol) a b) transport where
-  serve ::
-       Proxy (StreamingEndpointJSON s a b, transport)
-    -> transport
+       Proxy (Endpoint 'Streaming 'OpenAuth s a b, transport)
     -> (a -> IO (Streamly.Serial b))
+    -> transport
     -> IO ()
-  serve _ =
+  serve _ handler =
     _serve
-      (\pub xs -> do
-         Streamly.mapM_ (pub . encode . Result) xs
-         pub . encode $ EndOfResults @b)
-      decode
+      (serveProcessor (authenticatorOf OpenAuth) (\_ -> handler) streamingSender)
+      (Id $ proxyText (Proxy :: Proxy s))
+
+instance ( KnownSymbol s
+         , Read a
+         , Show b
+         , FromJSON a
+         , ToJSON b
+         , RpcTransport transport
+         ) =>
+         Server (Endpoint 'Direct 'TokenAuth (s :: Symbol) a b) transport where
+  serve ::
+       Proxy (Endpoint 'Direct 'TokenAuth s a b, transport)
+    -> (Claims -> a -> IO b)
+    -> transport
+    -> IO ()
+  serve _ handler =
+    _serve
+      (serveProcessor (authenticatorOf TokenAuth) handler directSender)
+      (Id $ proxyText (Proxy :: Proxy s))
+
+instance ( KnownSymbol s
+         , Read a
+         , Show b
+         , FromJSON a
+         , ToJSON b
+         , RpcTransport transport
+         ) =>
+         Server (Endpoint 'Streaming 'TokenAuth (s :: Symbol) a b) transport where
+  serve ::
+       Proxy (Endpoint 'Streaming 'TokenAuth s a b, transport)
+    -> (Claims -> a -> IO (Streamly.Serial b))
+    -> transport
+    -> IO ()
+  serve _ handler =
+    _serve
+      (serveProcessor (authenticatorOf TokenAuth) handler streamingSender)
       (Id $ proxyText (Proxy :: Proxy s))
