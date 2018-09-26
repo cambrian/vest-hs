@@ -19,11 +19,14 @@ data PriceVirtualStakeRequest (currency :: Symbol) (unit :: Symbol) = PriceVirtu
   , duration :: Time Day
   } deriving (Generic)
 
-instance Money.Unit c u => Eq (PriceVirtualStakeRequest c u)
+deriving instance
+         Money.Unit c u => Eq (PriceVirtualStakeRequest c u)
 
-instance Money.Unit c u => Read (PriceVirtualStakeRequest c u)
+deriving instance
+         Money.Unit c u => Read (PriceVirtualStakeRequest c u)
 
-instance Money.Unit c u => Show (PriceVirtualStakeRequest c u)
+deriving instance
+         Money.Unit c u => Show (PriceVirtualStakeRequest c u)
 
 instance Money.Unit c u => ToJSON (PriceVirtualStakeRequest c u)
 
