@@ -5,9 +5,10 @@ module Bridge.Rpc.AuthSchemes.Token
 import Bridge.Rpc.Prelude
 import VestPrelude
 
--- TODO:
-data TokenAuth
+data TokenAuth =
+  TokenAuth
 
+-- TODO:
 data TokenClaims =
   TokenClaims
 
