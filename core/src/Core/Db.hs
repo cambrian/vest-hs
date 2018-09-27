@@ -26,7 +26,7 @@ localConfig =
     }
 
 data UserT (c :: Symbol) (u :: Symbol) f = User
-  { _userAddress :: Columnar f (Id "Address")
+  { _userAddress :: Columnar f (Text' "Address")
   , _userBalance :: Columnar f (Money.Discrete c u)
   } deriving (Generic, Beamable)
 
@@ -40,7 +40,7 @@ deriving instance Money.Unit c u => Show (User c u)
 
 instance Money.Unit c u => Table (UserT c u) where
   data PrimaryKey (UserT c u) f = UserAddress (Columnar f
-                                               (Id "Address"))
+                                               (Text' "Address"))
                                   deriving (Generic, Beamable)
   primaryKey = UserAddress . _userAddress
 
@@ -51,7 +51,7 @@ deriving instance Read (PrimaryKey (UserT c u) Identity)
 deriving instance Show (PrimaryKey (UserT c u) Identity)
 
 data VirtualStakeT (c :: Symbol) (u :: Symbol) f = VirtualStake
-  { _virtualStakeId :: Columnar f (Id "VirtualStake")
+  { _virtualStakeId :: Columnar f (Text' "VirtualStakeId")
   , _virtualStakeOwner :: PrimaryKey (UserT c u) f
   , _virtualStakeSize :: Columnar f (Money.Discrete c u)
   , _virtualStakeStartTime :: Columnar f Timestamp
@@ -69,7 +69,7 @@ deriving instance Money.Unit c u => Show (VirtualStake c u)
 
 instance Money.Unit c u => Table (VirtualStakeT c u) where
   data PrimaryKey (VirtualStakeT c u) f = VirtualStakeId (Columnar f
-                                                          (Id "VirtualStake"))
+                                                          (Text' "VirtualStakeId"))
                                           deriving (Generic, Beamable)
   primaryKey = VirtualStakeId . _virtualStakeId
 
@@ -81,9 +81,9 @@ deriving instance Show (PrimaryKey (VirtualStakeT c u) Identity)
 
 -- A collection transaction, made on behalf of the owner to an arbitrary recipient address
 data CollectionT (c :: Symbol) (u :: Symbol) f = Collection
-  { _collectionTxHash :: Columnar f (Id "TxHash")
+  { _collectionTxHash :: Columnar f (Text' "TxHash")
   , _collectionOwner :: PrimaryKey (UserT c u) f
-  , _collectionRecipient :: Columnar f (Id "Address")
+  , _collectionRecipient :: Columnar f (Text' "Address")
   , _collectionSize :: Columnar f (Money.Discrete c u)
   , _collectionTime :: Columnar f Timestamp
   } deriving (Generic, Beamable)
@@ -100,7 +100,7 @@ deriving instance Money.Unit c u => Show (Collection c u)
 -- instance (KnownSymbol c) => FromJSON (Collection c)
 instance Money.Unit c u => Table (CollectionT c u) where
   data PrimaryKey (CollectionT c u) f = CollectionTxHash (Columnar f
-                                                          (Id "TxHash"))
+                                                          (Text' "TxHash"))
                                         deriving (Generic, Beamable)
   primaryKey = CollectionTxHash . _collectionTxHash
 
@@ -112,8 +112,8 @@ deriving instance Show (PrimaryKey (CollectionT c u) Identity)
 
 -- A staking reward event, for a specific staking contract
 data StakingRewardT (c :: Symbol) (u :: Symbol) f = StakingReward
-  { _stakingRewardId :: Columnar f (Id "StakingReward")
-  , _stakingRewardTxHash :: Columnar f (Id "TxHash") -- ^ the staking reward transaction that this reward is part of
+  { _stakingRewardId :: Columnar f (Text' "StakingRewardId")
+  , _stakingRewardTxHash :: Columnar f (Text' "TxHash") -- ^ the staking reward transaction that this reward is part of
   , _stakingRewardStakingContract :: PrimaryKey (VirtualStakeT c u) f
   , _stakingRewardSize :: Columnar f (Money.Discrete c u)
   , _stakingRewardTime :: Columnar f Timestamp
@@ -132,7 +132,7 @@ deriving instance Money.Unit c u => Show (StakingReward c u)
 instance Money.Unit c u => Table (StakingRewardT c u) where
   data PrimaryKey (StakingRewardT c u) f = StakingRewardId (Columnar
                                                             f
-                                                            (Id "StakingReward"))
+                                                            (Text' "StakingRewardId"))
                                            deriving (Generic, Beamable)
   primaryKey = StakingRewardId . _stakingRewardId
 
@@ -171,8 +171,8 @@ coreDb =
 
 storeVirtualStake ::
      forall c u. Money.Unit c u
-  => Id "VirtualStake"
-  -> Id "Address"
+  => Text' "VirtualStakeId"
+  -> Text' "Address"
   -> Money.Discrete c u
   -> Time Day
   -> Timestamp

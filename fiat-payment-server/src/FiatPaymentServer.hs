@@ -1,4 +1,4 @@
-module PriceServer
+module FiatPaymentServer
   ( Config(..)
   , T
   , PriceVirtualStakeRequest(..)
@@ -12,7 +12,7 @@ module PriceServer
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import PriceServer.Prelude
+import FiatPaymentServer.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
@@ -20,7 +20,7 @@ import qualified VestPrelude.Money as Money
 
 -- Eventually this will live inside the exchanger
 type TezosPriceTopic
-   = Topic 'Haskell "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
+   = Topic Haskell "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
 
 make :: Config -> Amqp.T -> IO T
 make Config {} amqp = do

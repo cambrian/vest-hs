@@ -14,5 +14,5 @@ data TokenClaims =
 type instance Claims TokenAuth = TokenClaims
 
 instance AuthScheme TokenAuth where
-  verify :: Headers -> Id "RequestText" -> IO (Maybe TokenClaims)
+  verify :: Headers -> Text' "Request" -> IO (Maybe TokenClaims)
   verify _ _ = return $ Just TokenClaims

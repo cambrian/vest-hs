@@ -1,5 +1,5 @@
-module Core.Api
-  ( module Core.Api
+module FiatPaymentServer.Api
+  ( module FiatPaymentServer.Api
   ) where
 
 import Bridge
@@ -8,10 +8,8 @@ import VestPrelude
 import qualified VestPrelude.Money as Money
 
 data VirtualStakeRequest (currency :: Symbol) (unit :: Symbol) = VirtualStakeRequest
-  { user :: Text' "Address"
-  , size :: Money.Discrete currency unit
-  , duration :: Time Day
-  , payment :: ()
+  { size :: Money.Discrete currency unit
+  , token :: Id "PaymentToken"
   } deriving (Generic)
 
 deriving instance Money.Unit c u => Eq (VirtualStakeRequest c u)
@@ -25,8 +23,8 @@ instance Money.Unit c u => ToJSON (VirtualStakeRequest c u)
 instance Money.Unit c u => FromJSON (VirtualStakeRequest c u)
 
 data VirtualStakeResponse (currency :: Symbol) (unit :: Symbol) = VirtualStakeResponse
-  { id :: Text' "VirtualStakeId"
-  , owner :: Text' "Address"
+  { id :: Id "VirtualStake"
+  , owner :: Id "Address"
   , size :: Money.Discrete currency unit
   , duration :: Time Day
   , startTime :: Timestamp

@@ -53,19 +53,19 @@ streamingPusher = do
 callProcessor ::
      (Show req, ToJSON req, Read res, FromJSON res)
   => IO (res -> IO (), IO x, IO ())
-  -> (Headers -> Id "RequestText" -> IO ())
+  -> (Headers -> Text' "Request" -> IO ())
   -> Time Second
   -> Headers
   -> req
-  -> IO (Id "ResponseText" -> IO (), IO x, IO ())
+  -> IO (Text' "Response" -> IO (), IO x, IO ())
 callProcessor pusher send timeout_ headers req = do
   let Headers {format} = headers
   let deserializeUnsafe = deserializeUnsafeOf format
       serialize = serializeOf format
   (push_, result, waitForDone) <- pusher
   (renewTimeout, timeoutDone) <- timeoutRenewable timeout_ waitForDone
-  send headers (Id @"RequestText" $ serialize req)
-  let push (Id resOrExcText) = do
+  send headers (Text' @"Request" $ serialize req)
+  let push (Text' resOrExcText) = do
         resOrExc <- deserializeUnsafe resOrExcText
         case resOrExc of
           Left exc -> throw (exc :: RpcClientException)
@@ -92,7 +92,9 @@ instance ( KnownSymbol route
     -> transport
     -> (Time Second -> Headers -> req -> IO res)
   makeClient _ =
-    _call (callProcessor directPusher) (Id $ proxyText (Proxy :: Proxy route))
+    _call
+      (callProcessor directPusher)
+      (Text' $ proxyText (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , Show req
@@ -109,4 +111,4 @@ instance ( KnownSymbol route
   makeClient _ =
     _call
       (callProcessor streamingPusher)
-      (Id $ proxyText (Proxy :: Proxy route))
+      (Text' $ proxyText (Proxy :: Proxy route))

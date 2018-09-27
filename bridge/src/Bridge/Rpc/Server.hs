@@ -21,7 +21,7 @@ type family NubRoutes spec where
 type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 data RpcServerException =
-  AlreadyServing (Id "Rpc")
+  AlreadyServing (Text' "Rpc")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
@@ -67,24 +67,24 @@ streamingSender send resStream = do
 
 serveProcessor ::
      (Read req, FromJSON req, Show res, ToJSON res)
-  => (Headers -> Id "RequestText" -> IO (Maybe (Claims auth)))
+  => (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
   -> ((res -> IO ()) -> x -> IO ()) -- Type x is typically res or Streamly.Serial res.
   -> (Claims auth -> req -> IO x) -- For non authenticated endpoints, Claims auth will be ().
-  -> (Id "ResponseText" -> IO ())
+  -> (Text' "Response" -> IO ())
   -> Headers
-  -> Id "RequestText"
+  -> Text' "Request"
   -> IO ()
 serveProcessor auth sender handler send headers reqText = do
   let Headers {format} = headers
-      deserialize (Id x) = deserializeOf format $ x
+      deserialize (Text' x) = deserializeOf format $ x
       serialize = serializeOf format
   catch
     (do claims <- auth headers reqText >>= fromJustUnsafe BadAuth
         req <- fromJustUnsafe (BadCall reqText) $ deserialize reqText
         res <- handler claims req
-        sender (send . Id @"ResponseText" . serialize . Right) res)
+        sender (send . Text' @"Response" . serialize . Right) res)
     (\(e :: RpcClientException) ->
-       send . Id @"ResponseText" . serialize . Left $ e)
+       send . Text' @"Response" . serialize . Left $ e)
 
 instance ( KnownSymbol route
          , Read req
@@ -102,7 +102,7 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verifyEmpty streamingSender (const handler))
-      (Id $ proxyText (Proxy :: Proxy route))
+      (Text' $ proxyText (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , Read req
@@ -120,7 +120,7 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verifyEmpty directSender (const handler))
-      (Id $ proxyText (Proxy :: Proxy route))
+      (Text' $ proxyText (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -139,7 +139,7 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verify streamingSender handler)
-      (Id $ proxyText (Proxy :: Proxy route))
+      (Text' $ proxyText (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -158,4 +158,4 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verify directSender handler)
-      (Id $ proxyText (Proxy :: Proxy route))
+      (Text' $ proxyText (Proxy :: Proxy route))

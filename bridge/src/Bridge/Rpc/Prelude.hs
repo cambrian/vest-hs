@@ -7,18 +7,18 @@ import VestPrelude
 
 class RpcTransport t where
   _serve ::
-       ((Id "ResponseText" -> IO ()) -> Headers -> Id "RequestText" -> IO ())
+       ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
     -- ^ (send response object text to wire -> headers -> request object text)
-    -> Id "Rpc" -- ^ route to listen for wire-messages on
+    -> Text' "Rpc" -- ^ route to listen for wire-messages on
     -> t -- ^ transport (should be mutated to store cleanup details)
     -> IO ()
   _call ::
-       ((Headers -> Id "RequestText" -> IO ()) -> Time Second -> Headers -> req -> IO ( Id "ResponseText" -> IO ()
-                                                                                      , IO x
-                                                                                      , IO ()))
+       ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
+                                                                                     , IO x
+                                                                                     , IO ()))
     -- ^ (add headers and send request object text to wire -> timeout -> request object)
     -- to IO (push response object text, result stream or item, wait-for-done)
-    -> Id "Rpc" -- ^ route to send wire-message on
+    -> Text' "Rpc" -- ^ route to send wire-message on
     -> t -- ^ transport (should be mutated to store cleanup details)
     -> Time Second -- ^ timeout
     -> Headers
@@ -33,7 +33,7 @@ data DirectOrStreaming
 type family Claims auth = claims | claims -> auth
 
 class AuthScheme t where
-  verify :: Headers -> Id "RequestText" -> IO (Maybe (Claims t))
+  verify :: Headers -> Text' "Request" -> IO (Maybe (Claims t))
 
 type instance Claims () = ()
 
@@ -46,7 +46,7 @@ data Headers = Headers
 defaultHeaders :: Headers
 defaultHeaders = Headers {format = Haskell, token = Nothing}
 
-verifyEmpty :: Headers -> Id "RequestText" -> IO (Maybe ())
+verifyEmpty :: Headers -> Text' "Request" -> IO (Maybe ())
 verifyEmpty _ _ = return (Just ())
 
 data Auth a
@@ -63,5 +63,5 @@ data ResultItem a
 
 data RpcClientException
   = BadAuth
-  | BadCall (Id "RequestText")
+  | BadCall (Text' "Request")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)

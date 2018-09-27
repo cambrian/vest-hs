@@ -15,7 +15,7 @@ instance (KnownSymbol s) => TypeScript (s :: Symbol) where
 
 -- This is repetitive, but since the splicing happens at compile time and certain types depend on
 -- other types having instances of TypeScript, we separate out the derivation splices.
-$(deriveTypeScript defaultOptions ''Id)
+$(deriveTypeScript defaultOptions ''Text')
 
 $(deriveTypeScript defaultOptions ''Format)
 
@@ -31,7 +31,7 @@ main :: IO ()
 main =
   putStrLn $
   formatTSDeclarations . concat $
-  [ getTypeScriptDeclarations (Proxy :: Proxy Id)
+  [ getTypeScriptDeclarations (Proxy :: Proxy Text')
   , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
   , getTypeScriptDeclarations (Proxy :: Proxy (Either RpcClientException Text))
   , getTypeScriptDeclarations (Proxy :: Proxy RequestMessage)

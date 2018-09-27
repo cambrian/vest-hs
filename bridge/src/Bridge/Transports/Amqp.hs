@@ -16,17 +16,17 @@ import VestPrelude
 type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
-  { id :: Id "RpcRequest"
+  { id :: Text' "RequestId"
   , headers :: Headers -- Metadata.
-  , responseQueue :: Id "ResponseQueue"
-  , reqText :: Id "RequestText" -- Should be the serialization of a request object, but this is not
+  , responseQueue :: Text' "ResponseQueue"
+  , reqText :: Text' "Request" -- Should be the serialization of a request object, but this is not
                                 -- guaranteed.
   } deriving (Eq, Show, Read)
 
 data ResponseMessage = ResponseMessage
-  { requestId :: Id "RpcRequest"
+  { requestId :: Text' "RequestId"
     -- Other metadata.
-  , resText :: Id "ResponseText"
+  , resText :: Text' "Response"
   } deriving (Eq, Show, Read)
 
 data Config = Config
@@ -48,18 +48,18 @@ localConfig =
 data T = T
   { conn :: AMQP.Connection
   , chan :: AMQP.Channel
-  , responseQueue :: Id "ResponseQueue"
+  , responseQueue :: Text' "ResponseQueue"
   , responseConsumerTag :: AMQP.ConsumerTag
-  , servedRouteTags :: HashTable (Id "Rpc") AMQP.ConsumerTag
-  , responseHandlers :: HashTable (Id "RpcRequest") (Id "ResponseText" -> IO ())
-  , publisherThreads :: HashTable (Id "Topic") (Async ())
-  , subscriberInfo :: HashTable (Id "Subscriber") (AMQP.ConsumerTag, IO ())
+  , servedRouteTags :: HashTable (Text' "Rpc") AMQP.ConsumerTag
+  , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
+  , publisherThreads :: HashTable (Text' "TopicName") (Async ())
+  , subscriberInfo :: HashTable (Text' "SubscriberId") (AMQP.ConsumerTag, IO ())
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
 newQueueName :: IO Text
 newQueueName = do
-  (Id id) <- newUuid
+  (Text' id) <- newUUID
   myHostName <- Network.HostName.getHostName >>- pack
   return $ myHostName <> "." <> id
 
@@ -98,7 +98,7 @@ instance Resource T where
       T
         { conn
         , chan
-        , responseQueue = Id queueName
+        , responseQueue = Text' queueName
         , responseConsumerTag
         , servedRouteTags
         , responseHandlers
@@ -117,7 +117,7 @@ instance Resource T where
           , publisherThreads
           , subscriberInfo
           } = t
-        Id _responseQueue = responseQueue
+        Text' _responseQueue = responseQueue
     AMQP.cancelConsumer chan responseConsumerTag
     HashTable.mapM_ (AMQP.cancelConsumer chan . snd) servedRouteTags
     HashTable.mapM_ (cancel . snd) publisherThreads
@@ -127,21 +127,21 @@ instance Resource T where
 
 instance RpcTransport T where
   _serve ::
-       ((Id "ResponseText" -> IO ()) -> Headers -> Id "RequestText" -> IO ())
-    -> Id "Rpc"
+       ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
+    -> Text' "Rpc"
     -> T
     -> IO ()
   _serve processor route T {chan, servedRouteTags} = do
     HashTable.lookup servedRouteTags route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
-    let Id queueName = route
+    let Text' queueName = route
         handleMsg RequestMessage { id = requestId
                                  , headers
                                  , responseQueue
                                  , reqText
                                  } = do
-          let Id _responseQueue = responseQueue
+          let Text' _responseQueue = responseQueue
               send resText =
                 void $
                 AMQP.publishMsg
@@ -162,17 +162,17 @@ instance RpcTransport T where
              AMQP.ackEnv env)
     HashTable.insert servedRouteTags route consumerTag
   _call ::
-       ((Headers -> Id "RequestText" -> IO ()) -> Time Second -> Headers -> req -> IO ( Id "ResponseText" -> IO ()
-                                                                                      , IO x
-                                                                                      , IO ()))
-    -> Id "Rpc"
+       ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
+                                                                                     , IO x
+                                                                                     , IO ()))
+    -> Text' "Rpc"
     -> T
     -> Time Second
     -> Headers
     -> req
     -> IO x
-  _call processor (Id queueName) T {chan, responseQueue, responseHandlers} _timeout headers req = do
-    id <- newUuid
+  _call processor (Text' queueName) T {chan, responseQueue, responseHandlers} _timeout headers req = do
+    id <- newUUID
     let send _headers reqText =
           void $
           AMQP.publishMsg
@@ -192,9 +192,9 @@ declarePubSubExchange chan exchangeName =
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
 
-_unsubscribe :: T -> Id "Subscriber" -> IO ()
+_unsubscribe :: T -> Text' "SubscriberId" -> IO ()
 _unsubscribe T {chan, subscriberInfo} subscriberId = do
-  let Id queueName = subscriberId
+  let Text' queueName = subscriberId
       maybeUnsubscribe =
         (>|>| \(consumerTag, close) -> do
                 AMQP.cancelConsumer chan consumerTag
@@ -205,40 +205,44 @@ _unsubscribe T {chan, subscriberInfo} subscriberId = do
 
 instance PubSubTransport T where
   _publish ::
-       ((Id "PublishText" -> IO ()) -> Streamly.Serial a -> IO ())
-    -> Id "Topic"
+       ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())
+    -> Text' "TopicName"
     -> Streamly.Serial a
     -> T
     -> IO ()
   _publish processor topic as T {chan, publisherThreads} = do
     HashTable.lookup publisherThreads topic >>= \case
       Nothing -> do
-        let Id exchangeName = topic
+        let Text' exchangeName = topic
         declarePubSubExchange chan exchangeName
         publisherThread <-
           async $
           processor
-            (\(Id a) ->
+            (\(Text' a) ->
                void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
              )
             as
         HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
   _subscribe ::
-       IO (Id "PublishText" -> IO (), IO (), Streamly.Serial a)
-    -> Id "Topic"
+       IO (Text' "a" -> IO (), IO (), Streamly.Serial a)
+    -> Text' "TopicName"
     -> T
-    -> IO (Id "Subscriber", Streamly.Serial a)
-  _subscribe processor (Id exchangeName) T {chan, subscriberInfo} = do
+    -> IO (Text' "SubscriberId", Streamly.Serial a)
+  _subscribe processor (Text' exchangeName) T {chan, subscriberInfo} = do
     (push, close, results) <- processor
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
     AMQP.bindQueue chan queueName exchangeName "" -- Routing key blank.
     consumerTag <-
-      AMQP.consumeMsgs chan queueName AMQP.NoAck (push . Id . fromAmqpMsg . fst)
-    let subscriberId = Id queueName
+      AMQP.consumeMsgs
+        chan
+        queueName
+        AMQP.NoAck
+        (push . Text' . fromAmqpMsg . fst)
+    let subscriberId = Text' queueName
     HashTable.insert subscriberInfo subscriberId (consumerTag, close)
     return (subscriberId, results)
-  unsubscribe :: T -> Id "Subscriber" -> IO ()
+  unsubscribe :: T -> Text' "SubscriberId" -> IO ()
   unsubscribe = _unsubscribe

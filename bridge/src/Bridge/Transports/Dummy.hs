@@ -20,14 +20,15 @@ localConfig :: Config
 localConfig = ()
 
 data T = T
-  { requestVars :: HashTable (Id "Rpc") (MVar ( Id "RpcRequest" -- Route to full request.
-                                              , Headers
-                                              , Id "RequestText"))
-  , responseVars :: HashTable (Id "RpcRequest") (MVar (Id "ResponseText")) -- Call ID to response.
-  , serverThreads :: HashTable (Id "Rpc") (Async ()) -- List of serving threads.
-  , publisherThreads :: HashTable (Id "Topic") (Async ()) -- List of publisher threads.
-  , streams :: HashTable (Id "Topic") (Text -> IO (), Streamly.Serial Text)
-  , subscriberInfo :: HashTable (Id "Subscriber") (Async (), IO ()) -- ID to (thread, close).
+  { requestVars :: HashTable (Text' "Rpc") (MVar ( Text' "RequestId" -- Route to full request.
+                                                 , Headers
+                                                 , Text' "Request"))
+  , responseVars :: HashTable (Text' "RequestId") (MVar (Text' "Response")) -- Call ID to response.
+  , serverThreads :: HashTable (Text' "Rpc") (Async ()) -- List of serving threads.
+  , publisherThreads :: HashTable (Text' "TopicName") (Async ()) -- List of publisher threads.
+  , streams :: HashTable (Text' "TopicName") ( Text -> IO ()
+                                             , Streamly.Serial Text)
+  , subscriberInfo :: HashTable (Text' "SubscriberId") (Async (), IO ()) -- ID to (thread, close).
   }
 
 type instance ResourceConfig T = Config
@@ -59,8 +60,8 @@ instance Resource T where
 
 instance RpcTransport T where
   _serve ::
-       ((Id "ResponseText" -> IO ()) -> Headers -> Id "RequestText" -> IO ())
-    -> Id "Rpc"
+       ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
+    -> Text' "Rpc"
     -> T
     -> IO ()
   _serve processor route T {requestVars, responseVars, serverThreads} = do
@@ -82,17 +83,17 @@ instance RpcTransport T where
         processor (send id) headers reqText
     HashTable.insert serverThreads route serverThread
   _call ::
-       ((Headers -> Id "RequestText" -> IO ()) -> Time Second -> Headers -> req -> IO ( Id "ResponseText" -> IO ()
-                                                                                      , IO x
-                                                                                      , IO ()))
-    -> Id "Rpc"
+       ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
+                                                                                     , IO x
+                                                                                     , IO ()))
+    -> Text' "Rpc"
     -> T
     -> Time Second
     -> Headers
     -> req
     -> IO x
   _call processor route T {requestVars, responseVars} _timeout headers req = do
-    id <- newUuid
+    id <- newUUID
     let send _headers reqText =
           HashTable.lookup requestVars route >>= \case
             Nothing -> panic "this is a bug"
@@ -108,7 +109,8 @@ instance RpcTransport T where
     async $ waitForDone >> cancel responseThread
     result
 
-retrieveStream :: T -> Id "Topic" -> IO (Text -> IO (), Streamly.Serial Text)
+retrieveStream ::
+     T -> Text' "TopicName" -> IO (Text -> IO (), Streamly.Serial Text)
 retrieveStream T {streams} topic =
   HashTable.lookup streams topic >>= \case
     Just stream -> return stream
@@ -117,7 +119,7 @@ retrieveStream T {streams} topic =
       HashTable.insert streams topic (push, results)
       return (push, results)
 
-_unsubscribe :: T -> Id "Subscriber" -> IO ()
+_unsubscribe :: T -> Text' "SubscriberId" -> IO ()
 _unsubscribe T {subscriberInfo} subscriberId = do
   let maybeUnsubscribe =
         (>|>| \(thread, close) -> do
@@ -128,8 +130,8 @@ _unsubscribe T {subscriberInfo} subscriberId = do
 
 instance PubSubTransport T where
   _publish ::
-       ((Id "PublishText" -> IO ()) -> Streamly.Serial a -> IO ())
-    -> Id "Topic"
+       ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())
+    -> Text' "TopicName"
     -> Streamly.Serial a
     -> T
     -> IO ()
@@ -138,21 +140,21 @@ instance PubSubTransport T where
     HashTable.lookup publisherThreads topic >>= \case
       Nothing -> do
         (push, _) <- retrieveStream t topic
-        publisherThread <- async $ processor (\(Id a) -> push a) as
+        publisherThread <- async $ processor (\(Text' a) -> push a) as
         HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
   _subscribe ::
-       IO (Id "PublishText" -> IO (), IO (), Streamly.Serial a)
-    -> Id "Topic"
+       IO (Text' "a" -> IO (), IO (), Streamly.Serial a)
+    -> Text' "TopicName"
     -> T
-    -> IO (Id "Subscriber", Streamly.Serial a)
+    -> IO (Text' "SubscriberId", Streamly.Serial a)
   _subscribe processor topic t = do
     let T {subscriberInfo} = t
     (push, close, results) <- processor
     (_, stream) <- retrieveStream t topic
-    subscriberThread <- async $ Streamly.mapM_ (push . Id) stream
-    subscriberId <- newUuid
+    subscriberThread <- async $ Streamly.mapM_ (push . Text') stream
+    subscriberId <- newUUID
     HashTable.insert subscriberInfo subscriberId (subscriberThread, close)
     return (subscriberId, results)
-  unsubscribe :: T -> Id "Subscriber" -> IO ()
+  unsubscribe :: T -> Text' "SubscriberId" -> IO ()
   unsubscribe = _unsubscribe

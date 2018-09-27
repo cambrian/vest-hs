@@ -45,7 +45,7 @@ class ( PriceServer.Priceable c
     price <-
       priceVirtualStake $ PriceServer.PriceVirtualStakeRequest {size, duration}
     -- TODO: process payment
-    id <- newUuid @"VirtualStake"
+    id <- newUUID @"VirtualStakeId"
     withResource
       dbPool
       (Db.storeVirtualStake @c @u id user size duration time_ price)

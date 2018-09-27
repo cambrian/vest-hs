@@ -22,53 +22,54 @@ import VestPrelude
 type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
-  { id :: Id "RpcRequest"
+  { id :: Text' "RequestId"
   , headers :: Headers -- Metadata.
-  , route :: Id "Rpc"
+  , route :: Text' "Rpc"
     -- Other metadata (time?).
-  , reqText :: Id "RequestText" -- Should be the serialization of a request object, but this is not
+  , reqText :: Text' "Request" -- Should be the serialization of a request object, but this is not
                                 -- guaranteed.
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data ResponseMessage = ResponseMessage
-  { requestId :: Id "RpcRequest"
+  { requestId :: Text' "RequestId"
     -- Other metadata.
-  , resText :: Id "ResponseText"
+  , resText :: Text' "Response"
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data Config = Config
   { serverPort :: Port
   , pingInterval :: Int
-  , clientUri :: Id "Uri"
+  , clientUri :: Text' "Uri"
   , clientPort :: Port
-  , clientPath :: Id "Path"
+  , clientPath :: Text' "Path"
   }
 
-localConfig :: ResourceConfig T
+localConfig :: Config
 localConfig =
   Config
     { serverPort = Port 3000
     , pingInterval = 30
-    , clientUri = Id "127.0.0.1"
+    , clientUri = Text' "127.0.0.1"
     , clientPort = Port 3000
-    , clientPath = Id "/"
+    , clientPath = Text' "/"
     }
 
 data T = T
   { serverThread :: Async ()
-  , clients :: HashTable (Id "Client") WS.Connection
+  , clients :: HashTable (Text' "ClientId") WS.Connection
   -- Value is request push stream.
-  , servedRouteRequests :: HashTable (Id "Rpc") ( (Id "Client", RequestMessage) -> IO ()
-                                                , IO ()
-                                                , Streamly.Serial ( Id "Client"
-                                                                  , RequestMessage))
+  , servedRouteRequests :: HashTable (Text' "Rpc") ( ( Text' "ClientId"
+                                                     , RequestMessage) -> IO ()
+                                                   , IO ()
+                                                   , Streamly.Serial ( Text' "ClientId"
+                                                                     , RequestMessage))
   -- Value is response push stream.
-  , servedConnectionResponses :: HashTable (Id "Client") ( Text -> IO ()
-                                                         , IO ()
-                                                         , Streamly.Serial Text)
-  , clientUri :: Id "Uri"
+  , servedConnectionResponses :: HashTable (Text' "ClientId") ( Text -> IO ()
+                                                              , IO ()
+                                                              , Streamly.Serial Text)
+  , clientUri :: Text' "Uri"
   , clientPort :: Port
-  , clientPath :: Id "Path"
+  , clientPath :: Text' "Path"
   }
 
 type instance ResourceConfig T = Config
@@ -126,19 +127,19 @@ wsApp socketServer pingInterval pendingConn = do
     (serveClient socketServer clientId conn)
     (disconnectClient socketServer clientId)
 
-connectClient :: T -> WS.Connection -> IO (Id "Client")
+connectClient :: T -> WS.Connection -> IO (Text' "ClientId")
 connectClient socketServer conn = do
   let T {clients} = socketServer
-  clientId <- newUuid
+  clientId <- newUUID
   HashTable.insert clients clientId conn
   return clientId
 
-disconnectClient :: T -> Id "Client" -> IO ()
+disconnectClient :: T -> Text' "ClientId" -> IO ()
 disconnectClient T {clients, servedConnectionResponses} clientId = do
   HashTable.delete clients clientId
   HashTable.delete servedConnectionResponses clientId
 
-serveClient :: T -> Id "Client" -> WS.Connection -> IO ()
+serveClient :: T -> Text' "ClientId" -> WS.Connection -> IO ()
 serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = do
   responses <- singleUsePushStream
   HashTable.insert servedConnectionResponses clientId responses
@@ -156,8 +157,8 @@ serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = d
 
 instance RpcTransport T where
   _serve ::
-       ((Id "ResponseText" -> IO ()) -> Headers -> Id "RequestText" -> IO ())
-    -> Id "Rpc"
+       ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
+    -> Text' "Rpc"
     -> T
     -> IO ()
   _serve processor route T {servedRouteRequests, servedConnectionResponses} = do
@@ -183,18 +184,19 @@ instance RpcTransport T where
     void . async $ Streamly.mapM_ handleMsg streamIn
  -- Only for testing purposes (inefficient since it spawns a connection per call).
   _call ::
-       ((Headers -> Id "RequestText" -> IO ()) -> Time Second -> Headers -> req -> IO ( Id "ResponseText" -> IO ()
-                                                                                      , IO x
-                                                                                      , IO ()))
-    -> Id "Rpc"
+       ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
+                                                                                     , IO x
+                                                                                     , IO ()))
+    -> Text' "Rpc"
     -> T
     -> Time Second
     -> Headers
     -> req
     -> IO x
   _call processor route T {clientUri, clientPort, clientPath} _timeout headers req = do
-    id <- newUuid
-    let (Id _uri, Port _port, Id _path) = (clientUri, clientPort, clientPath)
+    id <- newUUID
+    let (Text' _uri, Port _port, Text' _path) =
+          (clientUri, clientPort, clientPath)
     let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let send conn _headers reqText = do
           WS.sendTextData conn $

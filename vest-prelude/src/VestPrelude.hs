@@ -76,11 +76,11 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
   '[] :++ xs = xs
   (x ': xs) :++ ys = x ': (xs :++ ys)
 
--- For all of these wrapper types, you can extract the base Text by deconstructing:
--- show (Id "x") == "Id \"x\""
--- let Id text = (Id "x") -> text == "x"
-newtype Id (a :: Symbol) =
-  Id Text
+-- Extract the base Text by deconstructing:
+-- show (Text' "x") == "Text' \"x\""
+-- let Text' text = (Text' "x") -> text == "x"
+newtype Text' (a :: Symbol) =
+  Text' Text
   deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Port =
@@ -181,8 +181,8 @@ makeStreamVar' init as = do
   async $ Streamly.mapM_ (atomically . writeTVar var) as
   return var
 
-newUuid :: IO (Id a)
-newUuid = UUID.nextRandom >>- (Id . UUID.toText)
+newUUID :: IO (Text' a)
+newUUID = UUID.nextRandom >>- (Text' . UUID.toText)
 
 -- Returns (push, close, stream).
 -- Push does nothing after close is bound. TODO: It should probably throw.

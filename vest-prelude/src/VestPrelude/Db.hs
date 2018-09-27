@@ -14,13 +14,13 @@ import qualified Money
 import VestPrelude
 
 -- Postgres serializations for VestPrelude types.
-instance HasSqlValueSyntax be Text => HasSqlValueSyntax be (Id a) where
-  sqlValueSyntax (Id txt) = sqlValueSyntax txt
+instance HasSqlValueSyntax be Text => HasSqlValueSyntax be (Text' a) where
+  sqlValueSyntax (Text' t) = sqlValueSyntax t
 
-instance FromField (Id a) where
-  fromField f bs = fromField f bs >>- Id
+instance FromField (Text' a) where
+  fromField f bs = fromField f bs >>- Text'
 
-instance FromBackendRow Postgres (Id a)
+instance FromBackendRow Postgres (Text' a)
 
 -- In theory you could implement this directly on Timestamp without having to create a UTCTime
 -- but that's a bunch of work for what's only a smallish win.
@@ -34,15 +34,13 @@ instance FromField Timestamp where
 
 instance FromBackendRow Postgres Timestamp
 
-instance HasSqlValueSyntax be Rational =>
-         HasSqlValueSyntax be (Money.Dense a) where
-  sqlValueSyntax = sqlValueSyntax . toRational
-
-instance FromField (Money.Dense a) where
-  fromField f bs = fromField f bs >>- Money.dense'
-
-instance FromBackendRow Postgres (Money.Dense a)
-
+-- Beam doesn't support rationals so Money.Dense values can't be persisted. This is probably ok tho.
+-- instance HasSqlValueSyntax be Rational =>
+--          HasSqlValueSyntax be (Money.Dense a) where
+--   sqlValueSyntax = sqlValueSyntax . toRational
+-- instance FromField (Money.Dense a) where
+--   fromField f bs = fromField f bs >>- Money.dense'
+-- instance FromBackendRow Postgres (Money.Dense a)
 instance (HasSqlValueSyntax be Integer, KnownSymbol a, Money.GoodScale scale) =>
          HasSqlValueSyntax be (Money.Discrete' a scale) where
   sqlValueSyntax =

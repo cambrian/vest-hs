@@ -3,7 +3,8 @@ resolver: lts-12.10
 packages:
 - bridge
 - bridge-client
-# - core
+- core
+# - fiat-payment-server
 - manager
 - price-server
 - vest-prelude

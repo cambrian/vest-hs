@@ -9,7 +9,7 @@ import VestPrelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
-  SubscriberBindings (Topic (f :: Format) (s :: Symbol) a) = ( Id "Subscriber"
+  SubscriberBindings (Topic (f :: Format) (s :: Symbol) a) = ( Text' "SubscriberId"
                                                              , Streamly.Serial a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
@@ -39,10 +39,10 @@ instance (Subscriber a transport, Subscriber b transport) =>
 subscribeProcessor ::
      (Read a, FromJSON a)
   => Format
-  -> IO (Id "PublishText" -> IO (), IO (), Streamly.Serial a)
+  -> IO (Text' "a" -> IO (), IO (), Streamly.Serial a)
 subscribeProcessor format = do
   (_push, close, stream) <- pushStream
-  let push (Id a) = deserializeUnsafeOf format a >>= _push
+  let push (Text' a) = deserializeUnsafeOf format a >>= _push
   return (push, close, stream)
 
 instance (KnownSymbol s, Read a, FromJSON a, PubSubTransport transport) =>
@@ -50,15 +50,17 @@ instance (KnownSymbol s, Read a, FromJSON a, PubSubTransport transport) =>
   subscribe ::
        Proxy (Topic 'Haskell s a, transport)
     -> transport
-    -> IO (Id "Subscriber", Streamly.Serial a)
+    -> IO (Text' "SubscriberId", Streamly.Serial a)
   subscribe _ =
-    _subscribe (subscribeProcessor Haskell) (Id $ proxyText (Proxy :: Proxy s))
+    _subscribe
+      (subscribeProcessor Haskell)
+      (Text' $ proxyText (Proxy :: Proxy s))
 
 instance (KnownSymbol s, Read a, FromJSON a, PubSubTransport transport) =>
          Subscriber (Topic 'JSON (s :: Symbol) a) transport where
   subscribe ::
        Proxy (Topic 'JSON s a, transport)
     -> transport
-    -> IO (Id "Subscriber", Streamly.Serial a)
+    -> IO (Text' "SubscriberId", Streamly.Serial a)
   subscribe _ =
-    _subscribe (subscribeProcessor JSON) (Id $ proxyText (Proxy :: Proxy s))
+    _subscribe (subscribeProcessor JSON) (Text' $ proxyText (Proxy :: Proxy s))
