@@ -1,5 +1,5 @@
 module Core
-  (
+  ( module Core
   ) where
 
 import Bridge
@@ -19,11 +19,14 @@ data T c u = T
   , dbPool :: Pool Db.T
   }
 
-class (PriceServer.Priceable c, Money.Unit c u) =>
+class ( PriceServer.Priceable c
+      , Money.Unit c u
+      , KnownSymbol (VirtualStakeRoute c)
+      ) =>
       Stakeable c u
   where
-  make :: Amqp.T -> Pool Db.T -> Config -> IO (T c u)
-  make amqp dbPool _config =
+  make :: Config -> Amqp.T -> Pool Db.T -> IO (T c u)
+  make _config amqp dbPool =
     let priceVirtualStake =
           (makeClient
              (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint c u))
@@ -31,32 +34,27 @@ class (PriceServer.Priceable c, Money.Unit c u) =>
             (sec 1)
             defaultHeaders
      in return T {priceVirtualStake, dbPool}
-  stake :: T c u -> VirtualStakeRequest c u -> IO (VirtualStakeResponse c u)
-  stake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
-                                                          , size
-                                                          , duration
-                                                          , payment
-                                                          } = do
-    time <- now
+  handleStake ::
+       T c u -> VirtualStakeRequest c u -> IO (VirtualStakeResponse c u)
+  handleStake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
+                                                                , size
+                                                                , duration
+                                                                , payment
+                                                                } = do
+    time_ <- now
     price <-
       priceVirtualStake $ PriceServer.PriceVirtualStakeRequest {size, duration}
     -- TODO: process payment
     id <- newUuid @"VirtualStake"
     withResource
       dbPool
-      (Db.storeVirtualStake @c @u id user size time duration price)
-    -- save to db
-    return $ VirtualStakeResponse {}
--- make :: Config -> Amqp.T -> IO T
--- make Config {} bridge = do
---   return $ T {}
--- start :: Db.PGConnectInfo -> Bridge.Config -> Config -> IO ()
--- start dbConfig bridgeConfig config =
---   Db.withForever
---     dbConfig
---     (\db -> do
---        Bridge.withForever
---          bridgeConfig
---          (\bridge -> do
---             t <- make config bridge
---             return ()))
+      (Db.storeVirtualStake @c @u id user size duration time_ price)
+    return $ VirtualStakeResponse id user size duration time_ price
+  start :: Amqp.T -> T c u -> IO ()
+  start rpcTransport t =
+    serve
+      (Proxy :: Proxy (VirtualStakeEndpoint c u))
+      (handleStake t)
+      rpcTransport
+
+instance Stakeable "XTZ" "mutez"

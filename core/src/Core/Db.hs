@@ -15,6 +15,16 @@ instance Resource T where
   hold cfg = connect cfg >>- T
   release (T conn) = close conn
 
+localConfig :: ConnectInfo
+localConfig =
+  ConnectInfo
+    { connectHost = "localhost"
+    , connectPort = 5432
+    , connectUser = "vest"
+    , connectPassword = "localpassword"
+    , connectDatabase = "vest"
+    }
+
 data UserT (c :: Symbol) (u :: Symbol) f = User
   { _userAddress :: Columnar f (Id "Address")
   , _userBalance :: Columnar f (Money.Discrete c u)
@@ -27,10 +37,6 @@ deriving instance Money.Unit c u => Eq (User c u)
 deriving instance Money.Unit c u => Read (User c u)
 
 deriving instance Money.Unit c u => Show (User c u)
-
-instance Money.Unit c u => ToJSON (User c u)
-
-instance Money.Unit c u => FromJSON (User c u)
 
 instance Money.Unit c u => Table (UserT c u) where
   data PrimaryKey (UserT c u) f = UserAddress (Columnar f
@@ -61,9 +67,6 @@ deriving instance Money.Unit c u => Read (VirtualStake c u)
 
 deriving instance Money.Unit c u => Show (VirtualStake c u)
 
--- can't add these because o-clock's aeson flag isn't being set properly
--- instance (KnownSymbol c) => ToJSON (VirtualStake c)
--- instance (KnownSymbol c) => FromJSON (VirtualStake c)
 instance Money.Unit c u => Table (VirtualStakeT c u) where
   data PrimaryKey (VirtualStakeT c u) f = VirtualStakeId (Columnar f
                                                           (Id "VirtualStake"))
@@ -171,12 +174,13 @@ storeVirtualStake ::
   => Id "VirtualStake"
   -> Id "Address"
   -> Money.Discrete c u
-  -> Timestamp
   -> Time Day
+  -> Timestamp
   -> Money.Discrete "USD" "cent"
   -> T
   -> IO ()
-storeVirtualStake id ownerAddress size startTime duration price (T conn) = do
+-- ^ Inserts owner into c.users with a zero balance if not exists.
+storeVirtualStake id ownerAddress size duration startTime price (T conn) = do
   let owner = User @c @u ownerAddress (Money.discrete 0)
       virtualStake =
         VirtualStake

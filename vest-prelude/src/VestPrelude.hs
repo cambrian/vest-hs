@@ -38,6 +38,7 @@ import Protolude as Reexports hiding
   , forkIO
   , handle
   , handleJust
+  , ignore
   , mask
   , mask_
   , onException
@@ -53,6 +54,7 @@ import Protolude as Reexports hiding
   )
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
+import System.Console.CmdArgs as Reexports
 import qualified Text.Read
 import Time.Rational (KnownDivRat)
 import Time.Timestamp as Reexports
@@ -332,3 +334,13 @@ type family NubSymbols symbols where
               :<|> b) = Nub (NubSymbols a :++ NubSymbols b)
 
 type HasUniqueSymbols symbols = Symbols symbols ~ NubSymbols symbols
+
+deriving instance Generic Timestamp
+
+instance ToJSON Timestamp
+
+instance FromJSON Timestamp
+
+-- | Default Text value for cmdargs
+instance Default Text where
+  def = ""

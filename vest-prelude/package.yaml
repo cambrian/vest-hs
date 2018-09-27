@@ -16,6 +16,7 @@ dependencies:
 - base                  >= 4.10 && < 5
 - beam-core             >= 0.7  && < 1
 - beam-postgres         >= 0.3  && < 1
+- cmdargs               >= 0.10 && < 1
 - hashable              >= 1.2  && < 2
 - o-clock               >= 1.0  && < 2
 - postgresql-simple     >= 0.5  && < 1
@@ -38,12 +39,14 @@ dependencies:
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
 
 default-extensions:
+- AllowAmbiguousTypes
 - ApplicativeDo
 - BangPatterns
 - ConstraintKinds
 - DataKinds
 - DefaultSignatures
 - DeriveAnyClass
+- DeriveDataTypeable
 - DeriveFoldable
 - DeriveFunctor
 - DeriveGeneric
