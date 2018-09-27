@@ -64,7 +64,7 @@ data ResultItem a
 
 data RpcClientException
   = BadAuth
-  | BadCall (SerializationFormat, Text)
+  | BadCall (SerializationFormat, Text' "Request")
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
 
 defaultHeaders :: Headers
