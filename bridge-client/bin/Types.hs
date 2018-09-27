@@ -5,6 +5,7 @@ import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types ()
 import qualified Manager
 import System.Directory
+import System.FilePath
 import VestPrelude
 
 main :: IO ()
@@ -16,7 +17,7 @@ main = do
       Just _file -> return _file
       Nothing -> die "no output file provided"
   writeFile
-    (wd ++ "/" ++ file)
+    (wd </> file)
     (pack . formatTSDeclarations . concat $
      [ getTypeScriptDeclarations (Proxy :: Proxy Text')
      , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
