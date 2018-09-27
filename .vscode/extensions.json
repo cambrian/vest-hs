@@ -2,7 +2,7 @@
   "recommendations": [
     "jcanero.hoogle-vscode",
     "phoityne.phoityne-vscode",
-    "alanz.vscode-hie-server",
+    "vans.haskero",
     "wk-j.save-and-run"
   ]
 }

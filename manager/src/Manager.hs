@@ -4,6 +4,8 @@ module Manager
   ) where
 
 import Bridge
+import qualified Bridge.Transports.Amqp as Amqp
+import qualified Bridge.Transports.WebSocket as WebSocket
 import VestPrelude
 
 data AddIntsSignedRequest = AddIntsSignedRequest
@@ -28,3 +30,5 @@ addIntsSigned AddIntsSignedRequest {a, b, sign = False} =
 
 handlers :: Handlers ManagerApi
 handlers = addIntsSigned
+-- start :: WebSocket.T -> Amqp.T -> Amqp.T -> IO ()
+-- start client
