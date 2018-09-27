@@ -10,7 +10,9 @@ synopsis:            External account manager for Vest derivatives.
 description:         See README.md.
 
 dependencies:
-- base          >= 4.10 && < 5
+- aeson             >= 1.4  && < 2
+- aeson-typescript  >= 0.1  && < 1
+- base              >= 4.10 && < 5
 - bridge
 - vest-prelude
 

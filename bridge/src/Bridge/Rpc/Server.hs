@@ -78,7 +78,7 @@ serveProcessor auth sender handler send headers reqText = do
       (serialize', deserializeUnsafe') = runtimeSerializationsOf' format
   catch
     (do claims <- auth headers reqText >>= fromJustUnsafe BadAuth
-        req <- deserializeUnsafe' reqText
+        req <- deserializeUnsafe' reqText -- TODO: catch and rethrow
         res <- handler claims req
         sender (send . serialize' . Right) res)
     (\(e :: RpcClientException) -> send . serialize' . Left $ e)

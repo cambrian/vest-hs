@@ -1,3 +1,4 @@
+-- TODO: Different channels for different threads.
 module Bridge.Transports.Amqp
   ( T(..)
   , Config(..)

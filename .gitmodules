@@ -1,0 +1,6 @@
+[submodule "bridge-client/types"]
+	path = bridge-client/types
+	url = https://github.com/1protocol/bridge-client-types
+[submodule "bridge-client/generated"]
+	path = bridge-client/generated
+	url = https://github.com/1protocol/bridge-client-generated

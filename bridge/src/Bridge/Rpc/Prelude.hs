@@ -24,36 +24,38 @@ class RpcTransport t where
     -> req
     -> IO x
 
+data Auth a
+  = NoAuth
+  | Auth a
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+class AuthScheme t where
+  verify :: Headers -> Text' "Request" -> IO (Maybe (Claims t))
+
+-- Hacky way to match on auth type when we generate TypeScript callers, since we can't use the type
+-- family for that purpose. Down the road when the pipeline is clearer, this matching logic could
+-- be converted to a typeclass-based solution.
+data AuthType
+  = NoAuth'
+  | TokenAuth'
+  deriving (Show)
+
+type family Claims auth = claims | claims -> auth
+
+type instance Claims () = ()
+
 data DirectOrStreaming
   = Direct
   | Streaming
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-type family Claims auth = claims | claims -> auth
-
-class AuthScheme t where
-  verify :: Headers -> Text' "Request" -> IO (Maybe (Claims t))
-
-type instance Claims () = ()
+data Endpoint (t :: DirectOrStreaming) (auth :: Auth *) (route :: k) (req :: *) (res :: *)
 
 data Headers = Headers
   { format :: SerializationFormat
   , token :: Maybe (Text' "AuthToken")
   -- TODO: Signatures and such.
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
-
-defaultHeaders :: Headers
-defaultHeaders = Headers {format = Haskell, token = Nothing}
-
-verifyEmpty :: Headers -> Text' "Request" -> IO (Maybe ())
-verifyEmpty _ _ = return (Just ())
-
-data Auth a
-  = NoAuth
-  | Auth a
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
-
-data Endpoint (t :: DirectOrStreaming) (auth :: Auth *) (route :: k) (req :: *) (res :: *)
 
 data ResultItem a
   = Result a
@@ -62,6 +64,11 @@ data ResultItem a
 
 data RpcClientException
   = BadAuth
-  | BadCallHaskell (DeserializeException 'Haskell) -- not sure how to improve this
-  | BadCallJSON (DeserializeException 'JSON)
+  | BadCall (SerializationFormat, Text)
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
+
+defaultHeaders :: Headers
+defaultHeaders = Headers {format = Haskell, token = Nothing}
+
+verifyEmpty :: Headers -> Text' "Request" -> IO (Maybe ())
+verifyEmpty _ _ = return (Just ())
