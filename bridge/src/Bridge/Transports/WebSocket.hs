@@ -24,7 +24,7 @@ type HashTable k v = HashTable.BasicHashTable k v
 data RequestMessage = RequestMessage
   { id :: Text' "RequestId"
   , headers :: Headers -- Metadata.
-  , route :: Text' "Rpc"
+  , route :: Text' "Route"
     -- Other metadata (time?).
   , reqText :: Text' "Request" -- Should be the serialization of a request object, but this is not
                                 -- guaranteed.
@@ -58,11 +58,11 @@ data T = T
   { serverThread :: Async ()
   , clients :: HashTable (Text' "ClientId") WS.Connection
   -- Value is request push stream.
-  , servedRouteRequests :: HashTable (Text' "Rpc") ( ( Text' "ClientId"
-                                                     , RequestMessage) -> IO ()
-                                                   , IO ()
-                                                   , Streamly.Serial ( Text' "ClientId"
-                                                                     , RequestMessage))
+  , servedRouteRequests :: HashTable (Text' "Route") ( ( Text' "ClientId"
+                                                       , RequestMessage) -> IO ()
+                                                     , IO ()
+                                                     , Streamly.Serial ( Text' "ClientId"
+                                                                       , RequestMessage))
   -- Value is response push stream.
   , servedConnectionResponses :: HashTable (Text' "ClientId") ( Text -> IO ()
                                                               , IO ()
@@ -148,7 +148,7 @@ serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = d
   async $ Streamly.mapM_ (WS.sendTextData conn) streamOut
   Monad.forever $ do
     msg <- WS.receiveData conn
-    decode msg >|>| -- Do nothing if request message is malformed.
+    deserialize @'JSON msg >|>| -- Do nothing if request message is malformed.
       (\reqMsg -> do
          let RequestMessage {route} = reqMsg
          requestsMaybe <- HashTable.lookup servedRouteRequests route
@@ -158,7 +158,7 @@ serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = d
 instance RpcTransport T where
   _serve ::
        ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
-    -> Text' "Rpc"
+    -> Text' "Route"
     -> T
     -> IO ()
   _serve processor route T {servedRouteRequests, servedConnectionResponses} = do
@@ -177,7 +177,7 @@ instance RpcTransport T where
                                        -- its request is being serviced, in which case we discard
                                        -- the response.
                   Just (pushOut, _, _) ->
-                    void . pushOut . encode $
+                    void . pushOut . serialize @'JSON $
                     ResponseMessage {requestId, resText}
           processor send headers reqText
     -- Thread dies on its own when stream closed on kill.
@@ -187,7 +187,7 @@ instance RpcTransport T where
        ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
                                                                                      , IO x
                                                                                      , IO ()))
-    -> Text' "Rpc"
+    -> Text' "Route"
     -> T
     -> Time Second
     -> Headers
@@ -200,7 +200,9 @@ instance RpcTransport T where
     let (uriStr, pathStr) = (unpack _uri, unpack _path)
     let send conn _headers reqText = do
           WS.sendTextData conn $
-            encode RequestMessage {id, headers = _headers, route, reqText}
+            serialize
+              @'JSON
+              RequestMessage {id, headers = _headers, route, reqText}
     resultMVar <- newEmptyMVar
     -- TODO: Track these threads?
     let wsClientApp conn = do
@@ -210,7 +212,7 @@ instance RpcTransport T where
             async $ do
               let readLoop = do
                     msg <- WS.receiveData conn
-                    case decode msg of
+                    case deserialize @'JSON msg of
                       Nothing -> return () -- Swallow if entire message is garbled.
                       Just ResponseMessage {resText} -> push resText
                     readLoop

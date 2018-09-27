@@ -2,14 +2,13 @@ module Bridge.Rpc.Prelude
   ( module Bridge.Rpc.Prelude
   ) where
 
-import Bridge.Prelude
 import VestPrelude
 
 class RpcTransport t where
   _serve ::
        ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
     -- ^ (send response object text to wire -> headers -> request object text)
-    -> Text' "Rpc" -- ^ route to listen for wire-messages on
+    -> Text' "Route" -- ^ route to listen for wire-messages on
     -> t -- ^ transport (should be mutated to store cleanup details)
     -> IO ()
   _call ::
@@ -18,7 +17,7 @@ class RpcTransport t where
                                                                                      , IO ()))
     -- ^ (add headers and send request object text to wire -> timeout -> request object)
     -- to IO (push response object text, result stream or item, wait-for-done)
-    -> Text' "Rpc" -- ^ route to send wire-message on
+    -> Text' "Route" -- ^ route to send wire-message on
     -> t -- ^ transport (should be mutated to store cleanup details)
     -> Time Second -- ^ timeout
     -> Headers
@@ -38,8 +37,8 @@ class AuthScheme t where
 type instance Claims () = ()
 
 data Headers = Headers
-  { format :: Format
-  , token :: Maybe Text -- JWT.
+  { format :: SerializationFormat
+  , token :: Maybe (Text' "AuthToken")
   -- TODO: Signatures and such.
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
@@ -63,5 +62,6 @@ data ResultItem a
 
 data RpcClientException
   = BadAuth
-  | BadCall (Text' "Request")
-  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
+  | BadCallHaskell (DeserializeException 'Haskell) -- not sure how to improve this
+  | BadCallJSON (DeserializeException 'JSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)

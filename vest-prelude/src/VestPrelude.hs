@@ -79,17 +79,13 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
 -- Extract the base Text by deconstructing:
 -- show (Text' "x") == "Text' \"x\""
 -- let Text' text = (Text' "x") -> text == "x"
-newtype Text' (a :: Symbol) =
+newtype Text' a =
   Text' Text
   deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 newtype Port =
   Port Int
   deriving (Eq, Ord, Show, Read, Bounded, Generic, Hashable, ToJSON, FromJSON)
-
-newtype DecodeException =
-  DecodeException Text
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 newtype ReadException =
   ReadException Text
@@ -145,21 +141,6 @@ blockForever = do
                                              -- is blocked forever by creating a stable reference
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
-
-decodeMaybe :: (FromJSON a) => Text -> Maybe a
-decodeMaybe = Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack
-
-decode :: (FromJSON a) => Text -> Maybe a
-decode = decodeMaybe
-
-decodeUnsafe :: (FromJSON a) => Text -> IO a
-decodeUnsafe text =
-  case decodeMaybe text of
-    Nothing -> throw $ DecodeException text
-    Just x -> return x
-
-encode :: (ToJSON a) => a -> Text
-encode = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
 
 fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a
 fromJustUnsafe e Nothing = throw e
@@ -227,20 +208,8 @@ pushStream = do
           0
   return (push, close, stream)
 
-proxyText :: (KnownSymbol a) => Proxy a -> Text
-proxyText = pack . symbolVal
-
-readMaybe :: (Read a) => Text -> Maybe a
-readMaybe = Text.Read.readMaybe . unpack
-
-read :: (Read a) => Text -> Maybe a
-read = readMaybe
-
-readUnsafe :: (Read a) => Text -> IO a
-readUnsafe text =
-  case readMaybe text of
-    Nothing -> throw $ ReadException text
-    Just x -> return x
+proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
+proxyText' = Text' . pack . symbolVal
 
 -- Returns (push, close, stream).
 -- Push does nothing after close is bound.
@@ -344,3 +313,80 @@ instance FromJSON Timestamp
 -- | Default Text value for cmdargs
 instance Default Text where
   def = ""
+
+-- | Default Text' value for cmdargs
+instance Default (Text' a) where
+  def = Text' ""
+
+-- | Serialization
+data SerializationFormat
+  = Haskell
+  | JSON
+  deriving (Eq, Ord, Show, Read, Data, Generic, Hashable, ToJSON, FromJSON)
+
+-- | TODO: add format info. This is tough to do because it has to work both at compile time and at
+-- runtime
+data DeserializeException (f :: SerializationFormat) =
+  DeserializeException Text
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
+-- read :: (Read a) => Text -> Maybe a
+-- read = Text.Read.readMaybe . unpack
+-- -- show is defined in protolude
+-- decode :: (FromJSON a) => Text -> Maybe a
+-- decode = Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack
+-- encode :: (ToJSON a) => a -> Text
+-- encode = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
+-- readUnsafe :: (Read a) => Text -> IO a
+-- readUnsafe text =
+--   case readMaybe text of
+--     Nothing -> throw $ DeserializeException (Haskell, text)
+--     Just x -> return x
+-- decodeUnsafe :: (FromJSON a) => Text -> IO a
+-- decodeUnsafe text =
+--   case decodeMaybe text of
+--     Nothing -> throw $ DeserializeException (JSON, text)
+--     Just x -> return x
+class Serializable (f :: SerializationFormat) a where
+  serialize :: a -> Text
+  serialize' :: a -> Text' t
+  serialize' = Text' . serialize @f
+
+instance Show a => Serializable 'Haskell a where
+  serialize = show
+
+instance ToJSON a => Serializable 'JSON a where
+  serialize = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
+
+class (Typeable f) =>
+      Deserializable (f :: SerializationFormat) a
+  where
+  deserialize :: Text -> Maybe a
+  deserialize' :: Text' t -> Maybe a
+  deserialize' (Text' text) = deserialize @f text
+  deserializeUnsafe :: Text -> IO a
+  deserializeUnsafe text =
+    fromJustUnsafe (DeserializeException @f text) $ deserialize @f text
+  deserializeUnsafe' :: Text' t -> IO a
+  deserializeUnsafe' (Text' text) = deserializeUnsafe @f text
+
+instance Read a => Deserializable 'Haskell a where
+  deserialize = Text.Read.readMaybe . unpack
+
+instance FromJSON a => Deserializable 'JSON a where
+  deserialize = Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack
+
+runtimeSerializationsOf' ::
+     (Show a, Read b, ToJSON a, FromJSON b)
+  => SerializationFormat
+  -> (a -> Text' t, Text' v -> IO b)
+-- This function is awkwardly named on purpose. Typically you know which serialization format
+-- to use at compile time, but sometimes a runtime match is necessary.
+runtimeSerializationsOf' Haskell =
+  (serialize' @'Haskell, deserializeUnsafe' @'Haskell)
+runtimeSerializationsOf' JSON = (serialize' @'JSON, deserializeUnsafe' @'JSON)
+
+read :: (Read a) => Text -> Maybe a
+read = deserialize @'Haskell
+-- show is defined in protolude
+-- Not providing encode/decode because you should prefer serialize/deserialize @'JSON

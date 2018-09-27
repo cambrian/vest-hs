@@ -2,7 +2,6 @@ module Bridge.PubSub.Prelude
   ( module Bridge.PubSub.Prelude
   ) where
 
-import Bridge.Prelude
 import qualified Streamly
 import VestPrelude
 
@@ -21,14 +20,11 @@ class PubSubTransport t where
     -- ^ transport
     -> IO ()
   _subscribe ::
-       IO (Text' "a" -> IO (), IO (), Streamly.Serial a)
-    -- ^ (push subscribe object text, close, result stream)
-    -> Text' "TopicName"
-    -- ^ route to listen for wire-messages on
-    -> t
-    -- ^ transport (should be mutated to store cleanup details)
-    -> IO (Text' "SubscriberId", Streamly.Serial a)
-  -- ^ subscriber ID and result stream as tuple (ID, stream).
+       (Text' "a" -> IO ()) -- ^ Push serialized object.
+    -> IO () -- ^ Close topic stream.
+    -> Text' "TopicName" -- ^ Route to listen for wire-messages on.
+    -> t -- ^ Should be mutated to store cleanup details.
+    -> IO (Text' "SubscriberId")
   unsubscribe :: t -> Text' "SubscriberId" -> IO ()
 
-data Topic (f :: Format) (name :: k) (a :: *)
+data Topic (f :: SerializationFormat) (name :: k) (a :: *)

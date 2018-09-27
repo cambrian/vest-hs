@@ -2,7 +2,6 @@ module Bridge.Rpc.Server
   ( module Bridge.Rpc.Server
   ) where
 
-import Bridge.Prelude
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -21,7 +20,7 @@ type family NubRoutes spec where
 type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 data RpcServerException =
-  AlreadyServing (Text' "Rpc")
+  AlreadyServing (Text' "Route")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
@@ -76,15 +75,13 @@ serveProcessor ::
   -> IO ()
 serveProcessor auth sender handler send headers reqText = do
   let Headers {format} = headers
-      deserialize (Text' x) = deserializeOf format $ x
-      serialize = serializeOf format
+      (serialize', deserializeUnsafe') = runtimeSerializationsOf' format
   catch
     (do claims <- auth headers reqText >>= fromJustUnsafe BadAuth
-        req <- fromJustUnsafe (BadCall reqText) $ deserialize reqText
+        req <- deserializeUnsafe' reqText
         res <- handler claims req
-        sender (send . Text' @"Response" . serialize . Right) res)
-    (\(e :: RpcClientException) ->
-       send . Text' @"Response" . serialize . Left $ e)
+        sender (send . serialize' . Right) res)
+    (\(e :: RpcClientException) -> send . serialize' . Left $ e)
 
 instance ( KnownSymbol route
          , Read req
@@ -102,7 +99,7 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verifyEmpty streamingSender (const handler))
-      (Text' $ proxyText (Proxy :: Proxy route))
+      (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , Read req
@@ -120,7 +117,7 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verifyEmpty directSender (const handler))
-      (Text' $ proxyText (Proxy :: Proxy route))
+      (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -139,7 +136,7 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verify streamingSender handler)
-      (Text' $ proxyText (Proxy :: Proxy route))
+      (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -158,4 +155,4 @@ instance ( KnownSymbol route
   serve _ handler =
     _serve
       (serveProcessor verify directSender handler)
-      (Text' $ proxyText (Proxy :: Proxy route))
+      (proxyText' (Proxy :: Proxy route))

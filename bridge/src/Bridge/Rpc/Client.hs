@@ -2,7 +2,6 @@ module Bridge.Rpc.Client
   ( module Bridge.Rpc.Client
   ) where
 
-import Bridge.Prelude
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -60,13 +59,12 @@ callProcessor ::
   -> IO (Text' "Response" -> IO (), IO x, IO ())
 callProcessor pusher send timeout_ headers req = do
   let Headers {format} = headers
-  let deserializeUnsafe = deserializeUnsafeOf format
-      serialize = serializeOf format
+      (serialize', deserializeUnsafe') = runtimeSerializationsOf' format
   (push_, result, waitForDone) <- pusher
   (renewTimeout, timeoutDone) <- timeoutRenewable timeout_ waitForDone
-  send headers (Text' @"Request" $ serialize req)
-  let push (Text' resOrExcText) = do
-        resOrExc <- deserializeUnsafe resOrExcText
+  send headers (serialize' req)
+  let push resOrExcText = do
+        resOrExc <- deserializeUnsafe' resOrExcText
         case resOrExc of
           Left exc -> throw (exc :: RpcClientException)
           Right res -> push_ res
@@ -92,9 +90,7 @@ instance ( KnownSymbol route
     -> transport
     -> (Time Second -> Headers -> req -> IO res)
   makeClient _ =
-    _call
-      (callProcessor directPusher)
-      (Text' $ proxyText (Proxy :: Proxy route))
+    _call (callProcessor directPusher) (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , Show req
@@ -109,6 +105,4 @@ instance ( KnownSymbol route
     -> transport
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
   makeClient _ =
-    _call
-      (callProcessor streamingPusher)
-      (Text' $ proxyText (Proxy :: Proxy route))
+    _call (callProcessor streamingPusher) (proxyText' (Proxy :: Proxy route))

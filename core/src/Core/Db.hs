@@ -167,7 +167,8 @@ coreDb =
   dbModification
     {_coreStakingRewards = modifyTable prefixCurrencySchema tableModification}
   where
-    prefixCurrencySchema = ((proxyText (Proxy :: Proxy c) <> ".") <>)
+    (Text' currencyName) = proxyText' (Proxy :: Proxy c)
+    prefixCurrencySchema = ((currencyName <> ".") <>)
 
 storeVirtualStake ::
      forall c u. Money.Unit c u

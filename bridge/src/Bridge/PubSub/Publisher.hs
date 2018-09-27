@@ -2,7 +2,6 @@ module Bridge.PubSub.Publisher
   ( module Bridge.PubSub.Publisher
   ) where
 
-import Bridge.Prelude
 import Bridge.PubSub.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
@@ -54,31 +53,14 @@ instance ( HasUniqueTopics (a
     publish (Proxy :: Proxy (a, transport)) aStreams transport
     publish (Proxy :: Proxy (b, transport)) bStreams transport
 
-publishProcessor ::
-     (Show a, ToJSON a)
-  => Format
-  -> (Text' "a" -> IO ())
-  -> Streamly.Serial a
-  -> IO ()
-publishProcessor format send =
-  Streamly.mapM_ (send . Text' . serializeOf format)
-
-instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
-         Publisher (Topic 'Haskell (s :: Symbol) a) transport where
+instance (Serializable f a, KnownSymbol name, PubSubTransport transport) =>
+         Publisher (Topic (f :: SerializationFormat) (name :: Symbol) a) transport where
   publish ::
-       Proxy (Topic 'Haskell s a, transport)
+       Proxy (Topic f name a, transport)
     -> Streamly.Serial a
     -> transport
     -> IO ()
   publish _ =
-    _publish (publishProcessor Haskell) (Text' $ proxyText (Proxy :: Proxy s))
-
-instance (KnownSymbol s, Show a, ToJSON a, PubSubTransport transport) =>
-         Publisher (Topic 'JSON (s :: Symbol) a) transport where
-  publish ::
-       Proxy (Topic 'JSON s a, transport)
-    -> Streamly.Serial a
-    -> transport
-    -> IO ()
-  publish _ =
-    _publish (publishProcessor JSON) (Text' $ proxyText (Proxy :: Proxy s))
+    _publish
+      (\send -> Streamly.mapM_ (send . serialize' @f))
+      (proxyText' (Proxy :: Proxy name))

@@ -20,11 +20,11 @@ localConfig :: Config
 localConfig = ()
 
 data T = T
-  { requestVars :: HashTable (Text' "Rpc") (MVar ( Text' "RequestId" -- Route to full request.
-                                                 , Headers
-                                                 , Text' "Request"))
+  { requestVars :: HashTable (Text' "Route") (MVar ( Text' "RequestId" -- Route to full request.
+                                                   , Headers
+                                                   , Text' "Request"))
   , responseVars :: HashTable (Text' "RequestId") (MVar (Text' "Response")) -- Call ID to response.
-  , serverThreads :: HashTable (Text' "Rpc") (Async ()) -- List of serving threads.
+  , serverThreads :: HashTable (Text' "Route") (Async ()) -- List of serving threads.
   , publisherThreads :: HashTable (Text' "TopicName") (Async ()) -- List of publisher threads.
   , streams :: HashTable (Text' "TopicName") ( Text -> IO ()
                                              , Streamly.Serial Text)
@@ -61,7 +61,7 @@ instance Resource T where
 instance RpcTransport T where
   _serve ::
        ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
-    -> Text' "Rpc"
+    -> Text' "Route"
     -> T
     -> IO ()
   _serve processor route T {requestVars, responseVars, serverThreads} = do
@@ -86,7 +86,7 @@ instance RpcTransport T where
        ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
                                                                                      , IO x
                                                                                      , IO ()))
-    -> Text' "Rpc"
+    -> Text' "Route"
     -> T
     -> Time Second
     -> Headers
@@ -144,17 +144,17 @@ instance PubSubTransport T where
         HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
   _subscribe ::
-       IO (Text' "a" -> IO (), IO (), Streamly.Serial a)
+       (Text' "a" -> IO ())
+    -> IO ()
     -> Text' "TopicName"
     -> T
-    -> IO (Text' "SubscriberId", Streamly.Serial a)
-  _subscribe processor topic t = do
+    -> IO (Text' "SubscriberId")
+  _subscribe push close topic t = do
     let T {subscriberInfo} = t
-    (push, close, results) <- processor
     (_, stream) <- retrieveStream t topic
     subscriberThread <- async $ Streamly.mapM_ (push . Text') stream
     subscriberId <- newUUID
     HashTable.insert subscriberInfo subscriberId (subscriberThread, close)
-    return (subscriberId, results)
+    return subscriberId
   unsubscribe :: T -> Text' "SubscriberId" -> IO ()
   unsubscribe = _unsubscribe

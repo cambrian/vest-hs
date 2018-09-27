@@ -50,7 +50,7 @@ data T = T
   , chan :: AMQP.Channel
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerTag :: AMQP.ConsumerTag
-  , servedRouteTags :: HashTable (Text' "Rpc") AMQP.ConsumerTag
+  , servedRouteTags :: HashTable (Text' "Route") AMQP.ConsumerTag
   , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , publisherThreads :: HashTable (Text' "TopicName") (Async ())
   , subscriberInfo :: HashTable (Text' "SubscriberId") (AMQP.ConsumerTag, IO ())
@@ -128,7 +128,7 @@ instance Resource T where
 instance RpcTransport T where
   _serve ::
        ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
-    -> Text' "Rpc"
+    -> Text' "Route"
     -> T
     -> IO ()
   _serve processor route T {chan, servedRouteTags} = do
@@ -165,7 +165,7 @@ instance RpcTransport T where
        ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
                                                                                      , IO x
                                                                                      , IO ()))
-    -> Text' "Rpc"
+    -> Text' "Route"
     -> T
     -> Time Second
     -> Headers
@@ -225,12 +225,12 @@ instance PubSubTransport T where
         HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
   _subscribe ::
-       IO (Text' "a" -> IO (), IO (), Streamly.Serial a)
+       (Text' "a" -> IO ())
+    -> IO ()
     -> Text' "TopicName"
     -> T
-    -> IO (Text' "SubscriberId", Streamly.Serial a)
-  _subscribe processor (Text' exchangeName) T {chan, subscriberInfo} = do
-    (push, close, results) <- processor
+    -> IO (Text' "SubscriberId")
+  _subscribe push close (Text' exchangeName) T {chan, subscriberInfo} = do
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
@@ -243,6 +243,6 @@ instance PubSubTransport T where
         (push . Text' . fromAmqpMsg . fst)
     let subscriberId = Text' queueName
     HashTable.insert subscriberInfo subscriberId (consumerTag, close)
-    return (subscriberId, results)
+    return subscriberId
   unsubscribe :: T -> Text' "SubscriberId" -> IO ()
   unsubscribe = _unsubscribe

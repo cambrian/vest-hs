@@ -82,7 +82,7 @@ withSubscribed config _ action =
        action subscribed)
 
 tokenAuthJSON :: Headers
-tokenAuthJSON = Headers {format = JSON, token = Just ""}
+tokenAuthJSON = Headers {format = JSON, token = Just $ Text' ""}
 
 singleDirectTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
 singleDirectTest config =
