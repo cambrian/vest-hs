@@ -6,7 +6,6 @@ module BridgeClient
   ( module BridgeClient
   ) where
 
-import Bridge.Prelude (Format)
 import Bridge.Rpc.AuthSchemes
 import Bridge.Rpc.Prelude
   ( Auth(..)
@@ -24,13 +23,13 @@ import VestPrelude
 data SpecTsTypes = SpecTsTypes
   { directOrStreaming :: DirectOrStreaming
   , authType :: AuthType
-  , route :: Text
-  , req :: Text
-  , res :: Text
+  , route :: Text' "routeType"
+  , req :: Text' "reqType"
+  , res :: Text' "resType"
   } deriving (Show)
 
-toTsTypeText :: (TypeScript a) => Proxy a -> Text
-toTsTypeText = pack . getTypeScriptType
+toTsTypeText :: (TypeScript a) => Proxy a -> Text' t
+toTsTypeText = Text' . pack . getTypeScriptType
 
 -- Used to iterate over the nested API structure, run a (possibly monadic) function on the proxied
 -- types of each endpoint, and optionally collect the results in a list.
@@ -67,7 +66,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { directOrStreaming = Direct
         , authType = NoAuth'
-        , route = proxyText (Proxy :: Proxy route)
+        , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText (Proxy :: Proxy req)
         , res = toTsTypeText (Proxy :: Proxy res)
         }
@@ -85,7 +84,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { directOrStreaming = Streaming
         , authType = NoAuth'
-        , route = proxyText (Proxy :: Proxy route)
+        , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText (Proxy :: Proxy req)
         , res = toTsTypeText (Proxy :: Proxy res)
         }
@@ -103,7 +102,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { directOrStreaming = Direct
         , authType = TokenAuth'
-        , route = proxyText (Proxy :: Proxy route)
+        , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText (Proxy :: Proxy req)
         , res = toTsTypeText (Proxy :: Proxy res)
         }
@@ -121,7 +120,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { directOrStreaming = Direct
         , authType = TokenAuth'
-        , route = proxyText (Proxy :: Proxy route)
+        , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText (Proxy :: Proxy req)
         , res = toTsTypeText (Proxy :: Proxy res)
         }
@@ -149,7 +148,7 @@ instance (KnownSymbol s) => TypeScript (Text' (s :: Symbol)) where
 -- This is repetitive, but since the splicing happens at compile time and certain types depend on
 -- other types having instances of TypeScript, we separate out the derivation splices. For the same
 -- reason
-$(deriveTypeScript defaultOptions ''Format)
+$(deriveTypeScript defaultOptions ''SerializationFormat)
 
 $(deriveTypeScript defaultOptions ''Headers)
 

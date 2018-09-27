@@ -1,4 +1,4 @@
-import Bridge.Rpc.Prelude (RpcClientException)
+import Bridge.Rpc.Prelude (Headers, RpcClientException)
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import BridgeClient
 import Data.Aeson.TypeScript.TH
@@ -19,7 +19,9 @@ main = do
   writeFile
     (wd </> file)
     (pack . formatTSDeclarations . concat $
-     [ getTypeScriptDeclarations (Proxy :: Proxy Text')
+     [ getTypeScriptDeclarations (Proxy :: Proxy SerializationFormat)
+     , getTypeScriptDeclarations (Proxy :: Proxy Headers)
+     , getTypeScriptDeclarations (Proxy :: Proxy Text')
      , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
      , getTypeScriptDeclarations
          (Proxy :: Proxy (Either RpcClientException Text))
