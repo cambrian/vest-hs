@@ -28,6 +28,7 @@ class RpcTransport t where
 data DirectOrStreaming
   = Direct
   | Streaming
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type family Claims auth = claims | claims -> auth
 
@@ -51,13 +52,14 @@ verifyEmpty _ _ = return (Just ())
 data Auth a
   = NoAuth
   | Auth a
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 data Endpoint (t :: DirectOrStreaming) (auth :: Auth *) (route :: k) (req :: *) (res :: *)
 
 data ResultItem a
   = Result a
   | EndOfResults
-  deriving (Generic, Read, Show, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 data RpcClientException
   = BadAuth
