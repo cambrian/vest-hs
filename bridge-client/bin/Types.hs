@@ -7,8 +7,17 @@ import Data.Text (unlines)
 import qualified Manager
 import System.Directory
 import System.FilePath
+import System.Random
 import Text.Replace
 import VestPrelude
+
+version :: IO Text
+version = do
+  versionId <- randomRIO (1, 1000000)
+  return $
+    "type V" <> show (versionId :: Int) <> " = 'Bridge Typings Version " <>
+    show (versionId :: Int) <>
+    "'\n\n"
 
 nominal :: Text
 nominal =
@@ -27,7 +36,6 @@ replaceRules =
       "type Text_<T extends string> = string & Nominal<T>"
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
-  , Replace "\"" "\'"
   , Replace ";" ""
   ]
 
@@ -39,10 +47,11 @@ main = do
     case head arguments of
       Just _file -> return _file
       Nothing -> die "no output file provided"
+  versionText <- version
   writeFile (wd </> file) $
     pack . replaceWithList replaceRules $
     unpack
-      (nominal <>
+      (versionText <> nominal <>
        (pack . formatTSDeclarations . concat $
         [ getTypeScriptDeclarations (Proxy :: Proxy SerializationFormat)
         , getTypeScriptDeclarations (Proxy :: Proxy Headers)

@@ -129,7 +129,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
 
 -- Symbols will show up in TS as string literals.
 instance (KnownSymbol s) => TypeScript (s :: Symbol) where
-  getTypeScriptType s = "\"" ++ symbolVal s ++ "\""
+  getTypeScriptType s = "'" ++ symbolVal s ++ "'"
 
 newtype Text_ (a :: Symbol) =
   Text_ Text
