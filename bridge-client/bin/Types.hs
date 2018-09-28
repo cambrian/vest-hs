@@ -36,6 +36,7 @@ replaceRules =
       "type Text_<T extends string> = string & Nominal<T>"
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
+  , Replace "\"" "\'"
   , Replace ";" ""
   ]
 
