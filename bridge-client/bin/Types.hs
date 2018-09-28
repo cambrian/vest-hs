@@ -1,4 +1,4 @@
-import Bridge.Rpc.Prelude (Headers, RpcClientException)
+import Bridge.Rpc.Prelude (Headers, ResultItem, RpcClientException)
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import BridgeClient
 import Data.Aeson.TypeScript.TH
@@ -19,11 +19,14 @@ nominal =
     , "}\n"
     ]
 
+-- Hard-coded substitutions.
 replaceRules :: [Replace]
 replaceRules =
   [ Replace
       "type Text_<T> = IText_<T>"
-      "type Text_<T extends string> = IText_<T> & Nominal<T>"
+      "type Text_<T extends string> = string & Nominal<T>"
+  , Replace "\n\ntype IText_<T> = string" ""
+  , Replace "IEndOfResults<T>" "IEndOfResults"
   , Replace "\"" "\'"
   , Replace ";" ""
   ]
@@ -47,6 +50,7 @@ main = do
         , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
         , getTypeScriptDeclarations
             (Proxy :: Proxy (Either RpcClientException Text))
+        , getTypeScriptDeclarations (Proxy :: Proxy ResultItem)
         , getTypeScriptDeclarations (Proxy :: Proxy RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy ResponseMessage)
         , generateTsDeclarations (Proxy :: Proxy Manager.ManagerApi)

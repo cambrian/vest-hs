@@ -13,6 +13,7 @@ import Bridge.Rpc.Prelude
   , DirectOrStreaming(..)
   , Endpoint
   , Headers
+  , ResultItem
   , RpcClientException
   )
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
@@ -153,6 +154,8 @@ $(deriveTypeScript defaultOptions ''SerializationFormat)
 $(deriveTypeScript defaultOptions ''Headers)
 
 $(deriveTypeScript defaultOptions ''RpcClientException)
+
+$(deriveTypeScript defaultOptions ''ResultItem)
 
 $(deriveTypeScript defaultOptions ''RequestMessage)
 
