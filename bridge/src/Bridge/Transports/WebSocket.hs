@@ -23,72 +23,68 @@ type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
   { id :: Text' "RequestId"
-  , headers :: Headers -- Metadata.
+  , headers :: Headers
   , route :: Text' "Route"
-    -- Other metadata (time?).
-  , reqText :: Text' "Request" -- Should be the serialization of a request object, but this is not
-                                -- guaranteed.
-  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
+  , reqText :: Text' "Request"
+  } deriving (Generic, FromJSON, ToJSON)
 
 data ResponseMessage = ResponseMessage
   { requestId :: Text' "RequestId"
-    -- Other metadata.
   , resText :: Text' "Response"
-  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
+  } deriving (Generic, FromJSON, ToJSON)
 
 data Config = Config
-  { serverPort :: Port
+  { serverPort :: Int' "Port"
   , pingInterval :: Int
-  , clientUri :: Text' "Uri"
-  , clientPort :: Port
-  , clientPath :: Text' "Path"
   }
 
 localConfig :: Config
 localConfig =
   Config
-    { serverPort = Port 3000
+    { serverPort = Tagged 3000
     , pingInterval = 30
-    , clientUri = Text' "127.0.0.1"
-    , clientPort = Port 3000
-    , clientPath = Text' "/"
     }
 
 data T = T
   { serverThread :: Async ()
   , clients :: HashTable (Text' "ClientId") WS.Connection
-  -- Value is request push stream.
-  , servedRouteRequests :: HashTable (Text' "Route") ( ( Text' "ClientId"
-                                                       , RequestMessage) -> IO ()
-                                                     , IO ()
-                                                     , Streamly.Serial ( Text' "ClientId"
-                                                                       , RequestMessage))
-  -- Value is response push stream.
-  , servedConnectionResponses :: HashTable (Text' "ClientId") ( Text -> IO ()
-                                                              , IO ()
-                                                              , Streamly.Serial Text)
-  , clientUri :: Text' "Uri"
-  , clientPort :: Port
-  , clientPath :: Text' "Path"
+  , serverRequestHandlers :: HashTable (Text' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
+  -- ^ For a server, requests need to be aggregated by route.
+  , serverResponseHandlers :: HashTable (Text' "ClientId") (ResponseMessage -> IO ())
+  -- ^ For a server, stores each client's response queue
+  -- We could also have a map for client response handlers, but since we don't expect Haskell
+  -- websocket clients except for testing, we're not including it here.
   }
+
+data TestClient = TestClient
+  { serverUri :: Text' "Uri"
+  , serverPort :: Int' "Port"
+  , serverPath :: Text' "Path"
+  }
+
+localTestClient :: TestClient
+localTestClient = TestClient
+ { serverUri = Tagged "127.0.0.1"
+ , serverPort = Tagged 3000
+ , serverPath = Tagged "/"
+ }
 
 type instance ResourceConfig T = Config
 
 instance Resource T where
   hold :: ResourceConfig T -> IO T
   -- Connects to bridge, begins listening on client connections.
-  hold Config {serverPort, pingInterval, clientUri, clientPort, clientPath} = do
-    let Port _serverPort = serverPort
+  hold Config {serverPort, pingInterval} = do
     clients <- HashTable.new
-    servedRouteRequests <- HashTable.new
-    servedConnectionResponses <- HashTable.new
+    serverRequestHandlers <- HashTable.new
+    serverResponseHandlers <- HashTable.new
     -- Warp runs forever on its own thread.
     socketServerVar <- newEmptyMVar
     serverThread <-
       async $ do
         socketServer <- readMVar socketServerVar
         -- Wait for thread ID to be added to server state.
-        Warp.run _serverPort $
+        Warp.run (untag serverPort) $
           WS.websocketsOr
             WS.defaultConnectionOptions
             (wsApp socketServer pingInterval)
@@ -97,20 +93,15 @@ instance Resource T where
           T
             { serverThread
             , clients
-            , servedRouteRequests
-            , servedConnectionResponses
-            , clientUri
-            , clientPort
-            , clientPath
+            , serverRequestHandlers
+            , serverResponseHandlers
             }
     putMVar socketServerVar socketServer
     -- Wait for init to avoid test race conditions.
     threadDelay $ sec 0.1
     return socketServer
   release :: T -> IO ()
-  release T {serverThread, servedRouteRequests, servedConnectionResponses} = do
-    HashTable.mapM_ (\(_, (_, close, _)) -> close) servedRouteRequests
-    HashTable.mapM_ (\(_, (_, close, _)) -> close) servedConnectionResponses
+  release T {serverThread} = do
     cancel serverThread
 
 httpApp :: Wai.Application
@@ -135,90 +126,67 @@ connectClient socketServer conn = do
   return clientId
 
 disconnectClient :: T -> Text' "ClientId" -> IO ()
-disconnectClient T {clients, servedConnectionResponses} clientId = do
+disconnectClient T {clients, serverResponseHandlers} clientId = do
   HashTable.delete clients clientId
-  HashTable.delete servedConnectionResponses clientId
+  HashTable.delete serverResponseHandlers clientId
 
 serveClient :: T -> Text' "ClientId" -> WS.Connection -> IO ()
-serveClient T {servedRouteRequests, servedConnectionResponses} clientId conn = do
-  responses <- singleUsePushStream
-  HashTable.insert servedConnectionResponses clientId responses
-  let (_, _, streamOut) = responses
-  -- Thread dies on its own when the response is complete.
-  async $ Streamly.mapM_ (WS.sendTextData conn) streamOut
-  Monad.forever $ do
+serveClient T {serverRequestHandlers, serverResponseHandlers} clientId conn = do
+  let respond resMsg = WS.sendTextData conn (serialize @'JSON resMsg)
+  HashTable.insert serverResponseHandlers clientId respond
+  forever $ do
     msg <- WS.receiveData conn
-    deserialize @'JSON msg >|>| -- Do nothing if request message is malformed.
+    deserialize @'JSON msg >|>| -- Do nothing if request message does not deserialize.
       (\reqMsg -> do
          let RequestMessage {route} = reqMsg
-         requestsMaybe <- HashTable.lookup servedRouteRequests route
+         maybeHandler <- HashTable.lookup serverRequestHandlers route
          -- If the route is not served, swallow the request.
-         requestsMaybe >|>| (\(pushIn, _, _) -> pushIn (clientId, reqMsg)))
+         maybeHandler >|>| (\h -> h clientId reqMsg))
 
-instance RpcTransport T where
-  _serve ::
-       ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
+instance RpcServerTransport T where
+  _consumeRequests ::
+       (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> Text' "Route"
     -> T
     -> IO ()
-  _serve processor route T {servedRouteRequests, servedConnectionResponses} = do
-    (_, _, streamIn) <-
-      HashTable.lookup servedRouteRequests route >>= \case
-        Nothing -> do
-          requests <- singleUsePushStream
-          HashTable.insert servedRouteRequests route requests
-          return requests
-        Just _ -> throw $ AlreadyServing route
-    let handleMsg (clientId, RequestMessage {id = requestId, headers, reqText}) = do
-          let send resText = do
-                outMaybe <- HashTable.lookup servedConnectionResponses clientId
-                case outMaybe of
-                  Nothing -> return () -- Rare but possible edge case. A connection might die while
-                                       -- its request is being serviced, in which case we discard
-                                       -- the response.
-                  Just (pushOut, _, _) ->
-                    void . pushOut . serialize @'JSON $
-                    ResponseMessage {requestId, resText}
-          processor send headers reqText
-    -- Thread dies on its own when stream closed on kill.
-    void . async $ Streamly.mapM_ handleMsg streamIn
- -- Only for testing purposes (inefficient since it spawns a connection per call).
-  _call ::
-       ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
-                                                                                     , IO x
-                                                                                     , IO ()))
+  _consumeRequests asyncHandler route T {serverRequestHandlers, serverResponseHandlers} = do
+    HashTable.lookup serverRequestHandlers route >>= \case
+      Nothing -> return ()
+      Just _ -> throw $ AlreadyServing route
+    let handleMsg clientId RequestMessage {id = requestId, headers, reqText} = do
+          HashTable.lookup serverResponseHandlers clientId >>= \case
+            Nothing -> async $ return ()
+            Just handler ->
+              let respond resText = handler ResponseMessage {requestId, resText}
+               in asyncHandler headers reqText respond
+    HashTable.insert serverRequestHandlers route handleMsg
+
+instance RpcClientTransport TestClient where
+  _issueRequest ::
+       (Text' "Response" -> IO ())
     -> Text' "Route"
-    -> T
-    -> Time Second
+    -> TestClient
     -> Headers
-    -> req
-    -> IO x
-  _call processor route T {clientUri, clientPort, clientPath} _timeout headers req = do
-    id <- newUUID
-    let (Text' _uri, Port _port, Text' _path) =
-          (clientUri, clientPort, clientPath)
-    let (uriStr, pathStr) = (unpack _uri, unpack _path)
-    let send conn _headers reqText = do
-          WS.sendTextData conn $
-            serialize
-              @'JSON
-              RequestMessage {id, headers = _headers, route, reqText}
-    resultMVar <- newEmptyMVar
-    -- TODO: Track these threads?
-    let wsClientApp conn = do
-          (push, _result, waitForDone) <-
-            processor (send conn) _timeout headers req
+    -> Text' "Request"
+    -> IO (IO ())
+  -- ^ Only for testing purposes (inefficient since it spawns a connection per call).
+  _issueRequest respond route TestClient {serverUri, serverPort, serverPath} headers reqText = do
+    let rawUri = unpack $ untag serverUri
+        rawPath = unpack $ untag serverPath
+        rawPort = untag serverPort
+        wsClientApp conn = do
           readerThread <-
             async $ do
               let readLoop = do
                     msg <- WS.receiveData conn
                     case deserialize @'JSON msg of
                       Nothing -> return () -- Swallow if entire message is garbled.
-                      Just ResponseMessage {resText} -> push resText
+                      Just ResponseMessage {resText} -> respond resText
                     readLoop
               readLoop
-          putMVar resultMVar _result
-          waitForDone >> cancel readerThread
-    WS.runClient uriStr _port pathStr wsClientApp
-    result <- takeMVar resultMVar
-    result
+          WS.sendTextData conn $
+            serialize
+              @'JSON
+              RequestMessage {id=Tagged "", headers, route, reqText}
+          return $ cancel readerThread
+    WS.runClient rawUri rawPort rawPath wsClientApp

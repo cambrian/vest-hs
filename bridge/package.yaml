@@ -19,6 +19,8 @@ dependencies:
 - hspec             >= 2.5  && < 3
 - random            >= 1.1  && < 2
 - streamly          >= 0.5  && < 1
+- stm               >= 2.4  && < 3
+- stm-chans         >= 3.0  && < 4
 - text              >= 1.2  && < 2
 - utf8-string       >= 1.0  && < 2
 - vest-prelude

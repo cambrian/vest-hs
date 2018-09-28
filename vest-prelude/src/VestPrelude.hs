@@ -3,6 +3,7 @@ module VestPrelude
   , module Reexports
   ) where
 
+import Data.Tagged as Reexports hiding (witness)
 import Control.Concurrent.Async as Reexports
 import Control.Concurrent.MVar as Reexports
 import Control.Concurrent.STM.Delay as Reexports
@@ -76,16 +77,10 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
   '[] :++ xs = xs
   (x ': xs) :++ ys = x ': (xs :++ ys)
 
--- Extract the base Text by deconstructing:
--- show (Text' "x") == "Text' \"x\""
--- let Text' text = (Text' "x") -> text == "x"
-newtype Text' a =
-  Text' Text
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
+type Int' t = Tagged t Int
+type Text' t = Tagged t Text
 
-newtype Port =
-  Port Int
-  deriving (Eq, Ord, Show, Read, Bounded, Generic, Hashable, ToJSON, FromJSON)
+instance Hashable a => Hashable (Tagged s a)
 
 newtype ReadException =
   ReadException Text
@@ -162,12 +157,12 @@ makeStreamVar' init as = do
   async $ Streamly.mapM_ (atomically . writeTVar var) as
   return var
 
-newUUID :: IO (Text' a)
-newUUID = UUID.nextRandom >>- (Text' . UUID.toText)
+newUUID :: IO (Text' t)
+newUUID = UUID.nextRandom >>- (Tagged . UUID.toText)
 
+-- Does not support persistent fanout. Prefer using pushStream unless you know what you're doing.
 -- Returns (push, close, stream).
--- Push does nothing after close is bound. TODO: It should probably throw.
--- Does not support persistent fanout.
+-- Push does nothing after close is bound.
 singleUsePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
 singleUsePushStream = do
   resultVar <- newEmptyMVar
@@ -209,7 +204,7 @@ pushStream = do
   return (push, close, stream)
 
 proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
-proxyText' = Text' . pack . symbolVal
+proxyText' = Tagged . pack . symbolVal
 
 -- Returns (push, close, stream).
 -- Push does nothing after close is bound.
@@ -228,19 +223,22 @@ repeatableStream = do
   return (push . Just, push Nothing, stream)
 
 -- Returns renewer.
-timeoutRenewable :: Time Second -> IO a -> IO (IO (), IO (Maybe a))
-timeoutRenewable _timeout action = do
-  let micros = toNum @Microsecond _timeout
+timeoutRenewable :: Time Second -> IO a -> IO (IO (), IO (Either TimeoutException a))
+timeoutRenewable timeout_ action = do
+  let micros = toNum @Microsecond timeout_
   delay <- newDelay micros
   resultMVar <- newEmptyMVar
-  async $ do
+  void . async $ do
     atomically $ waitDelay delay
     putMVar resultMVar Nothing
-  async $ do
+  void . async $ do
     result <- action
     cancelDelay delay
     putMVar resultMVar (Just result)
-  return (updateDelay delay micros, readMVar resultMVar)
+  let result = readMVar resultMVar >>- \case
+        Nothing -> Left $ TimeoutException timeout_
+        Just a -> Right a
+  return (updateDelay delay micros, result)
 
 -- UTCTime <--> Timestamp
 -- TODO: keep nanos
@@ -315,8 +313,8 @@ instance Default Text where
   def = ""
 
 -- | Default Text' value for cmdargs
-instance Default (Text' a) where
-  def = Text' ""
+instance Default (Text' t) where
+  def = Tagged ""
 
 -- | Serialization
 data SerializationFormat
@@ -324,33 +322,14 @@ data SerializationFormat
   | JSON
   deriving (Eq, Ord, Show, Read, Data, Generic, Hashable, ToJSON, FromJSON)
 
--- | TODO: add format info. This is tough to do because it has to work both at compile time and at
--- runtime
 data DeserializeException (f :: SerializationFormat) =
   DeserializeException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
--- read :: (Read a) => Text -> Maybe a
--- read = Text.Read.readMaybe . unpack
--- -- show is defined in protolude
--- decode :: (FromJSON a) => Text -> Maybe a
--- decode = Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack
--- encode :: (ToJSON a) => a -> Text
--- encode = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
--- readUnsafe :: (Read a) => Text -> IO a
--- readUnsafe text =
---   case readMaybe text of
---     Nothing -> throw $ DeserializeException (Haskell, text)
---     Just x -> return x
--- decodeUnsafe :: (FromJSON a) => Text -> IO a
--- decodeUnsafe text =
---   case decodeMaybe text of
---     Nothing -> throw $ DeserializeException (JSON, text)
---     Just x -> return x
 class Serializable (f :: SerializationFormat) a where
   serialize :: a -> Text
   serialize' :: a -> Text' t
-  serialize' = Text' . serialize @f
+  serialize' = Tagged . serialize @f
 
 instance Show a => Serializable 'Haskell a where
   serialize = show
@@ -363,12 +342,12 @@ class (Typeable f) =>
   where
   deserialize :: Text -> Maybe a
   deserialize' :: Text' t -> Maybe a
-  deserialize' (Text' text) = deserialize @f text
+  deserialize' = deserialize @f . untag
   deserializeUnsafe :: Text -> IO a
   deserializeUnsafe text =
     fromJustUnsafe (DeserializeException @f text) $ deserialize @f text
   deserializeUnsafe' :: Text' t -> IO a
-  deserializeUnsafe' (Text' text) = deserializeUnsafe @f text
+  deserializeUnsafe' = deserializeUnsafe @f . untag
 
 instance Read a => Deserializable 'Haskell a where
   deserialize = Text.Read.readMaybe . unpack

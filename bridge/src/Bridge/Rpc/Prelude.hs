@@ -3,26 +3,27 @@ module Bridge.Rpc.Prelude
   ) where
 
 import VestPrelude
+import qualified Streamly
 
-class RpcTransport t where
-  _serve ::
-       ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
-    -- ^ (send response object text to wire -> headers -> request object text)
-    -> Text' "Route" -- ^ route to listen for wire-messages on
-    -> t -- ^ transport (should be mutated to store cleanup details)
+-- | This implementation uses callbacks instread of streaming interfaces because
+-- streamly streams don't have persistence and TB[M]Queues are ugly.
+class RpcServerTransport t where
+  _consumeRequests ::
+       (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
+       -- ^ Called on request, supplied with (headers request respond)
+    -> Text' "Route"
+    -> t
     -> IO ()
-  _call ::
-       ((Headers -> Text' "Request" -> IO ()) -> Time Second -> Headers -> req -> IO ( Text' "Response" -> IO ()
-                                                                                     , IO x
-                                                                                     , IO ()))
-    -- ^ (add headers and send request object text to wire -> timeout -> request object)
-    -- to IO (push response object text, result stream or item, wait-for-done)
-    -> Text' "Route" -- ^ route to send wire-message on
-    -> t -- ^ transport (should be mutated to store cleanup details)
-    -> Time Second -- ^ timeout
+    -- ^ Returns a stream of requests, with response function per-request
+class RpcClientTransport t where
+  _issueRequest ::
+       (Text' "Response" -> IO ()) -- ^ Called on response
+    -> Text' "Route"
+    -> t
     -> Headers
-    -> req
-    -> IO x
+    -> Text' "Request"
+    -> IO (IO ())
+    -- ^ Returns cleanup function
 
 data Auth a
   = NoAuth

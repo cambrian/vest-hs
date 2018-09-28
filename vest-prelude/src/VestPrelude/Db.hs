@@ -14,13 +14,6 @@ import qualified Money
 import VestPrelude
 
 -- Postgres serializations for VestPrelude types.
-instance HasSqlValueSyntax be Text => HasSqlValueSyntax be (Text' a) where
-  sqlValueSyntax (Text' t) = sqlValueSyntax t
-
-instance FromField (Text' a) where
-  fromField f bs = fromField f bs >>- Text'
-
-instance FromBackendRow Postgres (Text' a)
 
 -- In theory you could implement this directly on Timestamp without having to create a UTCTime
 -- but that's a bunch of work for what's only a smallish win.

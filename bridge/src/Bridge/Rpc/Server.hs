@@ -32,7 +32,7 @@ type family Handlers spec where
             :<|> b) = (Handlers a
                        :<|> Handlers b)
 
-class (RpcTransport transport) =>
+class (RpcServerTransport transport) =>
       Server spec transport
   where
   serve :: Proxy (spec, transport) -> Handlers spec -> transport -> IO ()
@@ -64,52 +64,36 @@ streamingSender send resStream = do
   Streamly.mapM_ (send . Result) resStream
   send EndOfResults
 
-serveProcessor ::
-     (Read req, FromJSON req, Show res, ToJSON res)
-  => (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
-  -> ((res -> IO ()) -> x -> IO ()) -- Type x is typically res or Streamly.Serial res.
-  -> (Claims auth -> req -> IO x) -- For non authenticated endpoints, Claims auth will be ().
-  -> (Text' "Response" -> IO ())
-  -> Headers
-  -> Text' "Request"
+_serve ::
+     (Read req, FromJSON req, Show res, ToJSON res, RpcServerTransport transport)
+  => ((res -> IO ()) -> x -> IO ()) -- Type x is typically res or Streamly.Serial res.
+  -> (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
+  -> Text' "Route"
+  -> (Claims auth -> req -> IO x)
+  -> transport
   -> IO ()
-serveProcessor auth sender handler send headers reqText = do
-  let Headers {format} = headers
-      (serialize', deserializeUnsafe') = runtimeSerializationsOf' format
-  catch
-    (do claims <- auth headers reqText >>= fromJustUnsafe BadAuth
-        req <-
-          catchAny
-            (deserializeUnsafe' reqText)
-            (const $ throw $ BadCall (format, reqText))
-        res <- handler claims req
-        sender (send . serialize' . Right) res)
-    (\(e :: RpcClientException) -> send . serialize' . Left $ e)
+_serve sender verifyAuth route handler transport =
+  _consumeRequests asyncHandle route transport
+  where
+    asyncHandle headers reqText respond = async $ do
+      let fmt = format headers
+          (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' $ fmt
+      catch
+        (do claims <- verifyAuth headers reqText >>= fromJustUnsafe BadAuth
+            req <-
+              catchAny
+                (deserializeUnsafe_ reqText)
+                (const $ throw $ BadCall (fmt, reqText))
+            res <- handler claims req
+            sender (respond . serialize_ . Right) res)
+        (\(e :: RpcClientException) -> respond . serialize_ . Left $ e)
 
 instance ( KnownSymbol route
          , Read req
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
-         ) =>
-         Server (Endpoint 'Streaming 'NoAuth (route :: Symbol) req res) transport where
-  serve ::
-       Proxy (Endpoint 'Streaming 'NoAuth route req res, transport)
-    -> (req -> IO (Streamly.Serial res))
-    -> transport
-    -> IO ()
-  serve _ handler =
-    _serve
-      (serveProcessor verifyEmpty streamingSender (const handler))
-      (proxyText' (Proxy :: Proxy route))
-
-instance ( KnownSymbol route
-         , Read req
-         , Show res
-         , FromJSON req
-         , ToJSON res
-         , RpcTransport transport
+         , RpcServerTransport transport
          ) =>
          Server (Endpoint 'Direct 'NoAuth (route :: Symbol) req res) transport where
   serve ::
@@ -117,29 +101,22 @@ instance ( KnownSymbol route
     -> (req -> IO res)
     -> transport
     -> IO ()
-  serve _ handler =
-    _serve
-      (serveProcessor verifyEmpty directSender (const handler))
-      (proxyText' (Proxy :: Proxy route))
+  serve _ handler = _serve directSender verifyEmpty (proxyText' (Proxy :: Proxy route)) (const handler)
 
 instance ( KnownSymbol route
-         , AuthScheme auth
          , Read req
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
+         , RpcServerTransport transport
          ) =>
-         Server (Endpoint 'Streaming ('Auth auth) (route :: Symbol) req res) transport where
+         Server (Endpoint 'Streaming 'NoAuth (route :: Symbol) req res) transport where
   serve ::
-       Proxy (Endpoint 'Streaming ('Auth auth) route req res, transport)
-    -> (Claims auth -> req -> IO (Streamly.Serial res))
+       Proxy (Endpoint 'Streaming 'NoAuth route req res, transport)
+    -> (req -> IO (Streamly.Serial res))
     -> transport
     -> IO ()
-  serve _ handler =
-    _serve
-      (serveProcessor verify streamingSender handler)
-      (proxyText' (Proxy :: Proxy route))
+  serve _ handler = _serve streamingSender verifyEmpty (proxyText' (Proxy :: Proxy route)) (const handler)
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -147,7 +124,7 @@ instance ( KnownSymbol route
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
+         , RpcServerTransport transport
          ) =>
          Server (Endpoint 'Direct ('Auth auth) (route :: Symbol) req res) transport where
   serve ::
@@ -155,7 +132,20 @@ instance ( KnownSymbol route
     -> (Claims auth -> req -> IO res)
     -> transport
     -> IO ()
-  serve _ handler =
-    _serve
-      (serveProcessor verify directSender handler)
-      (proxyText' (Proxy :: Proxy route))
+  serve _ = _serve directSender verify (proxyText' (Proxy :: Proxy route))
+
+instance ( KnownSymbol route
+         , AuthScheme auth
+         , Read req
+         , Show res
+         , FromJSON req
+         , ToJSON res
+         , RpcServerTransport transport
+         ) =>
+         Server (Endpoint 'Streaming ('Auth auth) (route :: Symbol) req res) transport where
+  serve ::
+       Proxy (Endpoint 'Streaming ('Auth auth) route req res, transport)
+    -> (Claims auth -> req -> IO (Streamly.Serial res))
+    -> transport
+    -> IO ()
+  serve _ = _serve streamingSender verify (proxyText' (Proxy :: Proxy route))

@@ -4,7 +4,7 @@ packages:
 - bridge
 - bridge-client
 - core
-# - fiat-payment-server
+- fiat-payment-server
 - manager
 - price-server
 - vest-prelude

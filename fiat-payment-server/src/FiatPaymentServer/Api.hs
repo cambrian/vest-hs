@@ -7,42 +7,35 @@ import qualified Bridge.Transports.Amqp as Amqp
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data VirtualStakeRequest (currency :: Symbol) (unit :: Symbol) = VirtualStakeRequest
+data ChargeRequest (currency :: Symbol) (unit :: Symbol) = ChargeRequest
   { size :: Money.Discrete currency unit
-  , token :: Id "PaymentToken"
+  , token :: Text' "PaymentToken"
   } deriving (Generic)
 
-deriving instance Money.Unit c u => Eq (VirtualStakeRequest c u)
+deriving instance Money.Unit c u => Read (ChargeRequest c u)
 
-deriving instance Money.Unit c u => Read (VirtualStakeRequest c u)
+deriving instance Money.Unit c u => Show (ChargeRequest c u)
 
-deriving instance Money.Unit c u => Show (VirtualStakeRequest c u)
+instance Money.Unit c u => ToJSON (ChargeRequest c u)
 
-instance Money.Unit c u => ToJSON (VirtualStakeRequest c u)
+instance Money.Unit c u => FromJSON (ChargeRequest c u)
 
-instance Money.Unit c u => FromJSON (VirtualStakeRequest c u)
+data ChargeException =
+  ChargeException
+  deriving (Read, Show, ToJSON, FromJSON, Generic, Exception)
 
-data VirtualStakeResponse (currency :: Symbol) (unit :: Symbol) = VirtualStakeResponse
-  { id :: Id "VirtualStake"
-  , owner :: Id "Address"
-  , size :: Money.Discrete currency unit
-  , duration :: Time Day
-  , startTime :: Timestamp
-  , price :: Money.Discrete "USD" "cent"
-  } deriving (Generic)
+-- data Charge (currency :: Symbol) (unit :: Symbol) = Charge
+--   { size :: Money.Discrete currency unit
+--   , time :: Timestamp
+--   } deriving (Generic)
+type ChargeResponse = Either ChargeException ()
 
-deriving instance Money.Unit c u => Eq (VirtualStakeResponse c u)
+-- deriving instance Money.Unit c u => Read (ChargeResponse c u)
+-- deriving instance Money.Unit c u => Show (ChargeResponse c u)
+-- instance Money.Unit c u => ToJSON (ChargeResponse c u)
+-- instance Money.Unit c u => FromJSON (ChargeResponse c u)
+type ChargeRoute currency = AppendSymbol "charge/" currency
 
-deriving instance Money.Unit c u => Read (VirtualStakeResponse c u)
-
-deriving instance Money.Unit c u => Show (VirtualStakeResponse c u)
-
-instance Money.Unit c u => ToJSON (VirtualStakeResponse c u)
-
-instance Money.Unit c u => FromJSON (VirtualStakeResponse c u)
-
-type VirtualStakeRoute currency = AppendSymbol "virtualStake/" currency
-
-type VirtualStakeEndpoint currency unit
-   = ( Endpoint 'Direct 'NoAuth (VirtualStakeRoute currency) (VirtualStakeRequest currency unit) (VirtualStakeResponse currency unit)
+type ChargeEndpoint c u
+   = ( Endpoint 'Direct 'NoAuth (ChargeRoute c) (ChargeRequest c u) ChargeResponse
      , Amqp.T)

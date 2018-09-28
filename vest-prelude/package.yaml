@@ -29,6 +29,7 @@ dependencies:
 - stm                   >= 2.4  && < 3
 - stm-delay             >= 0.1  && < 1
 - streamly              >= 0.5  && < 1
+- tagged                >= 0.8  && < 1
 - text                  >= 1.2  && < 2
 - time                  >= 1.8  && < 2 # Only for sql formatting time.
 - utf8-string           >= 1.0  && < 2

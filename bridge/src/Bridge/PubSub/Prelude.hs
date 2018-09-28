@@ -14,15 +14,13 @@ class PubSubTransport t where
        ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())
     -- ^ (send publish object text to wire -> stream of publish objects)
     -> Text' "TopicName"
-    -- ^ route to send wire-message on
     -> Streamly.Serial a
     -> t
-    -- ^ transport
     -> IO ()
   _subscribe ::
-       (Text' "a" -> IO ()) -- ^ Push serialized object.
+       (Text' "a" -> IO ()) -- ^ Fn to publish serialized object.
     -> IO () -- ^ Close topic stream.
-    -> Text' "TopicName" -- ^ Route to listen for wire-messages on.
+    -> Text' "TopicName"
     -> t -- ^ Should be mutated to store cleanup details.
     -> IO (Text' "SubscriberId")
   unsubscribe :: t -> Text' "SubscriberId" -> IO ()
