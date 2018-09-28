@@ -13,6 +13,7 @@ import Bridge.Rpc.Prelude
   , DirectOrStreaming(..)
   , Endpoint
   , Headers
+  , ResultItem
   , RpcClientException
   )
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
@@ -128,7 +129,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
 
 -- Symbols will show up in TS as string literals.
 instance (KnownSymbol s) => TypeScript (s :: Symbol) where
-  getTypeScriptType s = "\"" ++ symbolVal s ++ "\""
+  getTypeScriptType s = "'" ++ symbolVal s ++ "'"
 
 newtype Text_ (a :: Symbol) =
   Text_ Text
@@ -153,6 +154,8 @@ $(deriveTypeScript defaultOptions ''SerializationFormat)
 $(deriveTypeScript defaultOptions ''Headers)
 
 $(deriveTypeScript defaultOptions ''RpcClientException)
+
+$(deriveTypeScript defaultOptions ''ResultItem)
 
 $(deriveTypeScript defaultOptions ''RequestMessage)
 
