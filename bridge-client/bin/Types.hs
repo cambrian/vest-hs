@@ -26,7 +26,7 @@ replaceRules :: [Replace]
 replaceRules =
   [ Replace
       "type Text_<T> = IText_<T>"
-      "type Text<T extends string> = Tagged<T, string>"
+      "export type Text<T extends string> = Tagged<T, string>"
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
   , Replace "Text_" "Text"
