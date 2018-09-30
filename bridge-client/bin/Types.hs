@@ -3,7 +3,6 @@ import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import BridgeClient
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types ()
-import Data.Text (unlines)
 import qualified Manager
 import System.Directory
 import System.FilePath
@@ -19,25 +18,22 @@ version = do
     show (versionId :: Int) <>
     "'\n\n"
 
-nominal :: Text
-nominal =
-  unlines
-    [ "class Nominal<T extends string> {"
-    , "  // @ts-ignore"
-    , "  private as: T"
-    , "}\n"
-    ]
+tagged :: Text
+tagged = "type Tagged<T extends string, K> = { TagDoNotUse: T } | K\n\n"
 
 -- Hard-coded substitutions.
 replaceRules :: [Replace]
 replaceRules =
   [ Replace
       "type Text_<T> = IText_<T>"
-      "type Text_<T extends string> = string & Nominal<T>"
+      "type Text<T extends string> = Tagged<T, string>"
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
+  , Replace "Text_" "Text"
   , Replace "\"" "\'"
   , Replace ";" ""
+  , Replace "type" "export type"
+  , Replace "interface" "export interface"
   ]
 
 main :: IO ()
@@ -52,11 +48,11 @@ main = do
   writeFile (wd </> file) $
     pack . replaceWithList replaceRules $
     unpack
-      (versionText <> nominal <>
+      (versionText <> tagged <>
        (pack . formatTSDeclarations . concat $
-        [ getTypeScriptDeclarations (Proxy :: Proxy SerializationFormat)
+        [ getTypeScriptDeclarations (Proxy :: Proxy Text_)
+        , getTypeScriptDeclarations (Proxy :: Proxy SerializationFormat)
         , getTypeScriptDeclarations (Proxy :: Proxy Headers)
-        , getTypeScriptDeclarations (Proxy :: Proxy Text')
         , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
         , getTypeScriptDeclarations
             (Proxy :: Proxy (Either RpcClientException Text))
