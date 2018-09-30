@@ -13,10 +13,7 @@ import VestPrelude
 version :: IO Text
 version = do
   versionId <- randomRIO (1, 1000000)
-  return $
-    "type V" <> show (versionId :: Int) <> " = 'Bridge Typings Version " <>
-    show (versionId :: Int) <>
-    "'\n\n"
+  return $ "type V" <> show (versionId :: Int) <> " = void\n\n"
 
 tagged :: Text
 tagged = "type Tagged<T extends string, K> = { TagDoNotUse: T } | K\n\n"
