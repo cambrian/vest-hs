@@ -37,5 +37,5 @@ type ChargeResponse = Either ChargeException ()
 type ChargeRoute currency = AppendSymbol "charge/" currency
 
 type ChargeEndpoint c u
-   = ( Endpoint 'Direct 'NoAuth (ChargeRoute c) (ChargeRequest c u) ChargeResponse
+   = ( Endpoint 'NoAuth (ChargeRoute c) (ChargeRequest c u) ('Direct ChargeResponse)
      , Amqp.T)

@@ -44,7 +44,7 @@ type PriceVirtualStakeRoute currency
    = AppendSymbol "priceVirtualStake/" currency
 
 type PriceVirtualStakeEndpoint currency unit
-   = ( Endpoint 'Direct 'NoAuth (PriceVirtualStakeRoute currency) (PriceVirtualStakeRequest currency unit) (Money.Discrete "USD" "cent")
+   = ( Endpoint 'NoAuth (PriceVirtualStakeRoute currency) (PriceVirtualStakeRequest currency unit) (Direct' (Money.Discrete "USD" "cent"))
      , Amqp.T)
 
 type PriceFunctionRoute currency = AppendSymbol "priceFunctions/" currency

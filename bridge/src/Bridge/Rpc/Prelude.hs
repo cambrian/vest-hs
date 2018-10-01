@@ -3,20 +3,19 @@ module Bridge.Rpc.Prelude
   ) where
 
 import VestPrelude
-import qualified Streamly
 
 -- | This implementation uses callbacks instread of streaming interfaces because
 -- streamly streams don't have persistence and TB[M]Queues are ugly.
 class RpcTransport t where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-       -- ^ Called on request, supplied with (headers request respond)
+       -- ^ Called per request, supplied with (headers request respondToClient)
     -> Text' "Route"
     -> t
     -> IO ()
     -- ^ Returns a stream of requests, with response function per-request
   _issueRequest ::
-       (Text' "Response" -> IO ()) -- ^ Called on response
+       (Text' "Response" -> IO ()) -- ^ Called per response
     -> Text' "Route"
     -> t
     -> Headers
@@ -44,12 +43,13 @@ type family Claims auth = claims | claims -> auth
 
 type instance Claims () = ()
 
-data DirectOrStreaming
-  = Direct
-  | Streaming
+-- | Streaming endpoints should return cumulative results (missing an intermediate result is ok).
+data DirectOrStreaming a
+  = Direct a
+  | Streaming a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-data Endpoint (t :: DirectOrStreaming) (auth :: Auth *) (route :: k) (req :: *) (res :: *)
+data Endpoint (auth :: Auth *) (route :: k) (req :: *) (res :: DirectOrStreaming *)
 
 data Headers = Headers
   { format :: SerializationFormat

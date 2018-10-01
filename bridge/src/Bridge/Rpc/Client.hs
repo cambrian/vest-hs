@@ -8,8 +8,8 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type family ClientBindings spec where
-  ClientBindings (Endpoint 'Direct _ _ req res) = Time Second -> Headers -> req -> IO res
-  ClientBindings (Endpoint 'Streaming _ _ req res) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
+  ClientBindings (Endpoint _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
+  ClientBindings (Endpoint _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -85,9 +85,9 @@ instance ( KnownSymbol route
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint 'Direct h (route :: Symbol) req res) transport where
+         Client (Endpoint h (route :: Symbol) req ('Direct res)) transport where
   makeClient ::
-       Proxy (Endpoint 'Direct h route req res, transport)
+       Proxy (Endpoint h route req ('Direct res), transport)
     -> transport
     -> (Time Second -> Headers -> req -> IO res)
   makeClient _ = _call directPusher (proxyText' (Proxy :: Proxy route))
@@ -99,9 +99,9 @@ instance ( KnownSymbol route
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint 'Streaming h (route :: Symbol) req res) transport where
+         Client (Endpoint h (route :: Symbol) req ('Streaming res)) transport where
   makeClient ::
-       Proxy (Endpoint 'Streaming h route req res, transport)
+       Proxy (Endpoint h route req ('Streaming res), transport)
     -> transport
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
   makeClient _ = _call streamingPusher (proxyText' (Proxy :: Proxy route))

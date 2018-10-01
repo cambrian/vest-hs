@@ -20,9 +20,9 @@ data AddIntsRequest = AddIntsRequest
 
 $(deriveTypeScript defaultOptions ''AddIntsRequest)
 
-type AddIntsEndpoint = Endpoint 'Direct 'NoAuth "addInts" AddIntsRequest Int
+type AddIntsEndpoint = Endpoint 'NoAuth "addInts" AddIntsRequest ('Direct Int)
 
-type EchoThriceEndpoint = Endpoint 'Streaming 'NoAuth "echoThrice" Int Int
+type EchoThriceEndpoint = Endpoint 'NoAuth "echoThrice" Int ('Streaming Int)
 
 data ConcatTextAuthRequest = ConcatTextAuthRequest
   { a :: Text
@@ -38,10 +38,10 @@ data ConcatTextAuthResponse = ConcatTextAuthResponse
 $(deriveTypeScript defaultOptions ''ConcatTextAuthResponse)
 
 type ConcatTextAuthEndpoint
-   = Endpoint 'Direct ('Auth TokenAuth) "concatTextAuth" ConcatTextAuthRequest ConcatTextAuthResponse
+   = Endpoint ('Auth TokenAuth) "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
 
 type EchoThriceAuthEndpoint
-   = Endpoint 'Streaming ('Auth TokenAuth) "echoThriceAuth" Text Text
+   = Endpoint ('Auth TokenAuth) "echoThriceAuth" Text ('Streaming Text)
 
 type ManagerApi
    = AddIntsEndpoint

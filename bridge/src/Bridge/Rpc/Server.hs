@@ -8,12 +8,12 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type family Routes spec where
-  Routes (Endpoint _ _ (route :: Symbol) _ _) = '[ route]
+  Routes (Endpoint _ (route :: Symbol) _ _) = '[ route]
   Routes (a
           :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
-  NubRoutes (Endpoint _ _ (route :: Symbol) _ _) = '[ route]
+  NubRoutes (Endpoint _ (route :: Symbol) _ _) = '[ route]
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
@@ -24,10 +24,10 @@ data RpcServerException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
-  Handlers (Endpoint 'Direct 'NoAuth _ req res) = req -> IO res
-  Handlers (Endpoint 'Streaming 'NoAuth _ req res) = req -> IO (Streamly.Serial res)
-  Handlers (Endpoint 'Direct ('Auth auth) _ req res) = Claims auth -> req -> IO res
-  Handlers (Endpoint 'Streaming ('Auth auth) _ req res) = Claims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint 'NoAuth _ req ('Direct res)) = req -> IO res
+  Handlers (Endpoint  'NoAuth _ req ('Streaming res)) = req -> IO (Streamly.Serial res)
+  Handlers (Endpoint ('Auth auth) _ req ('Direct res)) = Claims auth -> req -> IO res
+  Handlers (Endpoint ('Auth auth) _ req ('Streaming res)) = Claims auth -> req -> IO (Streamly.Serial res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -95,9 +95,9 @@ instance ( KnownSymbol route
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Direct 'NoAuth (route :: Symbol) req res) transport where
+         Server (Endpoint 'NoAuth (route :: Symbol) req ('Direct res)) transport where
   serve ::
-       Proxy (Endpoint 'Direct 'NoAuth route req res, transport)
+       Proxy (Endpoint 'NoAuth route req ('Direct res), transport)
     -> (req -> IO res)
     -> transport
     -> IO ()
@@ -110,9 +110,9 @@ instance ( KnownSymbol route
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Streaming 'NoAuth (route :: Symbol) req res) transport where
+         Server (Endpoint 'NoAuth (route :: Symbol) req ('Streaming res)) transport where
   serve ::
-       Proxy (Endpoint 'Streaming 'NoAuth route req res, transport)
+       Proxy (Endpoint 'NoAuth route req ('Streaming res), transport)
     -> (req -> IO (Streamly.Serial res))
     -> transport
     -> IO ()
@@ -126,9 +126,9 @@ instance ( KnownSymbol route
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Direct ('Auth auth) (route :: Symbol) req res) transport where
+         Server (Endpoint ('Auth auth) (route :: Symbol) req ('Direct res)) transport where
   serve ::
-       Proxy (Endpoint 'Direct ('Auth auth) route req res, transport)
+       Proxy (Endpoint ('Auth auth) route req ('Direct res), transport)
     -> (Claims auth -> req -> IO res)
     -> transport
     -> IO ()
@@ -142,9 +142,9 @@ instance ( KnownSymbol route
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server (Endpoint 'Streaming ('Auth auth) (route :: Symbol) req res) transport where
+         Server (Endpoint ('Auth auth) (route :: Symbol) req ('Streaming res)) transport where
   serve ::
-       Proxy (Endpoint 'Streaming ('Auth auth) route req res, transport)
+       Proxy (Endpoint ('Auth auth) route req ('Streaming res), transport)
     -> (Claims auth -> req -> IO (Streamly.Serial res))
     -> transport
     -> IO ()
