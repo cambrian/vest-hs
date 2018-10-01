@@ -1,7 +1,10 @@
 {
   "recommendations": [
+    "amatiasq.sort-imports",
+    "eg2.tslint",
     "jcanero.hoogle-vscode",
     "phoityne.phoityne-vscode",
+    "steoates.autoimport",
     "vans.haskero",
     "wk-j.save-and-run"
   ]
