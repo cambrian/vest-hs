@@ -1,3 +1,4 @@
+-- Right now this file is just pointless endpoints for WebSocket testing.
 module Manager
   ( ManagerApi
   , start
@@ -8,27 +9,54 @@ import qualified Bridge.Transports.Amqp as Amqp
 import qualified Bridge.Transports.WebSocket as WebSocket
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
+import qualified Streamly
+import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
-data AddIntsSignedRequest = AddIntsSignedRequest
+data AddIntsRequest = AddIntsRequest
   { a :: Int
   , b :: Int
-  , sign :: Bool
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-$(deriveTypeScript defaultOptions ''AddIntsSignedRequest)
+$(deriveTypeScript defaultOptions ''AddIntsRequest)
 
-type AddIntsSignedEndpoint
-   = Endpoint 'Direct 'NoAuth "addSignedInts" AddIntsSignedRequest Int
+type AddIntsEndpoint = Endpoint 'Direct 'NoAuth "addInts" AddIntsRequest Int
 
-type ManagerApi = AddIntsSignedEndpoint
+type EchoThriceEndpoint = Endpoint 'Streaming 'NoAuth "echoThrice" Int Int
 
-addIntsSigned :: AddIntsSignedRequest -> IO Int
-addIntsSigned AddIntsSignedRequest {a, b, sign = True} = return $ (a + b)
-addIntsSigned AddIntsSignedRequest {a, b, sign = False} = return $ -(a + b)
+data ConcatTextAuthRequest = ConcatTextAuthRequest
+  { a :: Text
+  , b :: Text
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''ConcatTextAuthRequest)
+
+type ConcatTextAuthEndpoint
+   = Endpoint 'Direct ('Auth TokenAuth) "concatTextAuth" ConcatTextAuthRequest Text
+
+type EchoThriceAuthEndpoint
+   = Endpoint 'Streaming ('Auth TokenAuth) "echoThriceAuth" Text Text
+
+type ManagerApi
+   = AddIntsEndpoint
+     :<|> EchoThriceEndpoint
+     :<|> ConcatTextAuthEndpoint
+     :<|> EchoThriceAuthEndpoint
+
+addInts :: AddIntsRequest -> IO Int
+addInts AddIntsRequest {a, b} = return $ (a + b)
+
+echoThrice :: Int -> IO (Streamly.Serial Int)
+echoThrice = return . Streamly.fromList . replicate 3
+
+concatTextAuth :: Claims TokenAuth -> ConcatTextAuthRequest -> IO Text
+concatTextAuth _ ConcatTextAuthRequest {a, b} = return $ a <> b
+
+echoThriceAuth :: Claims TokenAuth -> Text -> IO (Streamly.Serial Text)
+echoThriceAuth _ = return . Streamly.fromList . replicate 3
 
 handlers :: Handlers ManagerApi
-handlers = addIntsSigned
+handlers = addInts :<|> echoThrice :<|> concatTextAuth :<|> echoThriceAuth
 
 start :: WebSocket.T -> Amqp.T -> Amqp.T -> IO ()
 start serverTransport _ _ =

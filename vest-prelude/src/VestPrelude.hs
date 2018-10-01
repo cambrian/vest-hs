@@ -3,7 +3,6 @@ module VestPrelude
   , module Reexports
   ) where
 
-import Data.Tagged as Reexports hiding (witness)
 import Control.Concurrent.Async as Reexports
 import Control.Concurrent.MVar as Reexports
 import Control.Concurrent.STM.Delay as Reexports
@@ -18,6 +17,7 @@ import Data.Hashable as Reexports (Hashable)
 import Data.Pool
 import Data.Pool as Reexports (Pool, tryWithResource, withResource)
 import Data.Proxy as Reexports
+import Data.Tagged as Reexports hiding (witness)
 import Data.Text as Reexports (pack, unpack)
 import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
@@ -78,6 +78,7 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
   (x ': xs) :++ ys = x ': (xs :++ ys)
 
 type Int' t = Tagged t Int
+
 type Text' t = Tagged t Text
 
 instance Hashable a => Hashable (Tagged s a)
@@ -223,7 +224,8 @@ repeatableStream = do
   return (push . Just, push Nothing, stream)
 
 -- Returns renewer.
-timeoutRenewable :: Time Second -> IO a -> IO (IO (), IO (Either TimeoutException a))
+timeoutRenewable ::
+     Time Second -> IO a -> IO (IO (), IO (Either TimeoutException a))
 timeoutRenewable timeout_ action = do
   let micros = toNum @Microsecond timeout_
   delay <- newDelay micros
@@ -235,9 +237,10 @@ timeoutRenewable timeout_ action = do
     result <- action
     cancelDelay delay
     putMVar resultMVar (Just result)
-  let result = readMVar resultMVar >>- \case
-        Nothing -> Left $ TimeoutException timeout_
-        Just a -> Right a
+  let result =
+        readMVar resultMVar >>- \case
+          Nothing -> Left $ TimeoutException timeout_
+          Just a -> Right a
   return (updateDelay delay micros, result)
 
 -- UTCTime <--> Timestamp

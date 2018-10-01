@@ -39,7 +39,7 @@ class ( PriceServer.Priceable c
   handleStake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
                                                                 , size
                                                                 , duration
-                                                                , payment
+                                                                -- , payment
                                                                 } = do
     time_ <- now
     price <-

@@ -30,7 +30,7 @@ data SpecTsTypes = SpecTsTypes
   } deriving (Show)
 
 toTsTypeText :: (TypeScript a) => Proxy a -> Text' t
-toTsTypeText = Text' . pack . getTypeScriptType
+toTsTypeText = Tagged . pack . getTypeScriptType
 
 -- Used to iterate over the nested API structure, run a (possibly monadic) function on the proxied
 -- types of each endpoint, and optionally collect the results in a list.
@@ -137,10 +137,6 @@ newtype Text_ (a :: Symbol) =
 
 $(deriveTypeScript defaultOptions ''Text_)
 
-instance TypeScript Text' where
-  getTypeScriptType _ = getTypeScriptType (Proxy :: Proxy Text_)
-  getTypeScriptDeclarations _ = getTypeScriptDeclarations (Proxy :: Proxy Text_)
-
 instance (KnownSymbol s) => TypeScript (Text' (s :: Symbol)) where
   getTypeScriptType _ = getTypeScriptType (Proxy :: Proxy (Text_ s))
   getTypeScriptDeclarations _ =
@@ -148,7 +144,7 @@ instance (KnownSymbol s) => TypeScript (Text' (s :: Symbol)) where
 
 -- This is repetitive, but since the splicing happens at compile time and certain types depend on
 -- other types having instances of TypeScript, we separate out the derivation splices. For the same
--- reason
+-- reason, we keep the Bridge types formatted all in one place here.
 $(deriveTypeScript defaultOptions ''SerializationFormat)
 
 $(deriveTypeScript defaultOptions ''Headers)
