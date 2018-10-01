@@ -174,7 +174,9 @@ wsClientApp clientResponseHandlers requestMVar conn = do
         maybeRequest <- takeMVar requestMVar
         case maybeRequest of
           Nothing -> cancel readerThread
-          Just x -> WS.sendTextData conn (serialize @'JSON x) >> loop
+          Just x -> do
+            WS.sendTextData conn (serialize @'JSON x)
+            loop
   loop
 
 instance RpcTransport T where
