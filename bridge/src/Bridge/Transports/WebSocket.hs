@@ -19,17 +19,20 @@ import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
 
+-- WebSockets don't exactly fit into the bridge model, since websocket connections are between
+-- clients and servers, rather than through a messaging service. That said, we provide a websocket
+-- transport so that components can serve public websocket endpoints.
 data RequestMessage = RequestMessage
   { id :: Text' "RequestId"
   , headers :: Headers
   , route :: Text' "Route"
   , reqText :: Text' "Request"
-  } deriving (Read, Show, Generic, FromJSON, ToJSON)
+  } deriving (Generic, FromJSON, ToJSON)
 
 data ResponseMessage = ResponseMessage
   { requestId :: Text' "RequestId"
   , resText :: Text' "Response"
-  } deriving (Read, Show, Generic, FromJSON, ToJSON)
+  } deriving (Generic, FromJSON, ToJSON)
 
 data ServerInfo = ServerInfo
   { uri :: Text' "Uri"
@@ -65,9 +68,9 @@ data T = T
 type instance ResourceConfig T = Config
 
 instance Resource T where
-  hold :: ResourceConfig T -> IO T
+  make :: ResourceConfig T -> IO T
   -- Connects to bridge, begins listening on client connections.
-  hold Config {servePort, pingInterval, servers} = do
+  make Config {servePort, pingInterval, servers} = do
     serverRequestHandlers <- HashTable.new
     serverResponseHandlers <- HashTable.new
     clientRequestHandlers <- HashTable.new

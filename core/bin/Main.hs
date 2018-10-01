@@ -7,7 +7,7 @@ data Core =
   XTZ
   deriving (Show, Data)
 
-config :: Config
+config :: Config c u
 config = Config {}
 
 dbPoolConfig :: PoolConfig
@@ -23,7 +23,7 @@ run =
        withPoolForever
          dbPoolConfig
          Db.localConfig
-         (\dbPool -> make @c @u config amqp dbPool >>= start amqp))
+         (\dbPool -> withForever (config @c @u, amqp, dbPool) (start amqp)))
 
 main :: IO Void
 main =

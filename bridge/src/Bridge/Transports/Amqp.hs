@@ -74,9 +74,9 @@ toAmqpMsg x =
 type instance ResourceConfig T = Config
 
 instance Resource T where
-  hold :: Config -> IO T
+  make :: Config -> IO T
     -- Connects to RabbitMQ, begins listening on RPC queue.
-  hold Config {hostname, virtualHost, username, password} = do
+  make Config {hostname, virtualHost, username, password} = do
     conn <- AMQP.openConnection (unpack hostname) virtualHost username password
     chan <- AMQP.openChannel conn
     queueName <- newQueueName
@@ -138,14 +138,18 @@ instance RpcTransport T where
       Just _ -> throw $ AlreadyServing route
     let Tagged queueName = route
     _ <- AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-    let asyncHandle RequestMessage {id = requestId, headers, responseQueue, reqText} = do
+    let asyncHandle RequestMessage { id = requestId
+                                   , headers
+                                   , responseQueue
+                                   , reqText
+                                   } = do
           let respond resText =
-                    void $
-                    AMQP.publishMsg
-                      chan
-                      "" -- Default exchange just sends message to queue specified by routing key.
-                      (untag responseQueue) -- Exchange routing key.
-                      (toAmqpMsg . show $ ResponseMessage {requestId, resText})
+                void $
+                AMQP.publishMsg
+                  chan
+                  "" -- Default exchange just sends message to queue specified by routing key.
+                  (untag responseQueue) -- Exchange routing key.
+                  (toAmqpMsg . show $ ResponseMessage {requestId, resText})
           asyncHandler headers reqText respond
     consumerTag <-
       AMQP.consumeMsgs
@@ -153,8 +157,8 @@ instance RpcTransport T where
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-             (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if request message fails to read.
-             AMQP.ackEnv env)
+           (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if request message fails to read.
+           AMQP.ackEnv env)
     HashTable.insert consumedRoutes route consumerTag
   _issueRequest ::
        (Text' "Response" -> IO ())
@@ -165,13 +169,12 @@ instance RpcTransport T where
     -> IO (IO ())
   _issueRequest respond route T {chan, responseQueue, responseHandlers} headers reqText = do
     id <- newUUID
-    AMQP.publishMsg
-            chan
-            ""
-            (untag route)
-            (toAmqpMsg . show $
-             RequestMessage {id, headers, responseQueue, reqText})
     HashTable.insert responseHandlers id respond
+    AMQP.publishMsg
+      chan
+      ""
+      (untag route)
+      (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
     return (HashTable.delete responseHandlers id)
 
 declarePubSubExchange :: AMQP.Channel -> Text -> IO ()

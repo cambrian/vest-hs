@@ -161,16 +161,6 @@ makeStreamVar' init as = do
 newUUID :: IO (Text' t)
 newUUID = UUID.nextRandom >>- (Tagged . UUID.toText)
 
--- Does not support persistent fanout. Prefer using pushStream unless you know what you're doing.
--- Returns (push, close, stream).
--- Push does nothing after close is bound.
-singleUsePushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
-singleUsePushStream = do
-  resultVar <- newEmptyMVar
-  let push = putMVar resultVar
-      stream = Streamly.unfoldrM (\() -> fmap (, ()) <$> takeMVar resultVar) ()
-  return (push . Just, push Nothing, stream)
-
 data StreamPushAfterCloseException =
   StreamPushAfterCloseException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
@@ -206,22 +196,6 @@ pushStream = do
 
 proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
 proxyText' = Tagged . pack . symbolVal
-
--- Returns (push, close, stream).
--- Push does nothing after close is bound.
-repeatableStream :: IO (a -> IO (), IO (), Streamly.Serial a)
-repeatableStream = do
-  resultsVar <- newTVarIO Vector.empty
-  let push a = atomically $ modifyTVar resultsVar (`Vector.snoc` a)
-      stream =
-        Streamly.unfoldrM
-          (\idx ->
-             atomically $ do
-               results <- readTVar resultsVar
-               unless (idx < Vector.length results) retry
-               return $ fmap (, idx + 1) (Vector.unsafeIndex results idx))
-          0
-  return (push . Just, push Nothing, stream)
 
 -- Returns renewer.
 timeoutRenewable ::
@@ -269,18 +243,18 @@ data PoolConfig = PoolConfig
   }
 
 class Resource a where
-  hold :: ResourceConfig a -> IO a
+  make :: ResourceConfig a -> IO a
   release :: a -> IO ()
   -- ^ Minimal required definition.
   with :: ResourceConfig a -> (a -> IO b) -> IO b
-  with config = bracket (hold config) release
+  with config = bracket (make config) release
   -- TODO: Catch exceptions and reconnect.
   withForever :: ResourceConfig a -> (a -> IO b) -> IO Void
   withForever config action = with config (\a -> action a >> blockForever)
   withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
   withPool PoolConfig {idleTime, numResources} config =
     bracket
-      (createPool (hold config) release 1 idleTime_ numResources_)
+      (createPool (make config) release 1 idleTime_ numResources_)
       destroyAllResources
     where
       idleTime_ = nominalDiffTimeFromTime idleTime
