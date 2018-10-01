@@ -13,7 +13,7 @@ type instance ResourceConfig T = ConnectInfo
 
 instance Resource T where
   make cfg = connect cfg >>- T
-  release (T conn) = close conn
+  cleanup (T conn) = close conn
 
 localConfig :: ConnectInfo
 localConfig =

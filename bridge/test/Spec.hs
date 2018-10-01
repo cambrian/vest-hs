@@ -189,7 +189,7 @@ main :: IO ()
 main = do
   let amqpMake = ($ Amqp.localConfig)
       -- dummyMake = ($ Dummy.localConfig)
-      -- wsMake = ($ webSocketConfig)
+      wsMake = ($ webSocketConfig)
   hspec $ do
     describe "AMQP bridge" $ do
       describe "Direct RPC" $ mapM_ amqpMake directTests
@@ -199,6 +199,6 @@ main = do
     --   describe "Direct RPC" $ mapM_ dummyMake directTests
     --   describe "Streaming RPC" $ mapM_ dummyMake streamingTests
     --   describe "Pub/Sub" $ mapM_ dummyMake pubSubTests
-    -- describe "WebSocket bridge" $ do
-    --   describe "Direct RPC" $ mapM_ wsMake directTests
-    --   describe "Streaming RPC" $ mapM_ wsMake streamingTests
+    describe "WebSocket bridge" $ do
+      describe "Direct RPC" $ mapM_ wsMake directTests
+      describe "Streaming RPC" $ mapM_ wsMake streamingTests

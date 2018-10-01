@@ -21,7 +21,7 @@ type HashTable k v = HashTable.BasicHashTable k v
 
 -- WebSockets don't exactly fit into the bridge model, since websocket connections are between
 -- clients and servers, rather than through a messaging service. That said, we provide a websocket
--- transport so that components can serve public websocket endpoints.
+-- transport so that components can serve public websocket endpoints to e.g. browsers.
 data RequestMessage = RequestMessage
   { id :: Text' "RequestId"
   , headers :: Headers
@@ -113,8 +113,8 @@ instance Resource T where
         , serverThread
         , clientCleanupFns
         }
-  release :: T -> IO ()
-  release T {serverThread, clientCleanupFns} = do
+  cleanup :: T -> IO ()
+  cleanup T {serverThread, clientCleanupFns} = do
     cancel serverThread
     mapM_ (\x -> do x) clientCleanupFns
 

@@ -244,17 +244,18 @@ data PoolConfig = PoolConfig
 
 class Resource a where
   make :: ResourceConfig a -> IO a
-  release :: a -> IO ()
+  cleanup :: a -> IO ()
   -- ^ Minimal required definition.
   with :: ResourceConfig a -> (a -> IO b) -> IO b
-  with config = bracket (make config) release
+  with config = bracket (make config) cleanup
   -- TODO: Catch exceptions and reconnect.
   withForever :: ResourceConfig a -> (a -> IO b) -> IO Void
   withForever config action = with config (\a -> action a >> blockForever)
+  -- Use with withResource pool (\resource -> do ...)
   withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
   withPool PoolConfig {idleTime, numResources} config =
     bracket
-      (createPool (make config) release 1 idleTime_ numResources_)
+      (createPool (make config) cleanup 1 idleTime_ numResources_)
       destroyAllResources
     where
       idleTime_ = nominalDiffTimeFromTime idleTime

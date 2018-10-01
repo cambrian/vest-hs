@@ -106,10 +106,10 @@ instance Resource T where
         , publisherThreads
         , subscriberInfo
         }
-  release :: T -> IO ()
+  cleanup :: T -> IO ()
     -- Closes AMQP consumers, closes connection, and deletes response queue.
     -- Unsubscribes from any subscribed topics.
-  release t = do
+  cleanup t = do
     let T { conn
           , chan
           , responseQueue
