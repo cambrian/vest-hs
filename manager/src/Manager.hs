@@ -31,8 +31,14 @@ data ConcatTextAuthRequest = ConcatTextAuthRequest
 
 $(deriveTypeScript defaultOptions ''ConcatTextAuthRequest)
 
+data ConcatTextAuthResponse = ConcatTextAuthResponse
+  { result :: Text
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''ConcatTextAuthResponse)
+
 type ConcatTextAuthEndpoint
-   = Endpoint 'Direct ('Auth TokenAuth) "concatTextAuth" ConcatTextAuthRequest Text
+   = Endpoint 'Direct ('Auth TokenAuth) "concatTextAuth" ConcatTextAuthRequest ConcatTextAuthResponse
 
 type EchoThriceAuthEndpoint
    = Endpoint 'Streaming ('Auth TokenAuth) "echoThriceAuth" Text Text
@@ -49,8 +55,10 @@ addInts AddIntsRequest {a, b} = return $ (a + b)
 echoThrice :: Int -> IO (Streamly.Serial Int)
 echoThrice = return . Streamly.fromList . replicate 3
 
-concatTextAuth :: Claims TokenAuth -> ConcatTextAuthRequest -> IO Text
-concatTextAuth _ ConcatTextAuthRequest {a, b} = return $ a <> b
+concatTextAuth ::
+     Claims TokenAuth -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
+concatTextAuth _ ConcatTextAuthRequest {a, b} =
+  return $ ConcatTextAuthResponse {result = a <> b}
 
 echoThriceAuth :: Claims TokenAuth -> Text -> IO (Streamly.Serial Text)
 echoThriceAuth _ = return . Streamly.fromList . replicate 3
