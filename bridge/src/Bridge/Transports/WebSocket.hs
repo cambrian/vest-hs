@@ -102,8 +102,9 @@ instance Resource T where
                   clientRequestHandlers
                   route
                   (putMVar requestMVar . Just))
-           let cleanup = return () -- putMVar requestMVar Nothing -- TODO: why doesn't this work?
-           return cleanup)
+           -- Using cleanUp instead of cleanup to avoid shadowing the VestPrelude binding.
+           let cleanUp = return () -- putMVar requestMVar Nothing -- TODO: why doesn't this work?
+           return cleanUp)
     return
       T
         { serverRequestHandlers
