@@ -12,8 +12,8 @@ newtype T =
 type instance ResourceConfig T = ConnectInfo
 
 instance Resource T where
-  hold cfg = connect cfg >>- T
-  release (T conn) = close conn
+  make cfg = connect cfg >>- T
+  cleanup (T conn) = close conn
 
 localConfig :: ConnectInfo
 localConfig =

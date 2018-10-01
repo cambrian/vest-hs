@@ -4,21 +4,16 @@ module Bridge.Transports.Dummy where
 --   , Config
 --   , localConfig
 --   ) where
-
 -- import Bridge.PubSub
 -- import Bridge.Rpc
 -- import qualified Data.HashTable.IO as HashTable
 -- import qualified Streamly
 -- import qualified Streamly.Prelude as Streamly
 -- import VestPrelude
-
 -- type HashTable k v = HashTable.BasicHashTable k v
-
 -- type Config = ()
-
 -- localConfig :: Config
 -- localConfig = ()
-
 -- data T = T
 --   { requestVars :: HashTable (Text' "Route") (MVar ( Text' "RequestId" -- Route to full request.
 --                                                    , Headers
@@ -30,12 +25,10 @@ module Bridge.Transports.Dummy where
 --                                              , Streamly.Serial Text)
 --   , subscriberInfo :: HashTable (Text' "SubscriberId") (Async (), IO ()) -- ID to (thread, close).
 --   }
-
 -- type instance ResourceConfig T = Config
-
 -- instance Resource T where
---   hold :: Config -> IO T
---   hold _ = do
+--   make :: Config -> IO T
+--   make _ = do
 --     requestVars <- HashTable.new
 --     responseVars <- HashTable.new
 --     serverThreads <- HashTable.new
@@ -57,7 +50,6 @@ module Bridge.Transports.Dummy where
 --     HashTable.mapM_ (cancel . snd) serverThreads
 --     HashTable.mapM_ (cancel . snd) publisherThreads
 --     HashTable.mapM_ (_unsubscribe t . fst) subscriberInfo
-
 -- instance RpcTransport T where
 --   _serve ::
 --        ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO ())
@@ -108,7 +100,6 @@ module Bridge.Transports.Dummy where
 --         push response
 --     async $ waitForDone >> cancel responseThread
 --     result
-
 -- retrieveStream ::
 --      T -> Text' "TopicName" -> IO (Text -> IO (), Streamly.Serial Text)
 -- retrieveStream T {streams} topic =
@@ -118,7 +109,6 @@ module Bridge.Transports.Dummy where
 --       (push, _, results) <- singleUsePushStream
 --       HashTable.insert streams topic (push, results)
 --       return (push, results)
-
 -- _unsubscribe :: T -> Text' "SubscriberId" -> IO ()
 -- _unsubscribe T {subscriberInfo} subscriberId = do
 --   let maybeUnsubscribe =
@@ -127,7 +117,6 @@ module Bridge.Transports.Dummy where
 --                 close)
 --   HashTable.lookup subscriberInfo subscriberId >>= maybeUnsubscribe
 --   HashTable.delete subscriberInfo subscriberId
-
 -- instance PubSubTransport T where
 --   _publish ::
 --        ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())

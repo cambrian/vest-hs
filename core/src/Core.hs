@@ -10,7 +10,7 @@ import qualified PriceServer
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data Config = Config
+data Config c u = Config
   {
   } deriving (Eq, Show, Read, Generic)
 
@@ -19,21 +19,26 @@ data T c u = T
   , dbPool :: Pool Db.T
   }
 
-class ( PriceServer.Priceable c
-      , Money.Unit c u
-      , KnownSymbol (VirtualStakeRoute c)
-      ) =>
-      Stakeable c u
-  where
-  make :: Config -> Amqp.T -> Pool Db.T -> IO (T c u)
-  make _config amqp dbPool =
+type instance ResourceConfig (T c u) =
+     (Config c u, Amqp.T, Pool Db.T)
+
+instance (PriceServer.Priceable c, Money.Unit c u) => Resource (T c u) where
+  make :: (Config c u, Amqp.T, Pool Db.T) -> IO (T c u)
+  make (_config, amqp, dbPool) = do
     let priceVirtualStake =
           (makeClient
              (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint c u))
              amqp)
             (sec 1)
             defaultHeaders
-     in return T {priceVirtualStake, dbPool}
+    return T {priceVirtualStake, dbPool}
+
+class ( PriceServer.Priceable c
+      , Money.Unit c u
+      , KnownSymbol (VirtualStakeRoute c)
+      ) =>
+      Stakeable c u
+  where
   handleStake ::
        T c u -> VirtualStakeRequest c u -> IO (VirtualStakeResponse c u)
   handleStake T {priceVirtualStake, dbPool} VirtualStakeRequest { user

@@ -10,4 +10,6 @@ main =
   withForever
     Amqp.localConfig
     (\amqp ->
-       make config amqp >>= start amqp amqp (Proxy :: Proxy PriceableCurrencies))
+       withForever
+         (config, amqp)
+         (start amqp amqp (Proxy :: Proxy PriceableCurrencies)))
