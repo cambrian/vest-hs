@@ -32,6 +32,7 @@ instance (PriceServer.Priceable c, Money.Unit c u) => Resource (T c u) where
             (sec 1)
             defaultHeaders
     return T {priceVirtualStake, dbPool}
+  -- TODO: Add explicit cleanup for minimal definition.
 
 class ( PriceServer.Priceable c
       , Money.Unit c u

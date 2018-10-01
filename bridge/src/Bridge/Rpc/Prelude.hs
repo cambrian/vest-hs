@@ -39,6 +39,12 @@ data AuthType
   | TokenAuth'
   deriving (Show)
 
+-- See note for AuthType.
+data DirectOrStreamingType
+  = DirectType
+  | StreamingType
+  deriving (Show)
+
 type family Claims auth = claims | claims -> auth
 
 type instance Claims () = ()

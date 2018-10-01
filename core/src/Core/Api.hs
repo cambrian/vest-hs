@@ -42,5 +42,5 @@ instance Money.Unit c u => FromJSON (VirtualStakeResponse c u)
 type VirtualStakeRoute currency = AppendSymbol "virtualStake/" currency
 
 type VirtualStakeEndpoint c u
-   = ( Endpoint 'Direct 'NoAuth (VirtualStakeRoute c) (VirtualStakeRequest c u) (VirtualStakeResponse c u)
+   = ( Endpoint 'NoAuth (VirtualStakeRoute c) (VirtualStakeRequest c u) ('Direct (VirtualStakeResponse c u))
      , Amqp.T)
