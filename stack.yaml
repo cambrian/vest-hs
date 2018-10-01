@@ -2,11 +2,11 @@ resolver: lts-12.10
 
 packages:
 - bridge
-# - bridge-client
-# - core
-# - fiat-payment-server
-# - manager
-# - price-server
+- bridge-client
+- core
+- fiat-payment-server
+- manager
+- price-server
 - vest-prelude
 
 extra-deps:
