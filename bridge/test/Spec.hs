@@ -1,7 +1,6 @@
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 
-import qualified Bridge.Transports.Dummy as Dummy
 import qualified Bridge.Transports.WebSocket as WebSocket
 import qualified Data.List
 import qualified Streamly
@@ -195,10 +194,6 @@ main = do
       describe "Direct RPC" $ mapM_ amqpMake directTests
       describe "Streaming RPC" $ mapM_ amqpMake streamingTests
       describe "Pub/Sub" $ mapM_ amqpMake pubSubTests
-    -- describe "Dummy bridge" $ do
-    --   describe "Direct RPC" $ mapM_ dummyMake directTests
-    --   describe "Streaming RPC" $ mapM_ dummyMake streamingTests
-    --   describe "Pub/Sub" $ mapM_ dummyMake pubSubTests
     describe "WebSocket bridge" $ do
       describe "Direct RPC" $ mapM_ wsMake directTests
       describe "Streaming RPC" $ mapM_ wsMake streamingTests
