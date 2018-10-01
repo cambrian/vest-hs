@@ -35,7 +35,7 @@ data ServerInfo = ServerInfo
   { uri :: Text' "Uri"
   , port :: Int' "Port"
   , path :: Text' "Path"
-  , routes :: [Text' "Route"] -- ^ not type safe infortunately
+  , routes :: [Text' "Route"] -- ^ Not type safe.
   }
 
 data Config = Config
@@ -200,7 +200,6 @@ instance RpcTransport T where
     -> Headers
     -> Text' "Request"
     -> IO (IO ())
-  -- ^ Only for testing purposes (inefficient since it spawns a connection per call).
   _issueRequest respond route T {clientRequestHandlers, clientResponseHandlers} headers reqText = do
     id <- newUUID
     makeRequest <-
