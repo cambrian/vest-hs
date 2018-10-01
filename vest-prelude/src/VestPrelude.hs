@@ -239,7 +239,7 @@ now = getCurrentTime >>- timestampFromUTCTime
 data PoolConfig = PoolConfig
   { idleTime :: Time Second
   , numResources :: Word
-  -- NumResources is technically per-stripe, but we just use 1 stripe
+  -- numResources is technically per-stripe, but we just use 1 stripe.
   }
 
 class Resource a where
@@ -248,11 +248,11 @@ class Resource a where
   -- ^ Minimal required definition.
   with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config = bracket (make config) cleanup
-  -- TODO: Catch exceptions and reconnect.
   withForever :: ResourceConfig a -> (a -> IO b) -> IO Void
+  -- ^ TODO: Catch exceptions and reconnect.
   withForever config action = with config (\a -> action a >> blockForever)
-  -- Use with withResource pool (\resource -> do ...)
   withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
+  -- ^ Use: withPool poolcfg cfg (\pool -> withResource pool (\resource -> do ...))
   withPool PoolConfig {idleTime, numResources} config =
     bracket
       (createPool (make config) cleanup 1 idleTime_ numResources_)
@@ -285,14 +285,6 @@ deriving instance Generic Timestamp
 instance ToJSON Timestamp
 
 instance FromJSON Timestamp
-
--- | Default Text value for cmdargs
-instance Default Text where
-  def = ""
-
--- | Default Text' value for cmdargs
-instance Default (Text' t) where
-  def = Tagged ""
 
 -- | Serialization
 data SerializationFormat

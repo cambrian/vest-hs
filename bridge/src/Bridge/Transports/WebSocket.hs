@@ -102,8 +102,8 @@ instance Resource T where
                   clientRequestHandlers
                   route
                   (putMVar requestMVar . Just))
-           return $ return () --putMVar requestMVar Nothing)
-         ) -- TODO: why doesn't returning the putMVar expression work?
+           let cleanup = return () -- putMVar requestMVar Nothing -- TODO: why doesn't this work?
+           return cleanup)
     return
       T
         { serverRequestHandlers
