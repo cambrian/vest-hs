@@ -125,7 +125,7 @@ instance Resource T where
     _ <- AMQP.deleteQueue chan (untag responseQueue)
     AMQP.closeConnection conn -- Also closes chan.
 
-instance RpcServerTransport T where
+instance RpcTransport T where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> Text' "Route"
@@ -156,8 +156,6 @@ instance RpcServerTransport T where
              (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if request message fails to read.
              AMQP.ackEnv env)
     HashTable.insert consumedRoutes route consumerTag
-
-instance RpcClientTransport T where
   _issueRequest ::
        (Text' "Response" -> IO ())
     -> Text' "Route"

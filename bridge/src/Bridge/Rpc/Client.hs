@@ -14,7 +14,7 @@ type family ClientBindings spec where
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
 
-class (RpcClientTransport transport) =>
+class (RpcTransport transport) =>
       Client spec transport
   where
   makeClient :: Proxy (spec, transport) -> transport -> ClientBindings spec
@@ -50,7 +50,7 @@ streamingPusher = do
   return (push, return results, done)
 
 _call ::
-     (Show req, ToJSON req, Read res, FromJSON res, RpcClientTransport transport)
+     (Show req, ToJSON req, Read res, FromJSON res, RpcTransport transport)
   => IO (res -> IO (), IO x, IO ())
   -> Text' "Route"
   -> transport
@@ -83,7 +83,7 @@ instance ( KnownSymbol route
          , ToJSON req
          , Read res
          , FromJSON res
-         , RpcClientTransport transport
+         , RpcTransport transport
          ) =>
          Client (Endpoint 'Direct h (route :: Symbol) req res) transport where
   makeClient ::
@@ -97,7 +97,7 @@ instance ( KnownSymbol route
          , ToJSON req
          , Read res
          , FromJSON res
-         , RpcClientTransport transport
+         , RpcTransport transport
          ) =>
          Client (Endpoint 'Streaming h (route :: Symbol) req res) transport where
   makeClient ::

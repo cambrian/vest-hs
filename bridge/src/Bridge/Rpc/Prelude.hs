@@ -7,7 +7,7 @@ import qualified Streamly
 
 -- | This implementation uses callbacks instread of streaming interfaces because
 -- streamly streams don't have persistence and TB[M]Queues are ugly.
-class RpcServerTransport t where
+class RpcTransport t where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
        -- ^ Called on request, supplied with (headers request respond)
@@ -15,7 +15,6 @@ class RpcServerTransport t where
     -> t
     -> IO ()
     -- ^ Returns a stream of requests, with response function per-request
-class RpcClientTransport t where
   _issueRequest ::
        (Text' "Response" -> IO ()) -- ^ Called on response
     -> Text' "Route"

@@ -32,7 +32,7 @@ type family Handlers spec where
             :<|> b) = (Handlers a
                        :<|> Handlers b)
 
-class (RpcServerTransport transport) =>
+class (RpcTransport transport) =>
       Server spec transport
   where
   serve :: Proxy (spec, transport) -> Handlers spec -> transport -> IO ()
@@ -65,7 +65,7 @@ streamingSender send resStream = do
   send EndOfResults
 
 _serve ::
-     (Read req, FromJSON req, Show res, ToJSON res, RpcServerTransport transport)
+     (Read req, FromJSON req, Show res, ToJSON res, RpcTransport transport)
   => ((res -> IO ()) -> x -> IO ()) -- Type x is typically res or Streamly.Serial res.
   -> (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
   -> Text' "Route"
@@ -93,7 +93,7 @@ instance ( KnownSymbol route
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcServerTransport transport
+         , RpcTransport transport
          ) =>
          Server (Endpoint 'Direct 'NoAuth (route :: Symbol) req res) transport where
   serve ::
@@ -108,7 +108,7 @@ instance ( KnownSymbol route
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcServerTransport transport
+         , RpcTransport transport
          ) =>
          Server (Endpoint 'Streaming 'NoAuth (route :: Symbol) req res) transport where
   serve ::
@@ -124,7 +124,7 @@ instance ( KnownSymbol route
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcServerTransport transport
+         , RpcTransport transport
          ) =>
          Server (Endpoint 'Direct ('Auth auth) (route :: Symbol) req res) transport where
   serve ::
@@ -140,7 +140,7 @@ instance ( KnownSymbol route
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcServerTransport transport
+         , RpcTransport transport
          ) =>
          Server (Endpoint 'Streaming ('Auth auth) (route :: Symbol) req res) transport where
   serve ::
