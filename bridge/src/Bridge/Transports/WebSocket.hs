@@ -58,7 +58,7 @@ data T = T
   { serverRequestHandlers :: HashTable (Text' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
   -- ^ For a server, requests need to be aggregated by route.
   , serverResponseHandlers :: HashTable (Text' "ClientId") (ResponseMessage -> IO ())
-  -- ^ For a server, stores each client's response queue
+  -- ^ For a server, stores each client's response queue.
   , clientRequestHandlers :: HashTable (Text' "Route") (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , serverThread :: Async ()
@@ -69,7 +69,7 @@ type instance ResourceConfig T = Config
 
 instance Resource T where
   make :: ResourceConfig T -> IO T
-  -- Connects to bridge, begins listening on client connections.
+  -- Begins listening on servePort, connects to each server and begins listening for responses.
   make Config {servePort, pingInterval, servers} = do
     serverRequestHandlers <- HashTable.new
     serverResponseHandlers <- HashTable.new
