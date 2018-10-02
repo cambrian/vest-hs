@@ -24,7 +24,6 @@ import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Type.Bool as Reexports
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
-import qualified Data.Vector as Vector
 import qualified Foreign.StablePtr as StablePtr
 import GHC.TypeLits as Reexports (AppendSymbol)
 import Protolude as Reexports hiding

@@ -200,7 +200,7 @@ instance PubSubTransport T where
     -> Streamly.Serial a
     -> T
     -> IO ()
-  _publish processor topic as T {chan, publisherThreads} = do
+  _publish processor topic as T {chan, publisherThreads} =
     HashTable.lookup publisherThreads topic >>= \case
       Nothing -> do
         let Tagged exchangeName = topic

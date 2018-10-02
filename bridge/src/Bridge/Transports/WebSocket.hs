@@ -117,7 +117,7 @@ instance Resource T where
   cleanup :: T -> IO ()
   cleanup T {serverThread, clientCleanupFns} = do
     cancel serverThread
-    mapM_ (\x -> do x) clientCleanupFns
+    mapM_ identity clientCleanupFns
 
 httpApp :: Wai.Application
 httpApp _ respond =
@@ -192,7 +192,7 @@ instance RpcTransport T where
     HashTable.lookup serverRequestHandlers route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
-    let handleMsg clientId RequestMessage {id = requestId, headers, reqText} = do
+    let handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
           HashTable.lookup serverResponseHandlers clientId >>= \case
             Nothing -> async $ return ()
             Just handler ->
