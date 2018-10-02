@@ -64,6 +64,18 @@ data Headers = Headers
   -- TODO: Signatures and such.
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
+type family Routes spec where
+  Routes (Endpoint _ (route :: Symbol) _ _) = '[ route]
+  Routes (a
+          :<|> b) = Routes a :++ Routes b
+
+type family NubRoutes spec where
+  NubRoutes (Endpoint _ (route :: Symbol) _ _) = '[ route]
+  NubRoutes (a
+             :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
+
+type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
+
 data ResultItem a
   = Result a
   | EndOfResults

@@ -1,6 +1,7 @@
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 
+import Bridge.Rpc.Prelude ()
 import qualified Bridge.Transports.WebSocket as WebSocket
 import qualified Data.List
 import qualified Streamly
@@ -47,6 +48,7 @@ withRpcClient config _ action =
     config
     (\transport -> do
        serve (Proxy :: Proxy (RpcApi, transport)) handlers transport
+       threadDelay (sec 0.01) -- Wait for servers to initialize and avoid races.
        action $ makeClient (Proxy :: Proxy (spec, transport)) transport)
 
 increment :: Streamly.Serial Int
@@ -175,11 +177,8 @@ webSocketConfig =
             , port = Tagged 3000
             , path = Tagged "/"
             , routes =
-                [ Tagged "echoIntsDirect"
-                , Tagged "echoTextDirect"
-                , Tagged "echoIntsStreaming"
-                , Tagged "echoTextsStreaming"
-                ]
+                map stringToText' . manySymbolVal $
+                (Proxy :: Proxy (NubRoutes RpcApi))
             }
         ]
     }
@@ -187,7 +186,6 @@ webSocketConfig =
 main :: IO ()
 main = do
   let amqpMake = ($ Amqp.localConfig)
-      -- dummyMake = ($ Dummy.localConfig)
       wsMake = ($ webSocketConfig)
   hspec $ do
     describe "AMQP bridge" $ do

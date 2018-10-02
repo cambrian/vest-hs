@@ -7,18 +7,6 @@ import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
-type family Routes spec where
-  Routes (Endpoint _ (route :: Symbol) _ _) = '[ route]
-  Routes (a
-          :<|> b) = Routes a :++ Routes b
-
-type family NubRoutes spec where
-  NubRoutes (Endpoint _ (route :: Symbol) _ _) = '[ route]
-  NubRoutes (a
-             :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
-
-type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
-
 data RpcServerException =
   AlreadyServing (Text' "Route")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)

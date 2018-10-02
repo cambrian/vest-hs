@@ -1,19 +1,31 @@
 #!/bin/bash
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+touch ~/.bash_profile
+NEW_PATH="export PATH=~/.local/bin:\$PATH"
+if grep -Fxq "$NEW_PATH" ~/.bash_profile; then
+:
+else
+echo "Adding Haskell global bin to PATH."
+echo "$NEW_PATH" >> ~/.bash_profile
+fi
+
+echo -e "${CYAN}Logging commands to ~/.vest-hs.${NC}"
 mkdir -p ~/.vest-hs
+rm -f ~/.vest-hs/*.log
+echo "Cleaning up existing stack work."
+stack clean --full > ~/.vest-hs/stack-clean.log 2>&1
 echo "Updating Cabal package list."
-cabal update > ~/.vest-hs/cabal-update.log
-# echo "Installing Haskell IDE engine."
-# echo "This might take a while."
-# git clone https://github.com/haskell/haskell-ide-engine ~/.haskell-ide-engine --recursive > /dev/null
-# cd ~/.haskell-ide-engine > /dev/null
-# stack install > ~/.vest-hs/hie-install.log
-# cd - > /dev/null
-# echo "Performing HIE troubleshooting fix."
-# mv ~/.stack/programs/x86_64-osx/ghc-8.4.3/lib/ghc-8.4.3/integer-gmp-1.0.2.0/HSinteger-gmp-1.0.2.0.o ~/.stack/programs/x86_64-osx/ghc-8.4.3/lib/ghc-8.4.3/integer-gmp-1.0.2.0/HSinteger-gmp-1.0.2.0.o.bak > /dev/null
+cabal update > ~/.vest-hs/cabal-update.log 2>&1
 echo "Installing Intero."
-stack build intero > ~/.vest-hs/intero-build.log
+stack build intero > ~/.vest-hs/intero-build.log 2>&1
 echo "Installing IDE-related modules."
-stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log /dev/null
-stack install hindent cabal-install > ~/.vest-hs/hindent-install.log /dev/null
+stack build hlint > ~/.vest-hs/hlint-build.log 2>&1
+stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log 2>&1
+stack install hindent > ~/.vest-hs/hindent-install.log 2>&1
 echo "Installing external dependencies."
-brew install rabbitmq libpq postgres > ~/.vest-hs/brew-install.log
+brew install rabbitmq libpq postgres > ~/.vest-hs/brew-install.log 2>&1
+echo -e "${CYAN}1. Run [source ~/.bash_profile] to apply your PATH."
+echo -e "2. Run ./dev.sh to build all the modules for Haskero."
+echo -e "3. Restart the entire VS Code application.${NC}"
