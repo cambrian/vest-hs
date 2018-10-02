@@ -122,7 +122,7 @@ noHttpApp _ respond =
   Wai.responseLBS
     Http.status400
     []
-    "HTTP requests not supported. (use WebSockets)."
+    "HTTP requests not supported (use WebSockets)."
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
@@ -184,17 +184,17 @@ instance RpcTransport T where
     -> IO ()
   _consumeRequests asyncHandler route T { serverRequestHandlers
                                         , serverResponseHandlers
-                                        } = do
+                                        } =
     HashTable.lookup serverRequestHandlers route >>= \case
-      Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
-    let handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
-          HashTable.lookup serverResponseHandlers clientId >>= \case
-            Nothing -> async $ return ()
-            Just handler ->
-              let respond resText = handler ResponseMessage {requestId, resText}
-               in asyncHandler headers reqText respond
-    HashTable.insert serverRequestHandlers route handleMsg
+      Nothing -> HashTable.insert serverRequestHandlers route handleMsg
+    where
+      handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
+        HashTable.lookup serverResponseHandlers clientId >>= \case
+          Nothing -> async $ return ()
+          Just handler ->
+            let respond resText = handler ResponseMessage {requestId, resText}
+             in asyncHandler headers reqText respond
   _issueRequest ::
        (Text' "Response" -> IO ())
     -> Text' "Route"
