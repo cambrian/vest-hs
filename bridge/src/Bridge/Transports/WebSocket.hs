@@ -62,7 +62,8 @@ data T = T
   , clientRequestHandlers :: HashTable (Text' "Route") (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , serverThread :: Async ()
-  , clientCleanupFns :: [IO ()]
+  , clientThreads :: [Async ()]
+  -- ^ Should clean themselves up when canceled
   }
 
 type instance ResourceConfig T = Config
@@ -83,18 +84,11 @@ instance Resource T where
         WS.defaultConnectionOptions
         (wsServe serverRequestHandlers serverResponseHandlers pingInterval)
         httpApp
-    clientCleanupFns <-
+    clientThreads <-
       forM
         servers
         (\ServerInfo {uri, port, path, routes} -> do
            requestMVar <- newEmptyMVar
-           clientThread <-
-             async $
-             WS.runClient
-               (unpack $ untag uri)
-               (untag port)
-               (unpack $ untag path)
-               (wsClientApp clientResponseHandlers requestMVar)
            forM_
              routes
              (\route ->
@@ -102,7 +96,12 @@ instance Resource T where
                   clientRequestHandlers
                   route
                   (putMVar requestMVar))
-           return $ cancel clientThread)
+           async $
+             WS.runClient
+               (unpack $ untag uri)
+               (untag port)
+               (unpack $ untag path)
+               (wsClientApp clientResponseHandlers requestMVar))
     return
       T
         { serverRequestHandlers
@@ -110,12 +109,12 @@ instance Resource T where
         , clientRequestHandlers
         , clientResponseHandlers
         , serverThread
-        , clientCleanupFns
+        , clientThreads
         }
   cleanup :: T -> IO ()
-  cleanup T {serverThread, clientCleanupFns} = do
+  cleanup T {serverThread, clientThreads} = do
     cancel serverThread
-    mapM_ identity clientCleanupFns
+    mapM_ cancel clientThreads
 
 httpApp :: Wai.Application
 httpApp _ respond =
