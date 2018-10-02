@@ -83,7 +83,7 @@ instance Resource T where
       WS.websocketsOr
         WS.defaultConnectionOptions
         (wsServe serverRequestHandlers serverResponseHandlers pingInterval)
-        httpApp
+        noHttpApp
     clientThreads <-
       forM
         servers
@@ -116,9 +116,13 @@ instance Resource T where
     cancel serverThread
     mapM_ cancel clientThreads
 
-httpApp :: Wai.Application
-httpApp _ respond =
-  respond $ Wai.responseLBS Http.status400 [] "not a WebSocket request"
+noHttpApp :: Wai.Application
+noHttpApp _ respond =
+  respond $
+  Wai.responseLBS
+    Http.status400
+    []
+    "HTTP requests not supported. (use WebSockets)."
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
