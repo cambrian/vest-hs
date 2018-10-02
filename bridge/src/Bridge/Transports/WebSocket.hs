@@ -88,7 +88,7 @@ instance Resource T where
         servers
         (\ServerInfo {uri, port, path, routes} -> do
            requestMVar <- newEmptyMVar
-           serverClientThread <-
+           clientThread <-
              async $
              WS.runClient
                (unpack $ untag uri)
@@ -101,9 +101,8 @@ instance Resource T where
                 HashTable.insert
                   clientRequestHandlers
                   route
-                  (putMVar requestMVar . Just))
-           let cleanupInner = cancel serverClientThread
-           return cleanupInner)
+                  (putMVar requestMVar))
+           return $ cancel clientThread)
     return
       T
         { serverRequestHandlers
@@ -157,7 +156,7 @@ serveClient serverRequestHandlers clientId conn =
 
 wsClientApp ::
      HashTable (Text' "RequestId") (Text' "Response" -> IO ())
-  -> MVar (Maybe RequestMessage)
+  -> MVar RequestMessage
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn =
   withAsync
@@ -170,15 +169,9 @@ wsClientApp clientResponseHandlers requestMVar conn =
            maybeHandler <- HashTable.lookup clientResponseHandlers requestId
             -- If the route is not served, swallow the request.
            maybeHandler >|>| ($ resText))
-    (\readerThread -> do
-       let loop = do
-             maybeRequest <- takeMVar requestMVar
-             case maybeRequest of
-               Nothing -> cancel readerThread
-               Just x -> do
-                 WS.sendTextData conn (serialize @'JSON x)
-                 loop
-       loop)
+    (const . forever $ do
+       request <- takeMVar requestMVar
+       WS.sendTextData conn (serialize @'JSON request))
 
 instance RpcTransport T where
   _consumeRequests ::
