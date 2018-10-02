@@ -11,7 +11,6 @@
 - arguments:
   # - --color
   # - --cpp-simple
-  - -XQuasiQuotes
   - -XAllowAmbiguousTypes
   - -XApplicativeDo
   - -XBangPatterns
@@ -70,7 +69,9 @@
 #   - {name: -w, within: []} # -w is allowed nowhere
 #
 # - modules:
-#   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
+#   # - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
+#   - {name: [VestPrelude.Money], as: Money}
+#   - {name: [VestPrelude.Db], as: Db}
 #   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
 #
 # - functions:

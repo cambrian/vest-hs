@@ -42,5 +42,4 @@ instance (HasSqlValueSyntax be Integer, KnownSymbol a, Money.GoodScale scale) =>
 instance (Money.GoodScale scale) => FromField (Money.Discrete' a scale) where
   fromField f bs = fromField f bs >>- Money.discrete @scale
 
-instance (Money.GoodScale scale) =>
-         FromBackendRow Postgres (Money.Discrete' a scale)
+instance (Money.GoodScale scale) => FromBackendRow Postgres (Money.Discrete' a scale)

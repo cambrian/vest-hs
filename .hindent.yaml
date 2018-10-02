@@ -2,3 +2,47 @@ line-breaks:
 - :<|>
 
 force-trailing-newline: true
+
+# Hindent takes a subset of the extensions we use... Be sure to keep this in sync with .hlint.yaml
+# and the various package.yamls
+extensions:
+- BangPatterns
+- ConstraintKinds
+- DataKinds
+- DefaultSignatures
+- DeriveAnyClass
+- DeriveDataTypeable
+- DeriveFoldable
+- DeriveFunctor
+- DeriveGeneric
+- DeriveTraversable
+- DerivingStrategies
+- EmptyCase
+- ExistentialQuantification
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GADTs
+# - GeneralizedNewtypeDeriving
+- InstanceSigs
+- KindSignatures
+- LambdaCase
+- MultiParamTypeClasses
+- MultiWayIf
+- NamedFieldPuns
+- NoImplicitPrelude
+- OverloadedStrings
+- OverloadedLabels
+- PatternSynonyms
+- PolyKinds
+- QuasiQuotes
+- RankNTypes
+- ScopedTypeVariables
+- StandaloneDeriving
+- TemplateHaskell
+- TupleSections
+- TypeApplications
+- TypeFamilies
+- TypeFamilyDependencies
+- TypeOperators
+- UndecidableInstances
