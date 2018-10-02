@@ -82,10 +82,6 @@ type Text' t = Tagged t Text
 
 instance Hashable a => Hashable (Tagged s a)
 
-newtype ReadException =
-  ReadException Text
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
-
 data BugException =
   BugException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
@@ -175,7 +171,7 @@ pushStream = do
   let push a =
         atomically $ do
           (_, closed, counter) <- readTVar t
-          when closed (throwSTM $ StreamPushAfterCloseException)
+          when closed (throwSTM StreamPushAfterCloseException)
           writeTVar t (Just a, False, counter + 1)
       close =
         atomically $ modifyTVar' t (\(x, _, counter) -> (x, True, counter))

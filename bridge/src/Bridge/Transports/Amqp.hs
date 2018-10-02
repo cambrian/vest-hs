@@ -1,4 +1,3 @@
--- TODO: Different channels for different threads.
 module Bridge.Transports.Amqp
   ( T(..)
   , Config(..)
@@ -90,7 +89,8 @@ instance Resource T where
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           (read . fromAmqpMsg $ msg) >|>| handleMsg -- Do nothing if response message malformed.
+           (read . fromAmqpMsg $ msg) >|>| handleMsg
+           -- ^ Do nothing if response message malformed.
            AMQP.ackEnv env)
     consumedRoutes <- HashTable.new
     publisherThreads <- HashTable.new
@@ -131,7 +131,10 @@ instance RpcTransport T where
     -> Text' "Route"
     -> T
     -> IO ()
-  -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem
+  -- ^ This function SHOULD lock the consumedRoutes table but it's highly
+  -- unlikely to be a problem.
+  -- TODO: Declare a chan per consumer thread.
+  -- (i.e. per call to AMQP.consumeMsgs)
   _consumeRequests asyncHandler route T {chan, consumedRoutes} = do
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
@@ -220,6 +223,8 @@ instance PubSubTransport T where
     -> Text' "TopicName"
     -> T
     -> IO (Text' "SubscriberId")
+  -- TODO: Declare a chan per consumer thread.
+  -- (i.e. per call to AMQP.consumeMsgs)
   _subscribe push close (Tagged exchangeName) T {chan, subscriberInfo} = do
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName

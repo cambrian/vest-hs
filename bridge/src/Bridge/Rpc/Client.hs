@@ -59,24 +59,25 @@ _call ::
   -> req
   -> IO x
 _call pusher route transport timeout_ headers req = do
-    (push, result, done) <- pusher
-    (renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
-    let fmt = format headers
-        (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' $ fmt
-        handleResponse resOrExcText = do
-          deserializeUnsafe_ resOrExcText >>= \case
-            Left exc -> throw (exc :: RpcClientException)
-            Right res -> push res
-          renewTimeout
-    cleanup <- _issueRequest handleResponse route transport headers (serialize_ req)
-    mainThread <- myThreadId
-    void . async $ do
-      timeoutOrDone_ <- timeoutOrDone
-      cleanup
-      case timeoutOrDone_ of
-        Left exn -> evilThrowTo mainThread exn -- TODO: We should probably change this?
-        _ -> return ()
-    result
+  (push, result, done) <- pusher
+  (renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
+  let fmt = format headers
+      (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' $ fmt
+      handleResponse resOrExcText = do
+        deserializeUnsafe_ resOrExcText >>= \case
+          Left exc -> throw (exc :: RpcClientException)
+          Right res -> push res
+        renewTimeout
+  doCleanup <-
+    _issueRequest handleResponse route transport headers (serialize_ req)
+  mainThread <- myThreadId
+  void . async $ do
+    timeoutOrDone_ <- timeoutOrDone
+    doCleanup
+    case timeoutOrDone_ of
+      Left exn -> evilThrowTo mainThread exn -- TODO: Is this bad?
+      _ -> return ()
+  result
 
 instance ( KnownSymbol route
          , Show req

@@ -5,14 +5,15 @@ module Bridge.PubSub.Prelude
 import qualified Streamly
 import VestPrelude
 
--- SubscribeOne (non-streaming version) is deliberately unimplemented, because RabbitMQ does not
--- support message history. Candidate solutions are building a separate pub/sub system on Kafka
--- (or similar), or adding Cassandra to RabbitMQ. For now, you can use makeStreamVar in
--- conjunction with subscribe' to get one-off values from a published topic.
+-- SubscribeOne (non-streaming version) is deliberately unimplemented, because
+-- RabbitMQ does not support message history. Candidate solutions are building
+-- a separate pub/sub system on Kafka (or similar), or adding Cassandra to
+-- RabbitMQ. For now, you can use makeStreamVar in conjunction with subscribe'
+-- to get one-off values from a published topic.
 class PubSubTransport t where
   _publish ::
        ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())
-    -- ^ (send publish object text to wire -> stream of publish objects)
+      -- ^ (send publish object text to wire -> stream of publish objects)
     -> Text' "TopicName"
     -> Streamly.Serial a
     -> t

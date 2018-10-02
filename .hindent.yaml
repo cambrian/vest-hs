@@ -1,4 +1,4 @@
 line-breaks:
 - :<|>
-- :=>
-- :*
+
+force-trailing-newline: true

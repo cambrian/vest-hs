@@ -4,9 +4,9 @@
     "eg2.tslint",
     "jcanero.hoogle-vscode",
     "lunaryorn.hlint",
+    "monofon.hindent-format",
     "phoityne.phoityne-vscode",
     "steoates.autoimport",
-    "vans.haskero",
-    "wk-j.save-and-run"
+    "vans.haskero"
   ]
 }

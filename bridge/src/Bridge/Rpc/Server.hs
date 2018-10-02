@@ -66,7 +66,8 @@ streamingSender send resStream = do
 
 _serve ::
      (Read req, FromJSON req, Show res, ToJSON res, RpcTransport transport)
-  => ((res -> IO ()) -> x -> IO ()) -- Type x is typically res or Streamly.Serial res.
+  => ((res -> IO ()) -> x -> IO ())
+     -- ^ x is typically res or Streamly.Serial res.
   -> (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
   -> Text' "Route"
   -> (Claims auth -> req -> IO x)
@@ -77,7 +78,7 @@ _serve sender verifyAuth route handler = _consumeRequests asyncHandle route
     asyncHandle headers reqText respond =
       async $ do
         let fmt = format headers
-            (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' $ fmt
+            (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' fmt
         catch
           (do claims <- verifyAuth headers reqText >>= fromJustUnsafe BadAuth
               req <-

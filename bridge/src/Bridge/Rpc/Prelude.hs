@@ -20,8 +20,7 @@ class RpcTransport t where
     -> t
     -> Headers
     -> Text' "Request"
-    -> IO (IO ())
-    -- ^ Returns cleanup function
+    -> IO (IO ()) -- ^ Returns cleanup function
 
 data Auth a
   = NoAuth
@@ -31,9 +30,10 @@ data Auth a
 class AuthScheme t where
   verify :: Headers -> Text' "Request" -> IO (Maybe (Claims t))
 
--- Hacky way to match on auth type when we generate TypeScript callers, since we can't use the type
--- family for that purpose. Down the road when the pipeline is clearer, this matching logic could
--- be converted to a typeclass-based solution.
+-- Hacky way to match on auth type when we generate TypeScript callers, since
+-- we can't use the type family for that purpose. Down the road when the
+-- pipeline is clearer, this matching logic could be converted to a
+-- typeclass-based solution.
 data AuthType
   = NoAuth'
   | TokenAuth'
@@ -49,7 +49,8 @@ type family Claims auth = claims | claims -> auth
 
 type instance Claims () = ()
 
--- | Streaming endpoints should return cumulative results (missing an intermediate result is ok).
+-- | Streaming endpoints should return cumulative results (missing an
+-- intermediate result is ok).
 data DirectOrStreaming a
   = Direct a
   | Streaming a
