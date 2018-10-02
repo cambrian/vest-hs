@@ -4,8 +4,8 @@ module Manager
   , start
   ) where
 
+-- import qualified Bridge.Transports.Amqp as Amqp
 import Bridge
-import qualified Bridge.Transports.Amqp as Amqp
 import qualified Bridge.Transports.WebSocket as WebSocket
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
@@ -66,6 +66,6 @@ echoThriceAuth _ = return . Streamly.fromList . replicate 3
 handlers :: Handlers ManagerApi
 handlers = addInts :<|> echoThrice :<|> concatTextAuth :<|> echoThriceAuth
 
-start :: WebSocket.T -> Amqp.T -> Amqp.T -> IO ()
+start :: WebSocket.T -> WebSocket.T -> WebSocket.T -> IO ()
 start serverTransport _ _ =
   serve handlers (Proxy :: Proxy (ManagerApi, WebSocket.T)) serverTransport

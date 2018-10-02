@@ -131,8 +131,7 @@ instance RpcTransport T where
     -> Text' "Route"
     -> T
     -> IO ()
-  -- ^ This function SHOULD lock the consumedRoutes table but it's highly
-  -- unlikely to be a problem.
+  -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
   -- TODO: Declare a chan per consumer thread.
   -- (i.e. per call to AMQP.consumeMsgs)
   _consumeRequests asyncHandler route T {chan, consumedRoutes} = do
@@ -160,7 +159,7 @@ instance RpcTransport T where
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if request message fails to read.
+           (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if message fails to read.
            AMQP.ackEnv env)
     HashTable.insert consumedRoutes route consumerTag
   _issueRequest ::

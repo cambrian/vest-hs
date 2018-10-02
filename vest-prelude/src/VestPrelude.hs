@@ -25,6 +25,7 @@ import Data.Type.Bool as Reexports
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Foreign.StablePtr as StablePtr
+import qualified GHC.Base
 import GHC.TypeLits as Reexports (AppendSymbol)
 import Protolude as Reexports hiding
   ( Exception
@@ -75,6 +76,16 @@ type family Nub xs where
 type family (x :: [k]) :++ (y :: [k]) :: [k] where
   '[] :++ xs = xs
   (x ': xs) :++ ys = x ': (xs :++ ys)
+
+class ManySymbolVal (xs :: [Symbol]) where
+  manySymbolVal :: proxy xs -> [GHC.Base.String]
+
+instance ManySymbolVal '[] where
+  manySymbolVal _ = []
+
+instance (KnownSymbol a, ManySymbolVal as) => ManySymbolVal (a ': as) where
+  manySymbolVal _ =
+    symbolVal (Proxy :: Proxy a) : manySymbolVal (Proxy :: Proxy as)
 
 type Int' t = Tagged t Int
 
@@ -190,7 +201,10 @@ pushStream = do
   return (push, close, stream)
 
 proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
-proxyText' = Tagged . pack . symbolVal
+proxyText' = stringToText' . symbolVal
+
+stringToText' :: GHC.Base.String -> Text' t
+stringToText' = Tagged . pack
 
 -- Returns renewer.
 timeoutRenewable ::
