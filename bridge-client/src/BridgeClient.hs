@@ -63,7 +63,8 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
-  makeSpecTsTypes :: Proxy (Endpoint auth route req ('Direct res)) -> [SpecTsTypes]
+  makeSpecTsTypes ::
+       Proxy (Endpoint auth route req ('Direct res)) -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
         { directOrStreamingType = DirectType
@@ -81,7 +82,8 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
-  makeSpecTsTypes :: Proxy (Endpoint auth route req ('Streaming res)) -> [SpecTsTypes]
+  makeSpecTsTypes ::
+       Proxy (Endpoint auth route req ('Streaming res)) -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
         { directOrStreamingType = StreamingType
@@ -99,7 +101,8 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
-  makeSpecTsTypes :: Proxy (Endpoint auth route req ('Direct res)) -> [SpecTsTypes]
+  makeSpecTsTypes ::
+       Proxy (Endpoint auth route req ('Direct res)) -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
         { directOrStreamingType = DirectType
@@ -117,10 +120,11 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
-  makeSpecTsTypes :: Proxy (Endpoint auth route req ('Streaming res)) -> [SpecTsTypes]
+  makeSpecTsTypes ::
+       Proxy (Endpoint auth route req ('Streaming res)) -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
-        { directOrStreamingType = DirectType
+        { directOrStreamingType = StreamingType
         , authType = TokenAuth'
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText (Proxy :: Proxy req)

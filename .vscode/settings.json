@@ -20,4 +20,14 @@
       }
     ]
   },
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "typescript.format.insertSpaceAfterConstructor": true,
+  "typescript.format.insertSpaceBeforeFunctionParenthesis": true,
+  "typescript.format.insertSpaceAfterTypeAssertion": true,
+  "typescript.tsdk": "bridge-client/foreign/node_modules/typescript/lib",
+  "tslint.configFile": "bridge-client/foreign/tslint.json",
+  "tslint.autoFixOnSave": true,
+  "files.associations": {
+    "*.ede": "cpp"
+  }
 }
