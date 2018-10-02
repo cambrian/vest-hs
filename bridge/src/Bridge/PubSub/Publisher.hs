@@ -32,7 +32,7 @@ type family Streams spec where
 class (PubSubTransport transport) =>
       Publisher spec transport
   where
-  publish :: Proxy (spec, transport) -> Streams spec -> transport -> IO ()
+  publish :: Streams spec -> Proxy (spec, transport) -> transport -> IO ()
 
 instance ( HasUniqueTopics (a
                             :<|> b)
@@ -42,25 +42,25 @@ instance ( HasUniqueTopics (a
          Publisher (a
                     :<|> b) transport where
   publish ::
-       Proxy ( a
+       (Streams a
+        :<|> Streams b)
+    -> Proxy ( a
                :<|> b
              , transport)
-    -> (Streams a
-        :<|> Streams b)
     -> transport
     -> IO ()
-  publish _ (aStreams :<|> bStreams) transport = do
-    publish (Proxy :: Proxy (a, transport)) aStreams transport
-    publish (Proxy :: Proxy (b, transport)) bStreams transport
+  publish (aStreams :<|> bStreams) _ transport = do
+    publish aStreams (Proxy :: Proxy (a, transport)) transport
+    publish bStreams (Proxy :: Proxy (b, transport)) transport
 
 instance (Serializable f a, KnownSymbol name, PubSubTransport transport) =>
          Publisher (Topic (f :: SerializationFormat) (name :: Symbol) a) transport where
   publish ::
-       Proxy (Topic f name a, transport)
-    -> Streamly.Serial a
+       Streamly.Serial a
+    -> Proxy (Topic f name a, transport)
     -> transport
     -> IO ()
-  publish _ =
+  publish stream _ =
     _publish
-      (\send -> Streamly.mapM_ (send . serialize' @f))
+      (\send -> Streamly.mapM_ (send . serialize' @f) stream)
       (proxyText' (Proxy :: Proxy name))

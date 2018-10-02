@@ -2,7 +2,6 @@ module Bridge.PubSub.Prelude
   ( module Bridge.PubSub.Prelude
   ) where
 
-import qualified Streamly
 import VestPrelude
 
 -- SubscribeOne (non-streaming version) is deliberately unimplemented, because
@@ -12,10 +11,9 @@ import VestPrelude
 -- to get one-off values from a published topic.
 class PubSubTransport t where
   _publish ::
-       ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())
-      -- ^ (send publish object text to wire -> stream of publish objects)
+       ((Text' "a" -> IO ()) -> IO ())
+      -- ^ Publish fn, given a function to send a serialized @a over @t.
     -> Text' "TopicName"
-    -> Streamly.Serial a
     -> t
     -> IO ()
   _subscribe ::

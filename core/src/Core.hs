@@ -59,8 +59,8 @@ class ( PriceServer.Priceable c
   start :: Amqp.T -> T c u -> IO ()
   start rpcTransport t =
     serve
-      (Proxy :: Proxy (VirtualStakeEndpoint c u))
       (handleStake t)
+      (Proxy :: Proxy (VirtualStakeEndpoint c u))
       rpcTransport
 
 instance Stakeable "XTZ" "mutez"

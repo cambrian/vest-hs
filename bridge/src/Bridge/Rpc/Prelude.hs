@@ -9,8 +9,8 @@ import VestPrelude
 class RpcTransport t where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-       -- ^ Called per request, supplied with (headers request respondToClient)
     -> Text' "Route"
+       -- ^ Called per request, supplied with (headers request respondToClient)
     -> t
     -> IO ()
     -- ^ Returns a stream of requests, with response function per-request
