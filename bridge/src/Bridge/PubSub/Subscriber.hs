@@ -41,7 +41,7 @@ instance (Deserializable f a, KnownSymbol name, PubSubTransport transport) =>
     -> transport
     -> IO (IO' "Unsubscribe" (), Streamly.Serial a)
   subscribe _ transport = do
-    (push_, close, stream) <- pushStream
+    (push_, Tagged close, stream) <- pushStream
     let push = push_ <=< deserializeUnsafe' @f
     Tagged unsubscribe_ <-
       _subscribe push (proxyText' (Proxy :: Proxy name)) transport

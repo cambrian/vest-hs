@@ -1,5 +1,5 @@
-module DelegateManager.Api
-  ( module DelegateManager.Api
+module TezosDelegationCore.Api
+  ( module TezosDelegationCore.Api
   ) where
 
 import Bridge

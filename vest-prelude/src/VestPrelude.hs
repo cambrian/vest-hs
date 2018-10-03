@@ -89,6 +89,8 @@ instance (KnownSymbol a, ManySymbolVal as) => ManySymbolVal (a ': as) where
 
 type Int' t = Tagged t Int
 
+type Int64' t = Tagged t Int64
+
 type Text' t = Tagged t Text
 
 type IO' t a = Tagged t (IO a)
@@ -178,7 +180,7 @@ data StreamPushAfterCloseException =
 -- Close does nothing on repeated binds.
 -- Remembers the most recent item pushed. A new consumption from this stream will see the most
 -- recently pushed item, even if it is already closed.
-pushStream :: IO (a -> IO (), IO (), Streamly.Serial a)
+pushStream :: IO (a -> IO (), IO' "CloseStream" (), Streamly.Serial a)
 pushStream = do
   t <- newTVarIO (Nothing, False, 0 :: Word64) -- stores (Maybe value, closed, counter)
   let push a =
@@ -194,13 +196,13 @@ pushStream = do
              atomically $ do
                (value, closed, counter) <- readTVar t
                unless (closed || counter > highestSeen) retry
-               if (counter > highestSeen)
+               if counter > highestSeen
                  then case value of
                         Just x -> return $ Just (x, counter)
-                        Nothing -> throwSTM $ BugException
+                        Nothing -> throwSTM BugException
                  else return Nothing)
           0
-  return (push, close, stream)
+  return (push, Tagged close, stream)
 
 proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
 proxyText' = stringToText' . symbolVal
@@ -208,9 +210,10 @@ proxyText' = stringToText' . symbolVal
 stringToText' :: GHC.Base.String -> Text' t
 stringToText' = Tagged . pack
 
--- Returns renewer.
 timeoutRenewable ::
-     Time Second -> IO a -> IO (IO (), IO (Either TimeoutException a))
+     Time Second
+  -> IO a
+  -> IO (IO' "RenewTimeout" (), IO (Either TimeoutException a))
 timeoutRenewable timeout_ action = do
   let micros = toNum @Microsecond timeout_
   delay <- newDelay micros
@@ -226,7 +229,7 @@ timeoutRenewable timeout_ action = do
         readMVar resultMVar >>- \case
           Nothing -> Left $ TimeoutException timeout_
           Just a -> Right a
-  return (updateDelay delay micros, result)
+  return (Tagged $ updateDelay delay micros, result)
 
 -- UTCTime <--> Timestamp
 -- TODO: keep nanos
@@ -303,7 +306,7 @@ data SerializationFormat
   | JSON
   deriving (Eq, Ord, Show, Read, Data, Generic, Hashable, ToJSON, FromJSON)
 
-data DeserializeException (f :: SerializationFormat) =
+newtype DeserializeException (f :: SerializationFormat) =
   DeserializeException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 

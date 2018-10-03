@@ -3,10 +3,10 @@ resolver: lts-12.10
 packages:
 - bridge
 - bridge-client
-- delegate-manager
 - fiat-payment-server
 - manager
 - price-server
+- tezos-delegation-core
 - vest-prelude
 
 extra-deps:

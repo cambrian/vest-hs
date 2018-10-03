@@ -33,25 +33,26 @@ instance (Client a transport, Client b transport) =>
     makeClient (Proxy :: Proxy (a, transport)) transport :<|>
     makeClient (Proxy :: Proxy (b, transport)) transport
 
-directPusher :: IO (res -> IO (), IO res, IO ())
+directPusher :: IO (res -> IO (), IO res, IO' "Done" ())
 directPusher = do
   resultVar <- newEmptyMVar
   let push = putMVar resultVar
       result = readMVar resultVar
       done = void result
-  return (push, result, done)
+  return (push, result, Tagged done)
 
-streamingPusher :: IO (ResultItem res -> IO (), IO (Streamly.Serial res), IO ())
+streamingPusher ::
+     IO (ResultItem res -> IO (), IO (Streamly.Serial res), IO' "Done" ())
 streamingPusher = do
-  (push_, close, results) <- pushStream
+  (push_, Tagged close, results) <- pushStream
   let push (Result res) = push_ res
       push EndOfResults = close
       done = Streamly.mapM_ return results
-  return (push, return results, done)
+  return (push, return results, Tagged done)
 
 _call ::
      (Show req, ToJSON req, Read res, FromJSON res, RpcTransport transport)
-  => IO (res -> IO (), IO x, IO ())
+  => IO (res -> IO (), IO x, IO' "Done" ())
   -> Text' "Route"
   -> transport
   -> Time Second
@@ -59,10 +60,10 @@ _call ::
   -> req
   -> IO x
 _call pusher route transport timeout_ headers req = do
-  (push, result, done) <- pusher
-  (renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
+  (push, result, Tagged done) <- pusher
+  (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
   let fmt = format headers
-      (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' $ fmt
+      (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' fmt
       handleResponse resOrExcText = do
         deserializeUnsafe_ resOrExcText >>= \case
           Left exc -> throw (exc :: RpcClientException)

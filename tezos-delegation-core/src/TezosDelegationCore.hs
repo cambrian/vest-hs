@@ -1,12 +1,12 @@
-module DelegateManager
-  ( module DelegateManager
+module TezosDelegationCore
+  ( module TezosDelegationCore
   ) where
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import DelegateManager.Api
-import qualified DelegateManager.Db as Db
 import qualified PriceServer
+import TezosDelegationCore.Api
+import qualified TezosDelegationCore.Db as Db
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
@@ -43,20 +43,17 @@ class ( PriceServer.Priceable c
   where
   handleStake ::
        T c u -> VirtualStakeRequest c u -> IO (VirtualStakeResponse c u)
-  handleStake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
-                                                                , size
-                                                                , duration
-                                                                -- , payment
-                                                                } = do
-    time_ <- now
-    price <-
-      priceVirtualStake $ PriceServer.PriceVirtualStakeRequest {size, duration}
-    -- TODO: process payment
-    id <- newUUID @"VirtualStakeId"
-    withResource
-      dbPool
-      (Db.storeVirtualStake @c @u id user size duration time_ price)
-    return $ VirtualStakeResponse id user size duration time_ price
+  -- handleStake T {priceVirtualStake, dbPool} VirtualStakeRequest { user
+  --                                                               , size
+  --                                                               , duration
+  --                                                               -- , payment
+  --                                                               } = do
+  --   time_ <- now
+  --   price <-
+  --     priceVirtualStake $ PriceServer.PriceVirtualStakeRequest {size, duration}
+  --   -- TODO: process payment
+  --   id <- newUUID @"VirtualStakeId"
+  --   return ()
   start :: Amqp.T -> T c u -> IO ()
   start rpcTransport t =
     serve

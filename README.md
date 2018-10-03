@@ -1,6 +1,6 @@
 # vest-hs
 
-Mono-repo for all Haskell projects.
+Monorepo for all Haskell projects.
 
 ## FAQ
 - **Where do dependencies go?** Per-project dependencies go in per-project YAML files, but if you

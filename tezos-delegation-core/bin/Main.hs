@@ -1,9 +1,9 @@
 import qualified Bridge.Transports.Amqp as Amqp
-import DelegateManager
-import qualified DelegateManager.Db as Db
+import TezosDelegationCore
+import qualified TezosDelegationCore.Db as Db
 import VestPrelude
 
-data DelegateManager =
+data TezosDelegationCore =
   XTZ
   deriving (Show, Data)
 
