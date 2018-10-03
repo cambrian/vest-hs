@@ -10,7 +10,6 @@ import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
-import qualified Streamly
 import VestPrelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -53,7 +52,7 @@ data T = T
   , consumedRoutes :: HashTable (Text' "Route") AMQP.ConsumerTag
   , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , publisherThreads :: HashTable (Text' "TopicName") (Async ())
-  , subscriberInfo :: HashTable (Text' "SubscriberId") (AMQP.ConsumerTag, IO ())
+  , subscribers :: HashTable (Text' "SubscriberId") AMQP.ConsumerTag
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
@@ -94,7 +93,7 @@ instance Resource T where
            AMQP.ackEnv env)
     consumedRoutes <- HashTable.new
     publisherThreads <- HashTable.new
-    subscriberInfo <- HashTable.new
+    subscribers <- HashTable.new
     return
       T
         { conn
@@ -104,24 +103,23 @@ instance Resource T where
         , consumedRoutes
         , responseHandlers
         , publisherThreads
-        , subscriberInfo
+        , subscribers
         }
   cleanup :: T -> IO ()
     -- Closes AMQP consumers, closes connection, and deletes response queue.
     -- Unsubscribes from any subscribed topics.
-  cleanup t = do
-    let T { conn
-          , chan
-          , responseQueue
-          , responseConsumerTag
-          , consumedRoutes
-          , publisherThreads
-          , subscriberInfo
-          } = t
+  cleanup T { conn
+            , chan
+            , responseQueue
+            , responseConsumerTag
+            , consumedRoutes
+            , publisherThreads
+            , subscribers
+            } = do
     AMQP.cancelConsumer chan responseConsumerTag
     HashTable.mapM_ (AMQP.cancelConsumer chan . snd) consumedRoutes
     HashTable.mapM_ (cancel . snd) publisherThreads
-    HashTable.mapM_ (_unsubscribe t . fst) subscriberInfo
+    HashTable.mapM_ (uncurry (unsubscribe chan)) subscribers
     _ <- AMQP.deleteQueue chan (untag responseQueue)
     AMQP.closeConnection conn -- Also closes chan.
 
@@ -168,7 +166,7 @@ instance RpcTransport T where
     -> T
     -> Headers
     -> Text' "Request"
-    -> IO (IO ())
+    -> IO (IO' "Cleanup" ())
   _issueRequest respond route T {chan, responseQueue, responseHandlers} headers reqText = do
     id <- newUUID
     HashTable.insert responseHandlers id respond
@@ -177,7 +175,7 @@ instance RpcTransport T where
       ""
       (untag route)
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
-    return (HashTable.delete responseHandlers id)
+    return $ Tagged $ HashTable.delete responseHandlers id
 
 declarePubSubExchange :: AMQP.Channel -> Text -> IO ()
 declarePubSubExchange chan exchangeName =
@@ -185,15 +183,10 @@ declarePubSubExchange chan exchangeName =
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
 
-_unsubscribe :: T -> Text' "SubscriberId" -> IO ()
-_unsubscribe T {chan, subscriberInfo} subscriberId = do
-  let maybeUnsubscribe =
-        (>|>| \(consumerTag, close) -> do
-                AMQP.cancelConsumer chan consumerTag
-                AMQP.deleteQueue chan (untag subscriberId)
-                close)
-  HashTable.lookup subscriberInfo subscriberId >>= maybeUnsubscribe
-  HashTable.delete subscriberInfo subscriberId
+unsubscribe :: AMQP.Channel -> Text' "SubscriberId" -> AMQP.ConsumerTag -> IO ()
+unsubscribe chan subscriberId consumerTag = do
+  AMQP.cancelConsumer chan consumerTag
+  AMQP.deleteQueue chan (untag subscriberId) & void
 
 instance PubSubTransport T where
   _publish :: ((Text' "a" -> IO ()) -> IO ()) -> Text' "TopicName" -> T -> IO ()
@@ -210,13 +203,12 @@ instance PubSubTransport T where
     HashTable.insert publisherThreads topic publisherThread
   _subscribe ::
        (Text' "a" -> IO ())
-    -> IO ()
     -> Text' "TopicName"
     -> T
-    -> IO (Text' "SubscriberId")
+    -> IO (IO' "Unsubscribe" ())
   -- TODO: Declare a chan per consumer thread.
   -- (i.e. per call to AMQP.consumeMsgs)
-  _subscribe push close (Tagged exchangeName) T {chan, subscriberInfo} = do
+  _subscribe push (Tagged exchangeName) T {chan, subscribers} = do
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
@@ -228,7 +220,8 @@ instance PubSubTransport T where
         AMQP.NoAck
         (push . Tagged . fromAmqpMsg . fst)
     let subscriberId = Tagged queueName
-    HashTable.insert subscriberInfo subscriberId (consumerTag, close)
-    return subscriberId
-  unsubscribe :: T -> Text' "SubscriberId" -> IO ()
-  unsubscribe = _unsubscribe
+    HashTable.insert subscribers subscriberId consumerTag
+    let unsubscribe_ = do
+          HashTable.delete subscribers subscriberId
+          unsubscribe chan subscriberId consumerTag
+    return $ Tagged unsubscribe_

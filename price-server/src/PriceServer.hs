@@ -32,6 +32,8 @@ instance Resource T where
       subscribe (Proxy :: Proxy (TezosPriceTopic, amqp)) amqp
     tezosPrice <- makeStreamVar' dummyTezosExchangeRate tezosPriceStream
     return $ T {tezosPrice}
+  cleanup :: T -> IO ()
+  cleanup _t = panic "unimplemented"
 
 instance Priceable "XTZ" where
   priceVirtualStake T {tezosPrice} size duration = do

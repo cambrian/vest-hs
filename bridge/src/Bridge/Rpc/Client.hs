@@ -68,7 +68,7 @@ _call pusher route transport timeout_ headers req = do
           Left exc -> throw (exc :: RpcClientException)
           Right res -> push res
         renewTimeout
-  doCleanup <-
+  Tagged doCleanup <-
     _issueRequest handleResponse route transport headers (serialize_ req)
   mainThread <- myThreadId
   void . async $ do

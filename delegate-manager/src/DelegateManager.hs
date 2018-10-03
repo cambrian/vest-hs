@@ -1,11 +1,11 @@
-module Core
-  ( module Core
+module DelegateManager
+  ( module DelegateManager
   ) where
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import Core.Api
-import qualified Core.Db as Db
+import DelegateManager.Api
+import qualified DelegateManager.Db as Db
 import qualified PriceServer
 import VestPrelude
 import qualified VestPrelude.Money as Money
@@ -26,13 +26,14 @@ instance (PriceServer.Priceable c, Money.Unit c u) => Resource (T c u) where
   make :: (Config c u, Amqp.T, Pool Db.T) -> IO (T c u)
   make (_config, amqp, dbPool) = do
     let priceVirtualStake =
-          (makeClient
-             (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint c u))
-             amqp)
+          makeClient
+            (Proxy :: Proxy (PriceServer.PriceVirtualStakeEndpoint c u))
+            amqp
             (sec 1)
             defaultHeaders
     return T {priceVirtualStake, dbPool}
-  -- TODO: Add explicit cleanup for minimal definition.
+  cleanup :: T c u -> IO ()
+  cleanup _t = panic "unimplemented"
 
 class ( PriceServer.Priceable c
       , Money.Unit c u

@@ -91,6 +91,8 @@ type Int' t = Tagged t Int
 
 type Text' t = Tagged t Text
 
+type IO' t a = Tagged t (IO a)
+
 instance Hashable a => Hashable (Tagged s a)
 
 data BugException =

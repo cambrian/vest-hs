@@ -1,9 +1,9 @@
 import qualified Bridge.Transports.Amqp as Amqp
-import Core
-import qualified Core.Db as Db
+import DelegateManager
+import qualified DelegateManager.Db as Db
 import VestPrelude
 
-data Core =
+data DelegateManager =
   XTZ
   deriving (Show, Data)
 
