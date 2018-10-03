@@ -221,4 +221,7 @@ instance PubSubTransport T where
         (push . Tagged . fromAmqpMsg . fst)
     let subscriberId = Tagged queueName
     HashTable.insert subscribers subscriberId consumerTag
-    return $ Tagged $ unsubscribe chan subscriberId consumerTag
+    let unsubscribe_ = do
+          HashTable.delete subscribers subscriberId
+          unsubscribe chan subscriberId consumerTag
+    return $ Tagged unsubscribe_
