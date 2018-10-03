@@ -166,7 +166,7 @@ instance RpcTransport T where
     -> T
     -> Headers
     -> Text' "Request"
-    -> IO (IO ())
+    -> IO (IO' "Cleanup" ())
   _issueRequest respond route T {chan, responseQueue, responseHandlers} headers reqText = do
     id <- newUUID
     HashTable.insert responseHandlers id respond
@@ -175,7 +175,7 @@ instance RpcTransport T where
       ""
       (untag route)
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
-    return (HashTable.delete responseHandlers id)
+    return $ Tagged $ HashTable.delete responseHandlers id
 
 declarePubSubExchange :: AMQP.Channel -> Text -> IO ()
 declarePubSubExchange chan exchangeName =

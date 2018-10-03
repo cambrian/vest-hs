@@ -200,7 +200,7 @@ instance RpcTransport T where
     -> T
     -> Headers
     -> Text' "Request"
-    -> IO (IO ())
+    -> IO (IO' "Cleanup" ())
   _issueRequest respond route T {clientRequestHandlers, clientResponseHandlers} headers reqText = do
     id <- newUUID
     makeRequest <-
@@ -208,4 +208,4 @@ instance RpcTransport T where
       fromJustUnsafe (NoServerForRoute route)
     HashTable.insert clientResponseHandlers id respond
     makeRequest $ RequestMessage {id, headers, route, reqText}
-    return (HashTable.delete clientResponseHandlers id)
+    return $ Tagged $ HashTable.delete clientResponseHandlers id

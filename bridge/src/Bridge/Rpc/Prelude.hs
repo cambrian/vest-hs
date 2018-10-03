@@ -20,7 +20,7 @@ class RpcTransport t where
     -> t
     -> Headers
     -> Text' "Request"
-    -> IO (IO ()) -- ^ Returns cleanup function
+    -> IO (IO' "Cleanup" ())
 
 data Auth a
   = NoAuth
