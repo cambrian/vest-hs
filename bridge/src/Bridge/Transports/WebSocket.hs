@@ -163,8 +163,7 @@ wsClientApp ::
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn =
   withAsync
-    (async $
-     forever $ do
+    (async . forever $ do
        msg <- WS.receiveData conn
        case deserialize @'JSON msg of
          Nothing -> return () -- Swallow if entire message is garbled.

@@ -1,5 +1,5 @@
-module Core.Db
-  ( module Core.Db
+module DelegateManager.Db
+  ( module DelegateManager.Db
   ) where
 
 import VestPrelude

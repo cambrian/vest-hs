@@ -1,5 +1,5 @@
-module Core.Api
-  ( module Core.Api
+module DelegateManager.Api
+  ( module DelegateManager.Api
   ) where
 
 import Bridge
