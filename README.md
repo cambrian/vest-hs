@@ -20,5 +20,5 @@ dependencies).
    TypeScript derivations where necessary in the codebase.
 2. Run `stack exec ts-callers bridge-client/foreign/templates/callers.ede bridge-client/foreign/src/generated/callers.ts`
    from the root of this repository.
-3. You will now have mis-matched version strings in `bridge-client/foreign/src`. Follow the
-   instructions in `call.ts` and `generated/callers.ts` to successfully integrate the new types.
+3. The `bridge-client` should now fail to compile. Follow the instructions in `index.ts` to
+   successfully integrate the new types.
