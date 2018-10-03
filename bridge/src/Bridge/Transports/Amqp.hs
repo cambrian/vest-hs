@@ -205,7 +205,7 @@ instance PubSubTransport T where
        (Text' "a" -> IO ())
     -> Text' "TopicName"
     -> T
-    -> IO (IO' "Unsubscribe" (), Text' "SubscriberId")
+    -> IO (IO' "Unsubscribe" ())
   -- TODO: Declare a chan per consumer thread.
   -- (i.e. per call to AMQP.consumeMsgs)
   _subscribe push (Tagged exchangeName) T {chan, subscribers} = do
@@ -221,4 +221,4 @@ instance PubSubTransport T where
         (push . Tagged . fromAmqpMsg . fst)
     let subscriberId = Tagged queueName
     HashTable.insert subscribers subscriberId consumerTag
-    return (Tagged $ unsubscribe chan subscriberId consumerTag, subscriberId)
+    return $ Tagged $ unsubscribe chan subscriberId consumerTag

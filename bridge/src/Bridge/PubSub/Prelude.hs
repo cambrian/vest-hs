@@ -20,6 +20,6 @@ class PubSubTransport t where
        (Text' "a" -> IO ()) -- ^ Fn to publish serialized object.
     -> Text' "TopicName"
     -> t -- ^ Should be mutated to store cleanup details.
-    -> IO (IO' "Unsubscribe" (), Text' "SubscriberId")
+    -> IO (IO' "Unsubscribe" ())
 
 data Topic (f :: SerializationFormat) (name :: k) (a :: *)
