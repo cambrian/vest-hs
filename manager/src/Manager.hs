@@ -50,10 +50,14 @@ type ManagerApi
      :<|> EchoThriceAuthEndpoint
 
 addInts :: AddIntsRequest -> IO Int
-addInts AddIntsRequest {a, b} = return $ (a + b)
+addInts AddIntsRequest {a, b} = do
+  threadDelay (sec 0.25)
+  return (a + b)
 
 echoThrice :: Int -> IO (Streamly.Serial Int)
-echoThrice = return . Streamly.fromList . replicate 3
+echoThrice x = do
+  threadDelay (sec 0.25)
+  return . Streamly.fromList . replicate 3 $ x
 
 concatTextAuth ::
      Claims TokenAuth -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
