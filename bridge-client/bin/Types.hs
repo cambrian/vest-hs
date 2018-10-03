@@ -3,7 +3,7 @@ import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import BridgeClient
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types ()
-import qualified Manager
+import qualified DummyManager
 import System.Directory
 import System.FilePath
 import System.Random
@@ -59,6 +59,6 @@ main = do
         , getTypeScriptDeclarations (Proxy :: Proxy ResultItem)
         , getTypeScriptDeclarations (Proxy :: Proxy RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy ResponseMessage)
-        , generateTsDeclarations (Proxy :: Proxy Manager.ManagerApi)
+        , generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
         ]) <>
        "\n")

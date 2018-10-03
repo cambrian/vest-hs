@@ -1,10 +1,9 @@
 -- Right now this file is just pointless endpoints for WebSocket testing.
-module Manager
-  ( ManagerApi
+module DummyManager
+  ( Api
   , start
   ) where
 
--- import qualified Bridge.Transports.Amqp as Amqp
 import Bridge
 import qualified Bridge.Transports.WebSocket as WebSocket
 import Data.Aeson.TypeScript.TH
@@ -43,7 +42,7 @@ type ConcatTextAuthEndpoint
 type EchoThriceAuthEndpoint
    = Endpoint ('Auth TokenAuth) "echoThriceAuth" Text ('Streaming Text)
 
-type ManagerApi
+type Api
    = AddIntsEndpoint
      :<|> EchoThriceEndpoint
      :<|> ConcatTextAuthEndpoint
@@ -67,9 +66,9 @@ concatTextAuth _ ConcatTextAuthRequest {a, b} =
 echoThriceAuth :: Claims TokenAuth -> Text -> IO (Streamly.Serial Text)
 echoThriceAuth _ = return . Streamly.fromList . replicate 3
 
-handlers :: Handlers ManagerApi
+handlers :: Handlers Api
 handlers = addInts :<|> echoThrice :<|> concatTextAuth :<|> echoThriceAuth
 
 start :: WebSocket.T -> WebSocket.T -> WebSocket.T -> IO ()
 start serverTransport _ _ =
-  serve handlers (Proxy :: Proxy (ManagerApi, WebSocket.T)) serverTransport
+  serve handlers (Proxy :: Proxy (Api, WebSocket.T)) serverTransport

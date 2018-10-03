@@ -2,7 +2,7 @@ import Bridge.Rpc.Prelude (AuthType(..), DirectOrStreamingType(..))
 import BridgeClient
 import Data.Aeson.Types (Object)
 import Data.Text.Lazy (toStrict)
-import qualified Manager
+import qualified DummyManager
 import System.Directory
 import System.FilePath
 import Text.EDE
@@ -45,5 +45,5 @@ main = do
       fromPairs
         [ "list" .=
           ((map specTsTypesToObject $
-            makeSpecTsTypes (Proxy :: Proxy Manager.ManagerApi)) :: [Object])
+            makeSpecTsTypes (Proxy :: Proxy DummyManager.Api)) :: [Object])
         ]

@@ -1,4 +1,4 @@
-name:                manager
+name:                dummy-manager
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -6,7 +6,7 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            External account manager for Vest derivatives.
+synopsis:            Dummy manager for front-end testing.
 description:         See README.md.
 
 dependencies:
@@ -78,4 +78,4 @@ executable:
   main:                Main.hs
   source-dirs:         bin
   dependencies:
-  - manager
+  - dummy-manager
