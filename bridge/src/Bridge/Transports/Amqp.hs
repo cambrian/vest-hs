@@ -196,26 +196,18 @@ _unsubscribe T {chan, subscriberInfo} subscriberId = do
   HashTable.delete subscriberInfo subscriberId
 
 instance PubSubTransport T where
-  _publish ::
-       ((Text' "a" -> IO ()) -> Streamly.Serial a -> IO ())
-    -> Text' "TopicName"
-    -> Streamly.Serial a
-    -> T
-    -> IO ()
-  _publish processor topic as T {chan, publisherThreads} =
+  _publish :: ((Text' "a" -> IO ()) -> IO ()) -> Text' "TopicName" -> T -> IO ()
+  -- Like _serve, has race condition on publisherThreads. Not likely to be a problem
+  _publish publisher topic T {chan, publisherThreads} = do
     HashTable.lookup publisherThreads topic >>= \case
-      Nothing -> do
-        let Tagged exchangeName = topic
-        declarePubSubExchange chan exchangeName
-        publisherThread <-
-          async $
-          processor
-            (\(Tagged a) ->
-               void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
-             )
-            as
-        HashTable.insert publisherThreads topic publisherThread
       Just _ -> throw $ AlreadyPublishing topic
+      Nothing -> return ()
+    let Tagged exchangeName = topic
+    declarePubSubExchange chan exchangeName
+    let send (Tagged a) =
+          void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
+    publisherThread <- async $ publisher send
+    HashTable.insert publisherThreads topic publisherThread
   _subscribe ::
        (Text' "a" -> IO ())
     -> IO ()

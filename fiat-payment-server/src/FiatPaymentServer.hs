@@ -19,7 +19,7 @@ import qualified VestPrelude.Money as Money
 
 -- Eventually this will live inside the exchanger
 type TezosPriceTopic
-   = Topic Haskell "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
+   = Topic 'Haskell "price/XTZ" (Money.ExchangeRate "XTZ" "USD")
 
 type instance ResourceConfig T = (Config, Amqp.T)
 

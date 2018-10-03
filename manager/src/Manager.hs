@@ -68,4 +68,4 @@ handlers = addInts :<|> echoThrice :<|> concatTextAuth :<|> echoThriceAuth
 
 start :: WebSocket.T -> WebSocket.T -> WebSocket.T -> IO ()
 start serverTransport _ _ =
-  serve (Proxy :: Proxy (ManagerApi, WebSocket.T)) handlers serverTransport
+  serve handlers (Proxy :: Proxy (ManagerApi, WebSocket.T)) serverTransport

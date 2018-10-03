@@ -23,7 +23,7 @@ type family Handlers spec where
 class (RpcTransport transport) =>
       Server spec transport
   where
-  serve :: Proxy (spec, transport) -> Handlers spec -> transport -> IO ()
+  serve :: Handlers spec -> Proxy (spec, transport) -> transport -> IO ()
 
 instance ( HasUniqueRoutes (a
                             :<|> b)
@@ -33,16 +33,16 @@ instance ( HasUniqueRoutes (a
          Server (a
                  :<|> b) transport where
   serve ::
-       Proxy ( a
+       (Handlers a
+        :<|> Handlers b)
+    -> Proxy ( a
                :<|> b
              , transport)
-    -> (Handlers a
-        :<|> Handlers b)
     -> transport
     -> IO ()
-  serve _ (aHandlers :<|> bHandlers) transport = do
-    serve (Proxy :: Proxy (a, transport)) aHandlers transport
-    serve (Proxy :: Proxy (b, transport)) bHandlers transport
+  serve (aHandlers :<|> bHandlers) _ transport = do
+    serve aHandlers (Proxy :: Proxy (a, transport)) transport
+    serve bHandlers (Proxy :: Proxy (b, transport)) transport
 
 directSender :: (res -> IO ()) -> res -> IO ()
 directSender send = send
@@ -57,11 +57,11 @@ _serve ::
   => ((res -> IO ()) -> x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
   -> (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
-  -> Text' "Route"
   -> (Claims auth -> req -> IO x)
+  -> Text' "Route"
   -> transport
   -> IO ()
-_serve sender verifyAuth route handler = _consumeRequests asyncHandle route
+_serve sender verifyAuth handler = _consumeRequests asyncHandle
   where
     asyncHandle headers reqText respond =
       async $ do
@@ -86,16 +86,16 @@ instance ( KnownSymbol route
          ) =>
          Server (Endpoint 'NoAuth (route :: Symbol) req ('Direct res)) transport where
   serve ::
-       Proxy (Endpoint 'NoAuth route req ('Direct res), transport)
-    -> (req -> IO res)
+       (req -> IO res)
+    -> Proxy (Endpoint 'NoAuth route req ('Direct res), transport)
     -> transport
     -> IO ()
-  serve _ handler =
+  serve handler _ =
     _serve
       directSender
       verifyEmpty
-      (proxyText' (Proxy :: Proxy route))
       (const handler)
+      (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , Read req
@@ -106,16 +106,16 @@ instance ( KnownSymbol route
          ) =>
          Server (Endpoint 'NoAuth (route :: Symbol) req ('Streaming res)) transport where
   serve ::
-       Proxy (Endpoint 'NoAuth route req ('Streaming res), transport)
-    -> (req -> IO (Streamly.Serial res))
+       (req -> IO (Streamly.Serial res))
+    -> Proxy (Endpoint 'NoAuth route req ('Streaming res), transport)
     -> transport
     -> IO ()
-  serve _ handler =
+  serve handler _ =
     _serve
       streamingSender
       verifyEmpty
-      (proxyText' (Proxy :: Proxy route))
       (const handler)
+      (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -127,11 +127,12 @@ instance ( KnownSymbol route
          ) =>
          Server (Endpoint ('Auth auth) (route :: Symbol) req ('Direct res)) transport where
   serve ::
-       Proxy (Endpoint ('Auth auth) route req ('Direct res), transport)
-    -> (Claims auth -> req -> IO res)
+       (Claims auth -> req -> IO res)
+    -> Proxy (Endpoint ('Auth auth) route req ('Direct res), transport)
     -> transport
     -> IO ()
-  serve _ = _serve directSender verify (proxyText' (Proxy :: Proxy route))
+  serve handler _ =
+    _serve directSender verify handler (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
          , AuthScheme auth
@@ -143,8 +144,9 @@ instance ( KnownSymbol route
          ) =>
          Server (Endpoint ('Auth auth) (route :: Symbol) req ('Streaming res)) transport where
   serve ::
-       Proxy (Endpoint ('Auth auth) route req ('Streaming res), transport)
-    -> (Claims auth -> req -> IO (Streamly.Serial res))
+       (Claims auth -> req -> IO (Streamly.Serial res))
+    -> Proxy (Endpoint ('Auth auth) route req ('Streaming res), transport)
     -> transport
     -> IO ()
-  serve _ = _serve streamingSender verify (proxyText' (Proxy :: Proxy route))
+  serve handler _ =
+    _serve streamingSender verify handler (proxyText' (Proxy :: Proxy route))

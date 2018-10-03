@@ -103,10 +103,10 @@ instance (Priceable currency, Money.Unit currency unit) =>
   start :: Amqp.T -> Amqp.T -> Proxy (Proxy currency, Proxy unit) -> T -> IO ()
   start rpcTransport pubSubTransport _ t = do
     serve
-      (Proxy :: Proxy (PriceVirtualStakeEndpoint currency unit))
       (priceVirtualStake' t)
+      (Proxy :: Proxy (PriceVirtualStakeEndpoint currency unit))
       rpcTransport
     publish
-      (Proxy :: Proxy (PriceFunctionTopic currency))
       (priceFunctionsInJavascript t (Proxy :: Proxy currency))
+      (Proxy :: Proxy (PriceFunctionTopic currency))
       pubSubTransport

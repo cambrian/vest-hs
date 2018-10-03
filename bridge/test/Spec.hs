@@ -47,7 +47,7 @@ withRpcClient config _ action =
   with
     config
     (\transport -> do
-       serve (Proxy :: Proxy (RpcApi, transport)) handlers transport
+       serve handlers (Proxy :: Proxy (RpcApi, transport)) transport
        threadDelay (sec 0.01) -- Wait for servers to initialize and avoid races.
        action $ makeClient (Proxy :: Proxy (spec, transport)) transport)
 
@@ -79,7 +79,7 @@ withSubscribed config _ action =
     config
     (\transport -> do
        subscribed <- subscribe (Proxy :: Proxy (spec, transport)) transport
-       publish (Proxy :: Proxy (PubSubApi, transport)) streams transport
+       publish streams (Proxy :: Proxy (PubSubApi, transport)) transport
        action subscribed)
 
 tokenAuthJSON :: Headers

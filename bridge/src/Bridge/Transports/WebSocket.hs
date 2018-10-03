@@ -62,7 +62,8 @@ data T = T
   , clientRequestHandlers :: HashTable (Text' "Route") (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , serverThread :: Async ()
-  , clientCleanupFns :: [IO ()]
+  , clientThreads :: [Async ()]
+  -- ^ Should clean themselves up when canceled
   }
 
 type instance ResourceConfig T = Config
@@ -82,28 +83,25 @@ instance Resource T where
       WS.websocketsOr
         WS.defaultConnectionOptions
         (wsServe serverRequestHandlers serverResponseHandlers pingInterval)
-        httpApp
-    clientCleanupFns <-
+        noHttpApp
+    clientThreads <-
       forM
         servers
         (\ServerInfo {uri, port, path, routes} -> do
            requestMVar <- newEmptyMVar
-           serverClientThread <-
-             async $
-             WS.runClient
-               (unpack $ untag uri)
-               (untag port)
-               (unpack $ untag path)
-               (wsClientApp clientResponseHandlers requestMVar)
            forM_
              routes
              (\route ->
                 HashTable.insert
                   clientRequestHandlers
                   route
-                  (putMVar requestMVar . Just))
-           let cleanupInner = cancel serverClientThread
-           return cleanupInner)
+                  (putMVar requestMVar))
+           async $
+             WS.runClient
+               (unpack $ untag uri)
+               (untag port)
+               (unpack $ untag path)
+               (wsClientApp clientResponseHandlers requestMVar))
     return
       T
         { serverRequestHandlers
@@ -111,16 +109,20 @@ instance Resource T where
         , clientRequestHandlers
         , clientResponseHandlers
         , serverThread
-        , clientCleanupFns
+        , clientThreads
         }
   cleanup :: T -> IO ()
-  cleanup T {serverThread, clientCleanupFns} = do
+  cleanup T {serverThread, clientThreads} = do
     cancel serverThread
-    mapM_ identity clientCleanupFns
+    mapM_ cancel clientThreads
 
-httpApp :: Wai.Application
-httpApp _ respond =
-  respond $ Wai.responseLBS Http.status400 [] "not a WebSocket request"
+noHttpApp :: Wai.Application
+noHttpApp _ respond =
+  respond $
+  Wai.responseLBS
+    Http.status400
+    []
+    "HTTP requests not supported (use WebSockets)."
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
@@ -157,7 +159,7 @@ serveClient serverRequestHandlers clientId conn =
 
 wsClientApp ::
      HashTable (Text' "RequestId") (Text' "Response" -> IO ())
-  -> MVar (Maybe RequestMessage)
+  -> MVar RequestMessage
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn =
   withAsync
@@ -170,15 +172,9 @@ wsClientApp clientResponseHandlers requestMVar conn =
            maybeHandler <- HashTable.lookup clientResponseHandlers requestId
             -- If the route is not served, swallow the request.
            maybeHandler >|>| ($ resText))
-    (\readerThread -> do
-       let loop = do
-             maybeRequest <- takeMVar requestMVar
-             case maybeRequest of
-               Nothing -> cancel readerThread
-               Just x -> do
-                 WS.sendTextData conn (serialize @'JSON x)
-                 loop
-       loop)
+    (const . forever $ do
+       request <- takeMVar requestMVar
+       WS.sendTextData conn (serialize @'JSON request))
 
 instance RpcTransport T where
   _consumeRequests ::
@@ -188,17 +184,17 @@ instance RpcTransport T where
     -> IO ()
   _consumeRequests asyncHandler route T { serverRequestHandlers
                                         , serverResponseHandlers
-                                        } = do
+                                        } =
     HashTable.lookup serverRequestHandlers route >>= \case
-      Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
-    let handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
-          HashTable.lookup serverResponseHandlers clientId >>= \case
-            Nothing -> async $ return ()
-            Just handler ->
-              let respond resText = handler ResponseMessage {requestId, resText}
-               in asyncHandler headers reqText respond
-    HashTable.insert serverRequestHandlers route handleMsg
+      Nothing -> HashTable.insert serverRequestHandlers route handleMsg
+    where
+      handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
+        HashTable.lookup serverResponseHandlers clientId >>= \case
+          Nothing -> async $ return ()
+          Just handler ->
+            let respond resText = handler ResponseMessage {requestId, resText}
+             in asyncHandler headers reqText respond
   _issueRequest ::
        (Text' "Response" -> IO ())
     -> Text' "Route"
