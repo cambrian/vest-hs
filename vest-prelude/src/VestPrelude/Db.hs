@@ -3,8 +3,6 @@ module VestPrelude.Db
   , module Reexports
   ) where
 
-import Data.Time.Clock (UTCTime)
-import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Database.Beam as Reexports hiding (insert)
 import Database.Beam.Backend.SQL
 import Database.Beam.Postgres as Reexports

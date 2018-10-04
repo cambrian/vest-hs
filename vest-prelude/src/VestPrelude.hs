@@ -10,6 +10,7 @@ import Control.Concurrent.STM.TVar as Reexports
 import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
+import Crypto.Saltine as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
@@ -19,7 +20,8 @@ import Data.Pool as Reexports (Pool, tryWithResource, withResource)
 import Data.Proxy as Reexports
 import Data.Tagged as Reexports hiding (witness)
 import Data.Text as Reexports (pack, unpack)
-import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
+import Data.Time.Clock as Reexports (NominalDiffTime, UTCTime)
+import Data.Time.Clock (getCurrentTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Type.Bool as Reexports
 import qualified Data.UUID as UUID

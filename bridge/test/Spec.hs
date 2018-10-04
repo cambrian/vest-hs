@@ -48,7 +48,7 @@ withRpcClient config _ action =
     config
     (\transport -> do
        serve handlers (Proxy :: Proxy (RpcApi, transport)) transport
-       threadDelay (sec 0.01) -- Wait for servers to initialize and avoid races.
+       threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
        action $ makeClient (Proxy :: Proxy (spec, transport)) transport)
 
 increment :: Streamly.Serial Int

@@ -5,7 +5,6 @@ packages:
 - bridge-client
 - dummy-manager
 - fiat-payment-server
-- price-server
 - tezos-delegation-core
 - vest-prelude
 
