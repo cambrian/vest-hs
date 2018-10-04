@@ -22,41 +22,24 @@ class RpcTransport t where
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
 
-data Auth a
+data AuthOrNoAuth a
   = NoAuth
   | Auth a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-class AuthScheme t where
-  verify :: Headers -> Text' "Request" -> IO (Maybe (Claims t))
+-- | There's no reason this has to be injective, other than that the compiler complains if it's not
+type family AuthClaims auth = claims | claims -> auth
 
--- Hacky way to match on auth type when we generate TypeScript callers, since
--- we can't use the type family for that purpose. Down the road when the
--- pipeline is clearer, this matching logic could be converted to a
--- typeclass-based solution.
-data AuthType
-  = NoAuth'
-  | TokenAuth'
-  deriving (Show)
+class Auth t where
+  verify :: Headers -> Text' "Request" -> IO (Maybe (AuthClaims t))
 
--- See note for AuthType.
-data DirectOrStreamingType
-  = DirectType
-  | StreamingType
-  deriving (Show)
-
-type family Claims auth = claims | claims -> auth
-
-type instance Claims () = ()
-
--- | Streaming endpoints should return cumulative results (missing an
--- intermediate result is ok).
+-- | Streaming endpoints should return cumulative results (missing an intermediate result is ok).
 data DirectOrStreaming a
   = Direct a
   | Streaming a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-data Endpoint (auth :: Auth *) (route :: k) (req :: *) (res :: DirectOrStreaming *)
+data Endpoint (auth :: AuthOrNoAuth *) (route :: k) (req :: *) (res :: DirectOrStreaming *)
 
 data Headers = Headers
   { format :: SerializationFormat
@@ -88,6 +71,3 @@ data RpcClientException
 
 defaultHeaders :: Headers
 defaultHeaders = Headers {format = Haskell, token = Nothing}
-
-verifyEmpty :: Headers -> Text' "Request" -> IO (Maybe ())
-verifyEmpty _ _ = return (Just ())

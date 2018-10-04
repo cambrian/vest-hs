@@ -14,8 +14,8 @@ data RpcServerException =
 type family Handlers spec where
   Handlers (Endpoint 'NoAuth _ req ('Direct res)) = req -> IO res
   Handlers (Endpoint 'NoAuth _ req ('Streaming res)) = req -> IO (Streamly.Serial res)
-  Handlers (Endpoint ('Auth auth) _ req ('Direct res)) = Claims auth -> req -> IO res
-  Handlers (Endpoint ('Auth auth) _ req ('Streaming res)) = Claims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint ('Auth auth) _ req ('Direct res)) = AuthClaims auth -> req -> IO res
+  Handlers (Endpoint ('Auth auth) _ req ('Streaming res)) = AuthClaims auth -> req -> IO (Streamly.Serial res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -52,12 +52,15 @@ streamingSender send resStream = do
   Streamly.mapM_ (send . Result) resStream
   send EndOfResults
 
+verifyEmpty :: Headers -> Text' "Request" -> IO (Maybe ())
+verifyEmpty _ _ = return $ Just ()
+
 _serve ::
      (Read req, FromJSON req, Show res, ToJSON res, RpcTransport transport)
   => ((res -> IO ()) -> x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
-  -> (Headers -> Text' "Request" -> IO (Maybe (Claims auth)))
-  -> (Claims auth -> req -> IO x)
+  -> (Headers -> Text' "Request" -> IO (Maybe claims))
+  -> (claims -> req -> IO x)
   -> Text' "Route"
   -> transport
   -> IO ()
@@ -118,7 +121,7 @@ instance ( KnownSymbol route
       (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
-         , AuthScheme auth
+         , Auth auth
          , Read req
          , Show res
          , FromJSON req
@@ -127,7 +130,7 @@ instance ( KnownSymbol route
          ) =>
          Server (Endpoint ('Auth auth) (route :: Symbol) req ('Direct res)) transport where
   serve ::
-       (Claims auth -> req -> IO res)
+       (AuthClaims auth -> req -> IO res)
     -> Proxy (Endpoint ('Auth auth) route req ('Direct res), transport)
     -> transport
     -> IO ()
@@ -135,7 +138,7 @@ instance ( KnownSymbol route
     _serve directSender verify handler (proxyText' (Proxy :: Proxy route))
 
 instance ( KnownSymbol route
-         , AuthScheme auth
+         , Auth auth
          , Read req
          , Show res
          , FromJSON req
@@ -144,7 +147,7 @@ instance ( KnownSymbol route
          ) =>
          Server (Endpoint ('Auth auth) (route :: Symbol) req ('Streaming res)) transport where
   serve ::
-       (Claims auth -> req -> IO (Streamly.Serial res))
+       (AuthClaims auth -> req -> IO (Streamly.Serial res))
     -> Proxy (Endpoint ('Auth auth) route req ('Streaming res), transport)
     -> transport
     -> IO ()

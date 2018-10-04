@@ -12,6 +12,7 @@ description:         See README.md.
 dependencies:
 - base                  >= 4.10 && < 5
 - bridge
+- tezos-dispatcher
 - vest-prelude
 
 # The default-extensions and ghc-options have been taken from here:
@@ -40,6 +41,7 @@ default-extensions:
 - FunctionalDependencies
 - GADTs
 # - GeneralizedNewtypeDeriving
+- ImpredicativeTypes
 - InstanceSigs
 - KindSignatures
 - LambdaCase
@@ -68,6 +70,7 @@ ghc-options:
 - -Wincomplete-record-updates
 - -Wincomplete-uni-patterns
 - -Wredundant-constraints
+- -fno-warn-orphans
 # - -Wmissing-import-lists
 
 library:

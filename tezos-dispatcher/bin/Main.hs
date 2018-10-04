@@ -1,4 +1,4 @@
-import TezosDelegationCore
+import TezosDispatcher
 import VestPrelude
 
 main :: IO Void

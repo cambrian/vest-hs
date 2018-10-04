@@ -1,4 +1,5 @@
 import Bridge
+import qualified Bridge.Rpc.Auth.Token as Token
 import qualified Bridge.Transports.Amqp as Amqp
 
 import Bridge.Rpc.Prelude ()
@@ -16,10 +17,10 @@ type EchoTextsDirectEndpoint
    = Endpoint 'NoAuth "echoTextDirect" [Text] ('Direct [Text])
 
 type EchoIntsStreamingEndpoint
-   = Endpoint ('Auth TokenAuth) "echoIntsStreaming" [Int] ('Streaming Int)
+   = Endpoint ('Auth Token.T) "echoIntsStreaming" [Int] ('Streaming Int)
 
 type EchoTextsStreamingEndpoint
-   = Endpoint ('Auth TokenAuth) "echoTextsStreaming" [Text] ('Streaming Text)
+   = Endpoint ('Auth Token.T) "echoTextsStreaming" [Text] ('Streaming Text)
 
 type RpcApi
    = EchoIntsDirectEndpoint
@@ -30,7 +31,7 @@ type RpcApi
 echoDirect :: a -> IO a
 echoDirect x = threadDelay (sec 0.01) >> return x
 
-echoStreaming :: Claims auth -> [a] -> IO (Streamly.Serial a)
+echoStreaming :: AuthClaims auth -> [a] -> IO (Streamly.Serial a)
 echoStreaming _ xs =
   return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
 

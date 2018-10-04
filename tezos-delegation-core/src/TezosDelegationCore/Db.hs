@@ -27,10 +27,10 @@ localConfig =
     }
 
 data DelegateT f = Delegate
-  { _delegateAddress :: C f (Text' "Address")
-  , _delegateName :: C f Text
-  , _delegateDescription :: C f Text
-  , _delegatePriceTiers :: C f (PGArray (Money.Discrete "XTZ" "mutez", Double))
+  { address :: C f (Text' "Address")
+  , name :: C f Text
+  , description :: C f Text
+  , priceTiers :: C f (PGArray (Money.XTZ, Double))
   } deriving (Generic, Beamable)
 
 type Delegate = DelegateT Identity
@@ -45,7 +45,7 @@ instance Table DelegateT where
   data PrimaryKey DelegateT f = DelegateAddress (C f
                                                  (Text' "Address"))
                                 deriving (Generic, Beamable)
-  primaryKey = DelegateAddress . _delegateAddress
+  primaryKey = DelegateAddress . address
 
 deriving instance Eq (PrimaryKey DelegateT Identity)
 
@@ -54,8 +54,8 @@ deriving instance Read (PrimaryKey DelegateT Identity)
 deriving instance Show (PrimaryKey DelegateT Identity)
 
 data CycleT f = Cycle
-  { _cycleNumber :: C f (Int64' "CycleNumber")
-  , _cycleRightsSnapshotNumber :: C f (Int64' "SnapshotNumber")
+  { number :: C f (Int64' "CycleNumber")
+  , timestamp :: C f Timestamp
   } deriving (Generic, Beamable)
 
 type Cycle = CycleT Identity
@@ -69,7 +69,7 @@ deriving instance Show Cycle
 instance Table CycleT where
   data PrimaryKey CycleT f = CycleNumber (C f (Int64' "CycleNumber"))
                              deriving (Generic, Beamable)
-  primaryKey = CycleNumber . _cycleNumber
+  primaryKey = CycleNumber . number
 
 deriving instance Eq (PrimaryKey CycleT Identity)
 
@@ -78,12 +78,12 @@ deriving instance Read (PrimaryKey CycleT Identity)
 deriving instance Show (PrimaryKey CycleT Identity)
 
 data RewardT f = Reward
-  { _rewardDelegate :: PrimaryKey DelegateT f
-  , _rewardRightsCycle :: PrimaryKey CycleT f
-  , _rewardDelegatedBalance :: C f (Money.Discrete "XTZ" "mutez")
-  , _rewardSizeFromDelegations :: C f (Money.Discrete "XTZ" "mutez")
-  , _rewardPaymentOwed :: C f (Money.Discrete "XTZ" "mutez")
-  , _rewardPaymentFulfilled :: C f (Money.Discrete "XTZ" "mutez")
+  { delegate :: PrimaryKey DelegateT f
+  , rightsCycle :: PrimaryKey CycleT f
+  , delegatedBalance :: C f Money.XTZ
+  , sizeFromDelegations :: C f Money.XTZ
+  , paymentOwed :: C f Money.XTZ
+  , paymentFulfilled :: C f Money.XTZ
   } deriving (Generic, Beamable)
 
 type Reward = RewardT Identity
@@ -99,8 +99,8 @@ instance Table RewardT where
        f = RewardDelegateAndRightsCycle (PrimaryKey DelegateT f)
                                         (PrimaryKey CycleT f)
              deriving (Generic, Beamable)
-  primaryKey =
-    RewardDelegateAndRightsCycle <$> _rewardDelegate <*> _rewardRightsCycle
+  primaryKey Reward {delegate, rightsCycle} =
+    RewardDelegateAndRightsCycle delegate rightsCycle
 
 deriving instance Eq (PrimaryKey RewardT Identity)
 
@@ -109,11 +109,11 @@ deriving instance Read (PrimaryKey RewardT Identity)
 deriving instance Show (PrimaryKey RewardT Identity)
 
 data PaymentT f = Payment
-  { _paymentTxHash :: C f (Text' "TxHash")
-  , _paymentDelegate :: PrimaryKey DelegateT f
-  , _paymentSize :: C f (Money.Discrete "XTZ" "mutez")
-  , _paymentTime :: C f Timestamp
-  , _paymentStatus :: C f TxStatus
+  { txHash :: C f (Text' "TxHash")
+  , delegate :: PrimaryKey DelegateT f
+  , size :: C f Money.XTZ
+  , time :: C f Timestamp
+  , status :: C f TxStatus
   } deriving (Generic, Beamable)
 
 type Payment = PaymentT Identity
@@ -127,7 +127,7 @@ deriving instance Read Payment
 instance Table PaymentT where
   data PrimaryKey PaymentT f = PaymentTxHash (C f (Text' "TxHash"))
                                deriving (Generic, Beamable)
-  primaryKey = PaymentTxHash . _paymentTxHash
+  primaryKey Payment {txHash} = PaymentTxHash txHash
 
 deriving instance Eq (PrimaryKey PaymentT Identity)
 
@@ -136,11 +136,11 @@ deriving instance Read (PrimaryKey PaymentT Identity)
 deriving instance Show (PrimaryKey PaymentT Identity)
 
 data PayoutT f = Payout
-  { _payoutTxHash :: C f (Text' "TxHash")
-  , _payoutDelegator :: C f (Text' "Address")
-  , _payoutSize :: C f (Money.Discrete "XTZ" "mutez")
-  , _payoutTime :: C f Timestamp
-  , _payoutStatus :: C f TxStatus
+  { txHash :: C f (Text' "TxHash")
+  , delegator :: C f (Text' "Address")
+  , size :: C f Money.XTZ
+  , time :: C f Timestamp
+  , status :: C f TxStatus
   } deriving (Generic, Beamable)
 
 type Payout = PayoutT Identity
@@ -154,7 +154,7 @@ deriving instance Read Payout
 instance Table PayoutT where
   data PrimaryKey PayoutT f = PayoutTxHash (C f (Text' "TxHash"))
                               deriving (Generic, Beamable)
-  primaryKey = PayoutTxHash . _payoutTxHash
+  primaryKey Payout {txHash} = PayoutTxHash txHash
 
 deriving instance Eq (PrimaryKey PayoutT Identity)
 
@@ -163,11 +163,11 @@ deriving instance Read (PrimaryKey PayoutT Identity)
 deriving instance Show (PrimaryKey PayoutT Identity)
 
 data DelegationT f = Delegation
-  { _delegationDelegator :: C f (Text' "Address")
-  , _delegationReward :: PrimaryKey RewardT f
-  , _delegationSize :: C f (Money.Discrete "XTZ" "mutez")
-  , _delegationDividend :: C f (Money.Discrete "XTZ" "mutez")
-  , _delegationPayout :: PrimaryKey PayoutT f
+  { delegator :: C f (Text' "Address")
+  , reward :: PrimaryKey RewardT f
+  , size :: C f Money.XTZ
+  , dividend :: C f Money.XTZ
+  , payout :: PrimaryKey PayoutT f
   } deriving (Generic, Beamable)
 
 type Delegation = DelegationT Identity
@@ -183,8 +183,8 @@ instance Table DelegationT where
                                                                 (Text' "Address"))
                                                              (PrimaryKey RewardT f)
                                   deriving (Generic, Beamable)
-  primaryKey =
-    DelegationDelegatorAndReward <$> _delegationDelegator <*> _delegationReward
+  primaryKey Delegation {delegator, reward} =
+    DelegationDelegatorAndReward delegator reward
 
 deriving instance Eq (PrimaryKey DelegationT Identity)
 
@@ -192,20 +192,20 @@ deriving instance Read (PrimaryKey DelegationT Identity)
 
 deriving instance Show (PrimaryKey DelegationT Identity)
 
-data TezosDelegationCoreDb f = TezosDelegationCoreDb
-  { _tezosDelegationCoreDelegates :: f (TableEntity DelegateT)
-  , _tezosDelegationCoreCycles :: f (TableEntity CycleT)
-  , _tezosDelegationCoreRewards :: f (TableEntity RewardT)
-  , _tezosDelegationCorePayments :: f (TableEntity PaymentT)
-  , _tezosDelegationCorePayouts :: f (TableEntity PayoutT)
-  , _tezosDelegationCoreDelegations :: f (TableEntity DelegationT)
+data T f = T
+  { delegates :: f (TableEntity DelegateT)
+  , cycles :: f (TableEntity CycleT)
+  , rewards :: f (TableEntity RewardT)
+  , payments :: f (TableEntity PaymentT)
+  , payouts :: f (TableEntity PayoutT)
+  , delegations :: f (TableEntity DelegationT)
   } deriving (Generic)
 
-instance Database be TezosDelegationCoreDb
+instance Database be T
 
 -- Database spec with explicit schema prefixing for the c c
 -- such that each table "table" is referred to by "c.table"
-t :: DatabaseSettings be TezosDelegationCoreDb
+t :: DatabaseSettings be T
 t = defaultDbSettings
 -- storeVirtualStake ::
 --      forall c u. Money.Unit c u
@@ -231,12 +231,12 @@ t = defaultDbSettings
 --   runBeamPostgres conn $
 --     runInsert $
 --     insert
---       (_coreUsers coreDb)
+--       (Users coreDb)
 --       (insertValues [owner])
 --       (onConflict anyConflict onConflictDoNothing)
 --   runBeamPostgres conn $
 --     runInsert $
 --     insert
---       (_coreVirtualStakes coreDb)
+--       (VirtualStakes coreDb)
 --       (insertValues [virtualStake])
 --       onConflictDefault

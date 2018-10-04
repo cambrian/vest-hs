@@ -5,6 +5,7 @@ module DummyManager
   ) where
 
 import Bridge
+import qualified Bridge.Rpc.Auth.Token as Token
 import qualified Bridge.Transports.WebSocket as WebSocket
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
@@ -37,10 +38,10 @@ data ConcatTextAuthResponse = ConcatTextAuthResponse
 $(deriveTypeScript defaultOptions ''ConcatTextAuthResponse)
 
 type ConcatTextAuthEndpoint
-   = Endpoint ('Auth TokenAuth) "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
+   = Endpoint ('Auth Token.T) "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
 
 type EchoThriceAuthEndpoint
-   = Endpoint ('Auth TokenAuth) "echoThriceAuth" Text ('Streaming Text)
+   = Endpoint ('Auth Token.T) "echoThriceAuth" Text ('Streaming Text)
 
 type Api
    = AddIntsEndpoint
@@ -59,11 +60,11 @@ echoThrice x = do
   return . Streamly.fromList . replicate 3 $ x
 
 concatTextAuth ::
-     Claims TokenAuth -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
+     AuthClaims Token.T -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
 concatTextAuth _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
-echoThriceAuth :: Claims TokenAuth -> Text -> IO (Streamly.Serial Text)
+echoThriceAuth :: AuthClaims Token.T -> Text -> IO (Streamly.Serial Text)
 echoThriceAuth _ = return . Streamly.fromList . replicate 3
 
 handlers :: Handlers Api

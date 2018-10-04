@@ -9,23 +9,28 @@ import qualified TezosDelegationCore.Db as Db
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data Config = Config
+data Args = Args
   {
-  } deriving (Eq, Show, Read, Generic)
+  } deriving (Eq, Show, Read, Generic, Data)
+
+dbPoolConfig :: PoolConfig
+dbPoolConfig = PoolConfig {idleTime = sec 30, numResources = 5}
 
 data T = T
-  { dbPool :: Pool Db.Connection
+  { amqp :: Amqp.T
+  , dbPool :: Pool Db.Connection
   }
 
-type instance ResourceConfig T =
-     (Config, Amqp.T, Pool Db.Connection)
+type instance ServiceArgs T = Args
 
-instance Resource T where
-  make :: (Config, Amqp.T, Pool Db.Connection) -> IO T
-  make (_config, amqp, dbPool) = do
-    return T {dbPool}
-  cleanup :: T -> IO ()
-  cleanup _t = panic "unimplemented"
-
-start :: Amqp.T -> T -> IO ()
-start rpcTransport t = return ()
+instance Service T where
+  defaultArgs = Args {}
+  start T {amqp, dbPool} = blockForever
+  withResources args start =
+    with
+      Amqp.localConfig
+      (\amqp ->
+         withPool
+           dbPoolConfig
+           Db.localConfig
+           (\dbPool -> start $ T {amqp, dbPool}))

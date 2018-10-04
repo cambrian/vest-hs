@@ -100,7 +100,7 @@ type IO' t a = Tagged t (IO a)
 instance Hashable a => Hashable (Tagged s a)
 
 data TxStatus
-  = Posted
+  = Pending
   | Confirmed
   | Rejected
   deriving (Eq, Ord, Read, Show, Enum, Generic, ToJSON, FromJSON, Hashable)
@@ -270,9 +270,7 @@ class Resource a where
   -- ^ Minimal required definition.
   with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config = bracket (make config) cleanup
-  withForever :: ResourceConfig a -> (a -> IO b) -> IO Void
-  -- ^ TODO: Catch exceptions and reconnect.
-  withForever config action = with config (\a -> action a >> blockForever)
+  -- ^ TODO: Retry on exception.
   withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
   -- ^ Use: withPool poolcfg cfg (\pool -> withResource pool (\resource -> do ...))
   withPool PoolConfig {idleTime, numResources} config =
@@ -282,13 +280,23 @@ class Resource a where
     where
       idleTime_ = nominalDiffTimeFromTime idleTime
       numResources_ = fromIntegral numResources
-  withPoolForever ::
-       PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO Void
-  withPoolForever poolconfig config action =
-    withPool poolconfig config (\pool -> action pool >> blockForever)
 
--- Make type family injective.
 type family ResourceConfig a = cfg | cfg -> a
+
+type family ServiceArgs a = cfg | cfg -> a
+
+-- TODO: can we put shared argument logic here, like reading secret key files?
+class (Data (ServiceArgs a)) =>
+      Service a
+  where
+  defaultArgs :: ServiceArgs a
+  start :: a -> IO Void
+  withResources :: ServiceArgs a -> (a -> IO b) -> IO b
+  -- ^ This isn't the cleanest but I can't think of anything better for the time being.
+  run :: IO Void
+  run = do
+    args <- cmdArgs $ defaultArgs @a
+    withResources args start
 
 type family Symbols symbols where
   Symbols (Proxy c) = '[ c]
