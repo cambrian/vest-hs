@@ -14,13 +14,14 @@ data Config = Config
   } deriving (Eq, Show, Read, Generic)
 
 data T = T
-  { dbPool :: Pool Db.T
+  { dbPool :: Pool Db.Connection
   }
 
-type instance ResourceConfig T = (Config, Amqp.T, Pool Db.T)
+type instance ResourceConfig T =
+     (Config, Amqp.T, Pool Db.Connection)
 
 instance Resource T where
-  make :: (Config, Amqp.T, Pool Db.T) -> IO T
+  make :: (Config, Amqp.T, Pool Db.Connection) -> IO T
   make (_config, amqp, dbPool) = do
     return T {dbPool}
   cleanup :: T -> IO ()

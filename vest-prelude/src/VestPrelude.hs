@@ -99,6 +99,12 @@ type IO' t a = Tagged t (IO a)
 
 instance Hashable a => Hashable (Tagged s a)
 
+data TxStatus
+  = Posted
+  | Confirmed
+  | Rejected
+  deriving (Eq, Ord, Read, Show, Enum, Generic, ToJSON, FromJSON, Hashable)
+
 data BugException =
   BugException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
