@@ -48,7 +48,7 @@ echoDirect :: T -> a -> IO a
 echoDirect _ x = threadDelay (sec 0.01) >> return x
 
 echoStreaming ::
-     forall a auth. T -> AuthClaims auth -> [a] -> IO (Streamly.Serial a)
+     forall a auth. T -> Claims auth -> [a] -> IO (Streamly.Serial a)
 echoStreaming _ _ xs =
   return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
 
