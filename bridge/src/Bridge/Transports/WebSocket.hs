@@ -25,7 +25,7 @@ type HashTable k v = HashTable.BasicHashTable k v
 data RequestMessage = RequestMessage
   { id :: Text' "RequestId"
   , headers :: Headers
-  , route :: Text' "Route"
+  , route :: NamespacedText' "Route"
   , reqText :: Text' "Request"
   } deriving (Generic, FromJSON, ToJSON)
 
@@ -38,7 +38,7 @@ data ServerInfo = ServerInfo
   { uri :: Text' "Uri"
   , port :: Int' "Port"
   , path :: Text' "Path"
-  , routes :: [Text' "Route"] -- ^ Not type safe.
+  , routes :: [NamespacedText' "Route"] -- ^ Not type safe.
   }
 
 data Config = Config
@@ -51,15 +51,15 @@ localConfig :: Config
 localConfig = Config {servePort = Tagged 3000, pingInterval = 30, servers = []}
 
 data WebSocketClientException =
-  NoServerForRoute (Text' "Route")
+  NoServerForRoute (NamespacedText' "Route")
   deriving (Show, Exception)
 
 data T = T
-  { serverRequestHandlers :: HashTable (Text' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
+  { serverRequestHandlers :: HashTable (NamespacedText' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
   -- ^ For a server, requests need to be aggregated by route.
   , serverResponseHandlers :: HashTable (Text' "ClientId") (ResponseMessage -> IO ())
   -- ^ For a server, stores each client's response queue.
-  , clientRequestHandlers :: HashTable (Text' "Route") (RequestMessage -> IO ())
+  , clientRequestHandlers :: HashTable (NamespacedText' "Route") (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , serverThread :: Async ()
   , clientThreads :: [Async ()]
@@ -126,7 +126,7 @@ noHttpApp _ respond =
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
-     HashTable (Text' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
+     HashTable (NamespacedText' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
   -> HashTable (Text' "ClientId") (ResponseMessage -> IO ())
   -> Int
   -> WS.ServerApp
@@ -143,7 +143,7 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
     (HashTable.delete serverResponseHandlers clientId)
 
 serveClient ::
-     HashTable (Text' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
+     HashTable (NamespacedText' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
   -> Text' "ClientId"
   -> WS.Connection
   -> IO ()
@@ -178,7 +178,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
 instance RpcTransport T where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-    -> Text' "Route"
+    -> NamespacedText' "Route"
     -> T
     -> IO ()
   _consumeRequests asyncHandler route T { serverRequestHandlers
@@ -198,7 +198,7 @@ instance RpcTransport T where
              in asyncHandler headers reqText respond
   _issueRequest ::
        (Text' "Response" -> IO ())
-    -> Text' "Route"
+    -> NamespacedText' "Route"
     -> T
     -> Headers
     -> Text' "Request"

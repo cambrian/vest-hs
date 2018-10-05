@@ -49,9 +49,9 @@ data T = T
   , chan :: AMQP.Channel
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: HashTable (Text' "Route") AMQP.ConsumerTag
+  , consumedRoutes :: HashTable (NamespacedText' "Route") AMQP.ConsumerTag
   , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
-  , publisherThreads :: HashTable (Text' "TopicName") (Async ())
+  , publisherThreads :: HashTable (NamespacedText' "TopicName") (Async ())
   , subscribers :: HashTable (Text' "SubscriberId") AMQP.ConsumerTag
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
@@ -126,7 +126,7 @@ instance Resource T where
 instance RpcTransport T where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-    -> Text' "Route"
+    -> NamespacedText' "Route"
     -> T
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
@@ -136,7 +136,7 @@ instance RpcTransport T where
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
-    let Tagged queueName = route
+    let Tagged (Tagged queueName) = route
     _ <- AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
     let asyncHandle RequestMessage { id = requestId
                                    , headers
@@ -162,7 +162,7 @@ instance RpcTransport T where
     HashTable.insert consumedRoutes route consumerTag
   _issueRequest ::
        (Text' "Response" -> IO ())
-    -> Text' "Route"
+    -> NamespacedText' "Route"
     -> T
     -> Headers
     -> Text' "Request"
@@ -173,7 +173,7 @@ instance RpcTransport T where
     AMQP.publishMsg
       chan
       ""
-      (untag route)
+      (untag $ untag route)
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
     return $ Tagged $ HashTable.delete responseHandlers id
 
@@ -189,13 +189,17 @@ unsubscribe chan subscriberId consumerTag = do
   AMQP.deleteQueue chan (untag subscriberId) & void
 
 instance PubSubTransport T where
-  _publish :: ((Text' "a" -> IO ()) -> IO ()) -> Text' "TopicName" -> T -> IO ()
+  _publish ::
+       ((Text' "a" -> IO ()) -> IO ())
+    -> NamespacedText' "TopicName"
+    -> T
+    -> IO ()
   -- Like _serve, has race condition on publisherThreads. Not likely to be a problem
   _publish publisher topic T {chan, publisherThreads} = do
     HashTable.lookup publisherThreads topic >>= \case
       Just _ -> throw $ AlreadyPublishing topic
       Nothing -> return ()
-    let Tagged exchangeName = topic
+    let Tagged (Tagged exchangeName) = topic
     declarePubSubExchange chan exchangeName
     let send (Tagged a) =
           void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
@@ -203,12 +207,12 @@ instance PubSubTransport T where
     HashTable.insert publisherThreads topic publisherThread
   _subscribe ::
        (Text' "a" -> IO ())
-    -> Text' "TopicName"
+    -> NamespacedText' "TopicName"
     -> T
     -> IO (IO' "Unsubscribe" ())
   -- TODO: Declare a chan per consumer thread.
   -- (i.e. per call to AMQP.consumeMsgs)
-  _subscribe push (Tagged exchangeName) T {chan, subscribers} = do
+  _subscribe push (Tagged (Tagged exchangeName)) T {chan, subscribers} = do
     declarePubSubExchange chan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}

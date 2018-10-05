@@ -99,6 +99,8 @@ type Text' t = Tagged t Text
 
 type IO' t a = Tagged t (IO a)
 
+type NamespacedText' t = Tagged "Namespaced" (Text' t)
+
 instance Hashable a => Hashable (Tagged s a)
 
 data TxStatus
@@ -215,10 +217,7 @@ pushStream = do
   return (push, Tagged close, stream)
 
 proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
-proxyText' = stringToText' . symbolVal
-
-stringToText' :: GHC.Base.String -> Text' t
-stringToText' = Tagged . pack
+proxyText' = Tagged . pack . symbolVal
 
 timeoutRenewable ::
      Time Second
@@ -298,8 +297,8 @@ class (Data (ServiceArgs a), Typeable a) =>
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
   serviceName' :: Text' "ServiceName"
   serviceName' = moduleName' @a
-  namespace :: Text' t -> Text' t
-  namespace text = retag (serviceName' @a) <> "/" <> text
+  namespace :: Text' t -> NamespacedText' t
+  namespace text = Tagged $ retag (serviceName' @a) <> "/" <> text
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a

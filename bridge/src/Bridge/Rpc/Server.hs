@@ -8,7 +8,7 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 data RpcServerException =
-  AlreadyServing (Text' "Route")
+  AlreadyServing (NamespacedText' "Route")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
@@ -63,7 +63,7 @@ _serve ::
      -- ^ x is typically res or Streamly.Serial res.
   -> (Headers -> Text' "Request" -> IO (Maybe claims))
   -> (claims -> req -> IO x)
-  -> Text' "Route"
+  -> NamespacedText' "Route"
   -> transport
   -> IO ()
 _serve sender verifyAuth handler = _consumeRequests asyncHandle

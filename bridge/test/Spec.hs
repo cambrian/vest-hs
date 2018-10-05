@@ -209,21 +209,21 @@ pubSubTests ::
      Publisher service PubSubApi transport => [(service -> transport) -> Spec]
 pubSubTests = [pubSubTest']
 
-webSocketConfig :: WebSocket.Config
-webSocketConfig =
-  WebSocket.localConfig
-    { WebSocket.servers =
-        [ WebSocket.ServerInfo
-            { uri = Tagged "127.0.0.1"
-            , port = Tagged 3000
-            , path = Tagged "/"
-            , routes =
-                map stringToText' . manySymbolVal $
-                (Proxy :: Proxy (NubRoutes RpcApi))
-            }
-        ]
-    }
-
+-- webSocketConfig :: WebSocket.Config
+-- webSocketConfig =
+--   WebSocket.localConfig
+--     { WebSocket.servers =
+--         [ WebSocket.ServerInfo
+--             { uri = Tagged "127.0.0.1"
+--             , port = Tagged 3000
+--             , path = Tagged "/"
+--             , routes =
+--                 map
+--                   (namespace @T . Tagged . pack . manySymbolVal)
+--                   (Proxy :: Proxy (Routes RpcApi))
+--             }
+--         ]
+--     }
 main :: IO ()
 main =
   hspec $ do
