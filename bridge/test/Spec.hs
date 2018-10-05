@@ -87,7 +87,7 @@ increment =
             else Nothing
    in Streamly.unfoldrM f 0
 
-type IncrementTopic = Topic 'Haskell "increment" Int
+type IncrementTopic = Topic T 'Haskell "increment" Int
 
 type PubSubApi = IncrementTopic
 
@@ -95,17 +95,23 @@ streams :: Streams PubSubApi
 streams = increment
 
 withSubscribed ::
-     forall spec transport. (Resource transport, Subscriber spec transport)
-  => ResourceConfig transport
-  -> Proxy (spec, transport)
+     forall service spec transport.
+     (Publisher service PubSubApi transport, Subscriber spec transport)
+  => Proxy (spec, transport)
+  -> (service -> transport)
   -> (SubscriberBindings spec -> IO ())
   -> IO ()
-withSubscribed config _ action =
-  with
-    config
-    (\transport -> do
-       subscribed <- subscribe (Proxy :: Proxy (spec, transport)) transport
-       publish streams (Proxy :: Proxy (PubSubApi, transport)) transport
+withSubscribed _ getTransport action =
+  run
+    defaultArgs
+    (\service -> do
+       subscribed <-
+         subscribe (Proxy :: Proxy (spec, transport)) (getTransport service)
+       publish
+         @service
+         streams
+         (Proxy :: Proxy (PubSubApi, transport))
+         (getTransport service)
        action subscribed)
 
 tokenAuthJSON :: Headers
@@ -183,9 +189,10 @@ multipleStreamingTest getTransport =
       resultList1 `shouldSatisfy` Data.List.all (== 1)
       resultList2 `shouldSatisfy` Data.List.all (== 2)
 
-pubSubTest' :: (Resource a, PubSubTransport a) => ResourceConfig a -> Spec
-pubSubTest' config =
-  around (withSubscribed config (Proxy :: Proxy (IncrementTopic, a))) $
+pubSubTest' ::
+     Publisher service PubSubApi transport => (service -> transport) -> Spec
+pubSubTest' getTransport =
+  around (withSubscribed (Proxy :: Proxy (IncrementTopic, a)) getTransport) $
   context "when publishing an incrementing stream" $
   it "functions correctly on the subscribing end" $ \(_id, results) ->
     Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
@@ -198,7 +205,8 @@ streamingTests ::
      Server service RpcApi transport => [(service -> transport) -> Spec]
 streamingTests = [singleStreamingTest, multipleStreamingTest]
 
-pubSubTests :: (Resource a, PubSubTransport a) => [ResourceConfig a -> Spec]
+pubSubTests ::
+     Publisher service PubSubApi transport => [(service -> transport) -> Spec]
 pubSubTests = [pubSubTest']
 
 webSocketConfig :: WebSocket.Config
@@ -222,7 +230,7 @@ main =
     describe "AMQP bridge" $ do
       describe "Direct RPC" $ mapM_ ($ amqp) directTests
       describe "Streaming RPC" $ mapM_ ($ amqp) streamingTests
-      -- describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
+      describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
     describe "WebSocket bridge" $ do
       describe "Direct RPC" $ mapM_ ($ webSocket) directTests
       describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests

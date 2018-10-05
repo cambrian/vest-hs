@@ -88,7 +88,7 @@ instance ( Service service
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint service _auth (route :: Symbol) req ('Direct res)) transport where
+         Client (Endpoint service _auth route req ('Direct res)) transport where
   makeClient ::
        Proxy (Endpoint service _auth route req ('Direct res), transport)
     -> transport
@@ -104,7 +104,7 @@ instance ( Service service
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint service _auth (route :: Symbol) req ('Streaming res)) transport where
+         Client (Endpoint service _auth route req ('Streaming res)) transport where
   makeClient ::
        Proxy (Endpoint service _auth route req ('Streaming res), transport)
     -> transport

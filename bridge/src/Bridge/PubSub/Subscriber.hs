@@ -8,7 +8,7 @@ import VestPrelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
-  SubscriberBindings (Topic _ _ a) = (IO' "Unsubscribe" (), Streamly.Serial a)
+  SubscriberBindings (Topic _ _ _ a) = (IO' "Unsubscribe" (), Streamly.Serial a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -34,16 +34,23 @@ instance (Subscriber a transport, Subscriber b transport) =>
     bStreams <- subscribe (Proxy :: Proxy (b, transport)) transport
     return $ aStreams :<|> bStreams
 
-instance (Deserializable f a, KnownSymbol name, PubSubTransport transport) =>
-         Subscriber (Topic (f :: SerializationFormat) (name :: Symbol) a) transport where
+instance ( Service service
+         , Deserializable f a
+         , KnownSymbol name
+         , PubSubTransport transport
+         ) =>
+         Subscriber (Topic service f name a) transport where
   subscribe ::
-       Proxy (Topic f name a, transport)
+       Proxy (Topic service f name a, transport)
     -> transport
     -> IO (IO' "Unsubscribe" (), Streamly.Serial a)
   subscribe _ transport = do
     (push_, Tagged close, stream) <- pushStream
     let push = push_ <=< deserializeUnsafe' @f
     Tagged unsubscribe_ <-
-      _subscribe push (proxyText' (Proxy :: Proxy name)) transport
+      _subscribe
+        push
+        (namespace @service $ proxyText' (Proxy :: Proxy name))
+        transport
     let unsubscribe = Tagged $ close >> unsubscribe_
     return (unsubscribe, stream)

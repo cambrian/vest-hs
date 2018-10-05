@@ -90,7 +90,7 @@ instance ( Service service
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server service (Endpoint service 'NoAuth (route :: Symbol) req ('Direct res)) transport where
+         Server service (Endpoint service 'NoAuth route req ('Direct res)) transport where
   serve ::
        (service -> req -> IO res)
     -> service
@@ -112,7 +112,7 @@ instance ( Service service
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server service (Endpoint service 'NoAuth (route :: Symbol) req ('Streaming res)) transport where
+         Server service (Endpoint service 'NoAuth route req ('Streaming res)) transport where
   serve ::
        (service -> req -> IO (Streamly.Serial res))
     -> service
@@ -135,7 +135,7 @@ instance ( Service service
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server service (Endpoint service ('Auth auth) (route :: Symbol) req ('Direct res)) transport where
+         Server service (Endpoint service ('Auth auth) route req ('Direct res)) transport where
   serve ::
        (service -> AuthClaims auth -> req -> IO res)
     -> service
@@ -158,7 +158,7 @@ instance ( Service service
          , ToJSON res
          , RpcTransport transport
          ) =>
-         Server service (Endpoint service ('Auth auth) (route :: Symbol) req ('Streaming res)) transport where
+         Server service (Endpoint service ('Auth auth) route req ('Streaming res)) transport where
   serve ::
        (service -> AuthClaims auth -> req -> IO (Streamly.Serial res))
     -> service
