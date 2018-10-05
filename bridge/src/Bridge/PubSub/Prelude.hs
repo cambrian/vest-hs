@@ -13,12 +13,12 @@ class PubSubTransport t where
   _publish ::
        ((Text' "a" -> IO ()) -> IO ())
       -- ^ Publish fn, given a function to send a serialized @a over @t.
-    -> NamespacedText' "TopicName"
+    -> Namespaced' "TopicName"
     -> t
     -> IO ()
   _subscribe ::
        (Text' "a" -> IO ()) -- ^ Fn to publish serialized object.
-    -> NamespacedText' "TopicName"
+    -> Namespaced' "TopicName"
     -> t -- ^ Should be mutated to store cleanup details.
     -> IO (IO' "Unsubscribe" ())
 

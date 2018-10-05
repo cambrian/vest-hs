@@ -20,7 +20,7 @@ type family NubTopics spec where
 type HasUniqueTopics spec = Topics spec ~ NubTopics spec
 
 data PubSubPublisherException =
-  AlreadyPublishing (NamespacedText' "TopicName")
+  AlreadyPublishing (Namespaced' "TopicName")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Streams spec where

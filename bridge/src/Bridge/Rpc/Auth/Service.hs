@@ -12,6 +12,6 @@ data Claims service =
 
 type instance AuthClaims (T service) = Claims service
 
-instance (Service a) => Auth (T a) where
+instance Auth (T a) where
   verify :: Headers -> Text' "Request" -> IO (Maybe (Claims service))
   verify _ _ = return $ Just Claims
