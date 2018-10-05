@@ -71,9 +71,3 @@ data RpcClientException
 
 defaultHeaders :: Headers
 defaultHeaders = Headers {format = Haskell, token = Nothing}
-
-serviceRoute ::
-     forall service route. (Service service, KnownSymbol route)
-  => Proxy route
-  -> Text' "Route"
-serviceRoute route = retag (serviceName' @service) <> "/" <> proxyText' route

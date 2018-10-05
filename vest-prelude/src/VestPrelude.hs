@@ -298,6 +298,8 @@ class (Data (ServiceArgs a), Typeable a) =>
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
   serviceName' :: Text' "ServiceName"
   serviceName' = moduleName' @a
+  namespace :: Text' t -> Text' t
+  namespace text = retag (serviceName' @a) <> "/" <> text
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a

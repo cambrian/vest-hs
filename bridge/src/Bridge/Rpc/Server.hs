@@ -102,7 +102,7 @@ instance ( Service service
       directSender
       verifyEmpty
       (const $ handler service)
-      (serviceRoute @service (Proxy :: Proxy route))
+      (namespace @service $ proxyText' (Proxy :: Proxy route))
 
 instance ( Service service
          , KnownSymbol route
@@ -124,7 +124,7 @@ instance ( Service service
       streamingSender
       verifyEmpty
       (const $ handler service)
-      (serviceRoute @service (Proxy :: Proxy route))
+      (namespace @service $ proxyText' (Proxy :: Proxy route))
 
 instance ( Service service
          , KnownSymbol route
@@ -147,7 +147,7 @@ instance ( Service service
       directSender
       verify
       (handler service)
-      (serviceRoute @service (Proxy :: Proxy route))
+      (namespace @service $ proxyText' (Proxy :: Proxy route))
 
 instance ( Service service
          , KnownSymbol route
@@ -171,4 +171,4 @@ instance ( Service service
       streamingSender
       verify
       (handler service)
-      (serviceRoute @service (Proxy :: Proxy route))
+      (namespace @service $ proxyText' (Proxy :: Proxy route))
