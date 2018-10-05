@@ -69,9 +69,8 @@ toAmqpMsg :: Text -> AMQP.Message
 toAmqpMsg x =
   AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack $ x}
 
-type instance ResourceConfig T = Config
-
 instance Resource T where
+  type ResourceConfig T = Config
   make :: Config -> IO T
     -- Connects to RabbitMQ, begins listening on RPC queue.
   make Config {hostname, virtualHost, username, password} = do

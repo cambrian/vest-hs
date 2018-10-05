@@ -10,9 +10,8 @@ import qualified VestPrelude.Money as Money
 newtype Connection =
   Connection Db.Connection
 
-type instance ResourceConfig Connection = ConnectInfo
-
 instance Resource Connection where
+  type ResourceConfig Connection = ConnectInfo
   make cfg = connect cfg >>- Connection
   cleanup (Connection conn) = close conn
 

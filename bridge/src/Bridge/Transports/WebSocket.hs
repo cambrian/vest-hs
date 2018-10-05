@@ -66,9 +66,8 @@ data T = T
   -- ^ Should clean themselves up when canceled
   }
 
-type instance ResourceConfig T = Config
-
 instance Resource T where
+  type ResourceConfig T = Config
   make :: ResourceConfig T -> IO T
   -- Begins listening on servePort, connects to each server and begins listening for responses.
   make Config {servePort, pingInterval, servers} = do

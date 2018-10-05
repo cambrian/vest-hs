@@ -267,6 +267,7 @@ data PoolConfig = PoolConfig
   }
 
 class Resource a where
+  type ResourceConfig a
   make :: ResourceConfig a -> IO a
   cleanup :: a -> IO ()
   -- ^ Minimal required definition.
@@ -282,8 +283,6 @@ class Resource a where
     where
       idleTime_ = nominalDiffTimeFromTime idleTime
       numResources_ = fromIntegral numResources
-
-type family ResourceConfig a = cfg | cfg -> a
 
 type PublicKey a = Tagged a (Text' "PublicKey")
 
