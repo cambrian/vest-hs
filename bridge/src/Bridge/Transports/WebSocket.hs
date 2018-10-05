@@ -41,13 +41,7 @@ data ServerInfo = ServerInfo
   , routes :: [Namespaced' "Route"] -- ^ Not type safe.
   }
 
-data Config = Config
-  { servePort :: Int' "Port"
-  , pingInterval :: Int
-  , servers :: [ServerInfo]
-  }
-
-localConfig :: Config
+localConfig :: Config T
 localConfig = Config {servePort = Tagged 3000, pingInterval = 30, servers = []}
 
 data WebSocketClientException =
@@ -67,8 +61,9 @@ data T = T
   }
 
 instance Resource T where
-  type ResourceConfig T = Config
-  make :: ResourceConfig T -> IO T
+  data Config T = Config{servePort :: Int' "Port",
+                       pingInterval :: Int, servers :: [ServerInfo]}
+  make :: Config T -> IO T
   -- Begins listening on servePort, connects to each server and begins listening for responses.
   make Config {servePort, pingInterval, servers} = do
     serverRequestHandlers <- HashTable.new

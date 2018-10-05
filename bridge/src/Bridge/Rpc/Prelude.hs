@@ -27,10 +27,10 @@ data AuthOrNoAuth a
   | Auth a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
--- | There's no reason this has to be injective, other than that the compiler complains if it's not
-type family AuthClaims auth = claims | claims -> auth
-
+-- -- | There's no reason this has to be injective, other than that the compiler complains if it's not
+-- type family AuthClaims auth = claims | claims -> auth
 class Auth t where
+  data AuthClaims t
   verify :: Headers -> Text' "Request" -> IO (Maybe (AuthClaims t))
 
 -- | Streaming endpoints should return cumulative results (missing an intermediate result is ok).

@@ -210,7 +210,7 @@ pubSubTests ::
      Publisher service PubSubApi transport => [(service -> transport) -> Spec]
 pubSubTests = [pubSubTest']
 
-webSocketTestConfig :: WebSocket.Config
+webSocketTestConfig :: Config WebSocket.T
 webSocketTestConfig =
   WebSocket.localConfig
     { WebSocket.servers =

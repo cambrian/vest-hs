@@ -267,14 +267,14 @@ data PoolConfig = PoolConfig
   }
 
 class Resource a where
-  type ResourceConfig a
-  make :: ResourceConfig a -> IO a
+  data Config a
+  make :: Config a -> IO a
   cleanup :: a -> IO ()
   -- ^ Minimal required definition.
-  with :: ResourceConfig a -> (a -> IO b) -> IO b
+  with :: Config a -> (a -> IO b) -> IO b
   with config = bracket (make config) cleanup
   -- ^ TODO: Retry on exception.
-  withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
+  withPool :: PoolConfig -> Config a -> (Pool a -> IO b) -> IO b
   -- ^ Use: withPool poolcfg cfg (\pool -> withResource pool (\resource -> do ...))
   withPool PoolConfig {idleTime, numResources} config =
     bracket
@@ -291,7 +291,7 @@ type PublicKey a = Tagged a (Text' "PublicKey")
 class (Data (ServiceArgs a), Typeable a) =>
       Service a
   where
-  type ServiceArgs a
+  type ServiceArgs a -- can't be data because cmdArgs has to get the type name
   defaultArgs :: ServiceArgs a
   run :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.

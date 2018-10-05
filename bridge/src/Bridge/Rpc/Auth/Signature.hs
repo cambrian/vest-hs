@@ -7,11 +7,7 @@ import VestPrelude
 
 data T
 
-data Claims =
-  Claims
-
-type instance AuthClaims T = Claims
-
 instance Auth T where
-  verify :: Headers -> Text' "Request" -> IO (Maybe Claims)
+  data AuthClaims T = Claims{}
+  verify :: Headers -> Text' "Request" -> IO (Maybe (AuthClaims T))
   verify _ _ = return $ Just Claims

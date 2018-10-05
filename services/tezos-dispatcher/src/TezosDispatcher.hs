@@ -15,8 +15,7 @@ data T = T
   { amqp :: Amqp.T
   }
 
-type instance ServiceArgs T = TezosDispatcher
-
 instance Service T where
+  type ServiceArgs T = TezosDispatcher
   defaultArgs = Args {}
   run _args f = with Amqp.localConfig (\amqp -> f $ T {amqp})

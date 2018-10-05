@@ -20,9 +20,8 @@ data T = T
   , dbPool :: Pool Db.Connection
   }
 
-type instance ServiceArgs T = TezosDelegationCore
-
 instance Service T where
+  type ServiceArgs T = TezosDelegationCore
   defaultArgs = Args {}
   run _args f =
     with

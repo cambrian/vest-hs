@@ -11,12 +11,13 @@ newtype Connection =
   Connection Db.Connection
 
 instance Resource Connection where
-  type ResourceConfig Connection = ConnectInfo
-  make cfg = connect cfg >>- Connection
+  data Config Connection = Config ConnectInfo
+  make (Config cfg) = connect cfg >>- Connection
   cleanup (Connection conn) = close conn
 
-localConfig :: ConnectInfo
+localConfig :: Config Connection
 localConfig =
+  Config $
   ConnectInfo
     { connectHost = "localhost"
     , connectPort = 5432
