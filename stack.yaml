@@ -3,10 +3,7 @@ resolver: lts-12.10
 packages:
 - bridge
 # - bridge-client
-# - dummy-manager
-# - fiat-payment-server
-- tezos-delegation-core
-- tezos-dispatcher
+- services
 - vest-prelude
 
 extra-deps:

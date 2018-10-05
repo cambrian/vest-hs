@@ -2,4 +2,4 @@ import TezosDelegationCore
 import VestPrelude
 
 main :: IO Void
-main = run @T
+main = start @T (const blockForever)

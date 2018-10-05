@@ -21,9 +21,9 @@ localConfig =
   ConnectInfo
     { connectHost = "localhost"
     , connectPort = 5432
-    , connectUser = "delegation-core"
+    , connectUser = "tezos-delegation-core"
     , connectPassword = "localpassword"
-    , connectDatabase = "delegation-core"
+    , connectDatabase = "tezos-delegation-core"
     }
 
 data DelegateT f = Delegate

@@ -9,7 +9,7 @@ import qualified TezosDelegationCore.Db as Db
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-data Args = Args
+data TezosDelegationCore = Args
   {
   } deriving (Eq, Show, Read, Generic, Data)
 
@@ -21,16 +21,12 @@ data T = T
   , dbPool :: Pool Db.Connection
   }
 
-type instance ServiceArgs T = Args
+type instance ServiceArgs T = TezosDelegationCore
 
 instance Service T where
   defaultArgs = Args {}
-  start T {amqp, dbPool} = blockForever
-  withResources args start =
+  start_ _args f =
     with
       Amqp.localConfig
       (\amqp ->
-         withPool
-           dbPoolConfig
-           Db.localConfig
-           (\dbPool -> start $ T {amqp, dbPool}))
+         withPool dbPoolConfig Db.localConfig (\dbPool -> f $ T {amqp, dbPool}))

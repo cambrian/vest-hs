@@ -285,18 +285,19 @@ type family ResourceConfig a = cfg | cfg -> a
 
 type family ServiceArgs a = cfg | cfg -> a
 
+type PublicKey a = Tagged a (Text' "PublicKey")
+
 -- TODO: can we put shared argument logic here, like reading secret key files?
 class (Data (ServiceArgs a)) =>
       Service a
   where
   defaultArgs :: ServiceArgs a
-  start :: a -> IO Void
-  withResources :: ServiceArgs a -> (a -> IO b) -> IO b
+  start_ :: ServiceArgs a -> (a -> IO Void) -> IO Void
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
-  run :: IO Void
-  run = do
+  start :: (a -> IO Void) -> IO Void
+  start f = do
     args <- cmdArgs $ defaultArgs @a
-    withResources args start
+    start_ args f
 
 type family Symbols symbols where
   Symbols (Proxy c) = '[ c]

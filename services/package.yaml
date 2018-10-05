@@ -1,4 +1,4 @@
-name:                tezos-dispatcher
+name:                services
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -10,7 +10,9 @@ synopsis:            Delegation backend service.
 description:         See README.md.
 
 dependencies:
+- aeson                 >= 1.4  && < 2
 - base                  >= 4.10 && < 5
+- streamly              >= 0.5  && < 1
 - bridge
 - vest-prelude
 
@@ -52,6 +54,7 @@ default-extensions:
 - OverloadedLabels
 - PatternSynonyms
 - PolyKinds
+- QuasiQuotes
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving
@@ -73,21 +76,40 @@ ghc-options:
 # - -Wmissing-import-lists
 
 library:
-  source-dirs: src
+  source-dirs:
+  # - dummy-manager/src
+  # - fiat-payment-server/src
+  - tezos-delegation-core/src
+  - tezos-dispatcher/src
 
-executable:
-  main:                Main.hs
-  source-dirs:         bin
-  dependencies:
-  - tezos-dispatcher
+executables:
+  tezos-delegation-core:
+    main:                Main.hs
+    source-dirs:         tezos-delegation-core/bin
+    dependencies:
+    - services
+  tezos-dispatcher:
+    main:                Main.hs
+    source-dirs:         tezos-dispatcher/bin
+    dependencies:
+    - services
 
 tests:
-  tezos-dispatcher-test:
+  tezos-delegation-core-test:
     main:                Spec.hs
-    source-dirs:         test
+    source-dirs:         tezos-delegation-core/test
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - tezos-dispatcher
+    - services
+  tezos-dispatcher-test:
+    main:                Spec.hs
+    source-dirs:         tezos-dispatcher/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - services
