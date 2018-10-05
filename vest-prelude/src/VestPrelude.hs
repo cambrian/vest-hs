@@ -14,6 +14,8 @@ import Crypto.Saltine as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
+import Data.HashMap.Strict as Reexports (HashMap)
+import Data.HashSet as Reexports (HashSet)
 import Data.Hashable as Reexports (Hashable)
 import Data.Pool
 import Data.Pool as Reexports (Pool, tryWithResource, withResource)

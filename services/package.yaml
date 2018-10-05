@@ -13,6 +13,7 @@ dependencies:
 - aeson                 >= 1.4  && < 2
 - base                  >= 4.10 && < 5
 - streamly              >= 0.5  && < 1
+- yaml                  >= 0.10 && < 1
 - bridge
 - vest-prelude
 
@@ -77,12 +78,18 @@ ghc-options:
 
 library:
   source-dirs:
+  - access-control/src
   # - dummy-manager/src
   # - fiat-payment-server/src
   - tezos-delegation-core/src
   - tezos-dispatcher/src
 
 executables:
+  access-control:
+    main:                Main.hs
+    source-dirs:         access-control/bin
+    dependencies:
+    - services
   tezos-delegation-core:
     main:                Main.hs
     source-dirs:         tezos-delegation-core/bin
@@ -95,6 +102,15 @@ executables:
     - services
 
 tests:
+  access-control-test:
+    main:                Spec.hs
+    source-dirs:         access-control/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - services
   tezos-delegation-core-test:
     main:                Spec.hs
     source-dirs:         tezos-delegation-core/test

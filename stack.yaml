@@ -15,6 +15,7 @@ extra-deps:
 - streamly-0.5.1
 - text-format-0.3.2
 - text-replace-0.0.0.3
+- yaml-0.10.2.0
 # Remove this when hindent > 5.2.7 is published to hackage (for configurable extensions).
 - github: commercialhaskell/hindent
   commit: ffe03701050d159387c06103ecaf8147716d5cb8
