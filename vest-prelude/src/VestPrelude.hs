@@ -98,7 +98,7 @@ type Text' t = Tagged t Text
 
 type IO' t a = Tagged t (IO a)
 
-type Namespaced' t = Tagged '( "Namespaced", t) Text
+type NamespacedText' t = Tagged '( "Namespaced", t) Text
 
 instance Hashable a => Hashable (Tagged s a)
 
@@ -296,7 +296,7 @@ class (Data (ServiceArgs a), Typeable a) =>
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
   serviceName' :: Text' "ServiceName"
   serviceName' = moduleName' @a
-  namespace :: Text' t -> Namespaced' t
+  namespace :: Text' t -> NamespacedText' t
   namespace text = retag $ retag (serviceName' @a) <> "/" <> text
   start :: (a -> IO Void) -> IO Void
   start f = do

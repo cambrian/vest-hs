@@ -73,7 +73,7 @@ withRpcClient _ getTransport action =
          service
          (Proxy :: Proxy (RpcApi, transport))
          (getTransport service)
-       threadDelay (sec 0.1) -- Wait for servers to initialize and avoid races.
+       threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
        action $
          makeClient (Proxy :: Proxy (spec, transport)) (getTransport service))
 

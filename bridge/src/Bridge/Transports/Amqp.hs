@@ -49,9 +49,9 @@ data T = T
   , chan :: AMQP.Channel
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: HashTable (Namespaced' "Route") AMQP.ConsumerTag
+  , consumedRoutes :: HashTable (NamespacedText' "Route") AMQP.ConsumerTag
   , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
-  , publisherThreads :: HashTable (Namespaced' "TopicName") (Async ())
+  , publisherThreads :: HashTable (NamespacedText' "TopicName") (Async ())
   , subscribers :: HashTable (Text' "SubscriberId") AMQP.ConsumerTag
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
@@ -126,7 +126,7 @@ instance Resource T where
 instance RpcTransport T where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-    -> Namespaced' "Route"
+    -> NamespacedText' "Route"
     -> T
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
@@ -162,7 +162,7 @@ instance RpcTransport T where
     HashTable.insert consumedRoutes route consumerTag
   _issueRequest ::
        (Text' "Response" -> IO ())
-    -> Namespaced' "Route"
+    -> NamespacedText' "Route"
     -> T
     -> Headers
     -> Text' "Request"
@@ -190,7 +190,10 @@ unsubscribe chan subscriberId consumerTag = do
 
 instance PubSubTransport T where
   _publish ::
-       ((Text' "a" -> IO ()) -> IO ()) -> Namespaced' "TopicName" -> T -> IO ()
+       ((Text' "a" -> IO ()) -> IO ())
+    -> NamespacedText' "TopicName"
+    -> T
+    -> IO ()
   -- Like _serve, has race condition on publisherThreads. Not likely to be a problem
   _publish publisher topic T {chan, publisherThreads} = do
     HashTable.lookup publisherThreads topic >>= \case
@@ -204,7 +207,7 @@ instance PubSubTransport T where
     HashTable.insert publisherThreads topic publisherThread
   _subscribe ::
        (Text' "a" -> IO ())
-    -> Namespaced' "TopicName"
+    -> NamespacedText' "TopicName"
     -> T
     -> IO (IO' "Unsubscribe" ())
   -- TODO: Declare a chan per consumer thread.

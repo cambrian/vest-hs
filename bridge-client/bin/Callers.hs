@@ -1,4 +1,3 @@
-import Bridge.Rpc.Prelude (AuthType(..), DirectOrStreamingType(..))
 import BridgeClient
 import Data.Aeson.Types (Object)
 import Data.Text.Lazy (toStrict)

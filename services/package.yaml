@@ -6,11 +6,12 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            Delegation backend service.
+synopsis:            Package containing all of the Vest backend services.
 description:         See README.md.
 
 dependencies:
 - aeson                 >= 1.4  && < 2
+- aeson-typescript      >= 0.1  && < 1
 - base                  >= 4.10 && < 5
 - streamly              >= 0.5  && < 1
 - bridge
@@ -77,12 +78,17 @@ ghc-options:
 
 library:
   source-dirs:
-  # - dummy-manager/src
+  - dummy-manager/src
   # - fiat-payment-server/src
   - tezos-delegation-core/src
   - tezos-dispatcher/src
 
 executables:
+  dummy-manager:
+    main:                Main.hs
+    source-dirs:         dummy-manager/bin
+    dependencies:
+    - services
   tezos-delegation-core:
     main:                Main.hs
     source-dirs:         tezos-delegation-core/bin

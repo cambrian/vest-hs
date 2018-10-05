@@ -1,7 +1,6 @@
--- Right now this file is just pointless endpoints for WebSocket testing.
+-- Pointless endpoints for WebSocket testing.
 module DummyManager
-  ( Api
-  , start
+  ( module DummyManager
   ) where
 
 import Bridge
@@ -13,6 +12,20 @@ import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
+data DummyManager = Args
+  {
+  } deriving (Eq, Show, Read, Generic, Data)
+
+data T = T
+  { webSocket :: WebSocket.T
+  }
+
+type instance ServiceArgs T = DummyManager
+
+instance Service T where
+  defaultArgs = Args {}
+  run _args f = with WebSocket.localConfig (\webSocket -> f $ T {webSocket})
+
 data AddIntsRequest = AddIntsRequest
   { a :: Int
   , b :: Int
@@ -20,9 +33,9 @@ data AddIntsRequest = AddIntsRequest
 
 $(deriveTypeScript defaultOptions ''AddIntsRequest)
 
-type AddIntsEndpoint = Endpoint 'NoAuth "addInts" AddIntsRequest ('Direct Int)
+type AddIntsEndpoint = Endpoint T 'NoAuth "addInts" AddIntsRequest ('Direct Int)
 
-type EchoThriceEndpoint = Endpoint 'NoAuth "echoThrice" Int ('Streaming Int)
+type EchoThriceEndpoint = Endpoint T 'NoAuth "echoThrice" Int ('Streaming Int)
 
 data ConcatTextAuthRequest = ConcatTextAuthRequest
   { a :: Text
@@ -38,10 +51,10 @@ data ConcatTextAuthResponse = ConcatTextAuthResponse
 $(deriveTypeScript defaultOptions ''ConcatTextAuthResponse)
 
 type ConcatTextAuthEndpoint
-   = Endpoint ('Auth Token.T) "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
+   = Endpoint T ('Auth Token.T) "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
 
 type EchoThriceAuthEndpoint
-   = Endpoint ('Auth Token.T) "echoThriceAuth" Text ('Streaming Text)
+   = Endpoint T ('Auth Token.T) "echoThriceAuth" Text ('Streaming Text)
 
 type Api
    = AddIntsEndpoint
@@ -49,27 +62,26 @@ type Api
      :<|> ConcatTextAuthEndpoint
      :<|> EchoThriceAuthEndpoint
 
-addInts :: AddIntsRequest -> IO Int
-addInts AddIntsRequest {a, b} = do
+addInts :: T -> AddIntsRequest -> IO Int
+addInts _ AddIntsRequest {a, b} = do
   threadDelay (sec 0.25)
   return (a + b)
 
-echoThrice :: Int -> IO (Streamly.Serial Int)
-echoThrice x = do
+echoThrice :: T -> Int -> IO (Streamly.Serial Int)
+echoThrice _ x = do
   threadDelay (sec 0.25)
   return . Streamly.fromList . replicate 3 $ x
 
 concatTextAuth ::
-     AuthClaims Token.T -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
-concatTextAuth _ ConcatTextAuthRequest {a, b} =
+     T
+  -> AuthClaims Token.T
+  -> ConcatTextAuthRequest
+  -> IO ConcatTextAuthResponse
+concatTextAuth _ _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
-echoThriceAuth :: AuthClaims Token.T -> Text -> IO (Streamly.Serial Text)
-echoThriceAuth _ = return . Streamly.fromList . replicate 3
+echoThriceAuth :: T -> AuthClaims Token.T -> Text -> IO (Streamly.Serial Text)
+echoThriceAuth _ _ = return . Streamly.fromList . replicate 3
 
 handlers :: Handlers Api
 handlers = addInts :<|> echoThrice :<|> concatTextAuth :<|> echoThriceAuth
-
-start :: WebSocket.T -> WebSocket.T -> WebSocket.T -> IO ()
-start serverTransport _ _ =
-  serve handlers (Proxy :: Proxy (Api, WebSocket.T)) serverTransport

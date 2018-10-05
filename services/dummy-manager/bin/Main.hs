@@ -1,9 +1,16 @@
+import Bridge
 import qualified Bridge.Transports.WebSocket as WebSocket
-import qualified DummyManager
+import DummyManager
 import VestPrelude
 
 main :: IO Void
 main =
-  withForever WebSocket.localConfig $ \serverTransport ->
-    withForever WebSocket.localConfig $ \clientTransport ->
-      DummyManager.start serverTransport clientTransport clientTransport
+  start
+    @T
+    (\service -> do
+       serve
+         handlers
+         service
+         (Proxy :: Proxy (Api, WebSocket.T))
+         (webSocket service)
+       blockForever)
