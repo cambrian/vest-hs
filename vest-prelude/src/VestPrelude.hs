@@ -293,14 +293,14 @@ class (Data (ServiceArgs a), Typeable a) =>
       Service a
   where
   defaultArgs :: ServiceArgs a
-  start_ :: ServiceArgs a -> (a -> IO Void) -> IO Void
+  run :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
   serviceName :: Text' "ServiceName"
   serviceName = moduleName @a
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a
-    start_ args f
+    run args f
 
 type family Symbols symbols where
   Symbols (Proxy c) = '[ c]

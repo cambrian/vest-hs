@@ -10,17 +10,34 @@ import qualified Streamly.Prelude as Streamly
 import Test.Hspec
 import VestPrelude
 
+data DummyService = Args
+  {
+  } deriving (Eq, Show, Read, Generic, Data)
+
+data T = T
+  { amqp :: Amqp.T
+  , webSocket :: WebSocket.T
+  }
+
+type instance ServiceArgs T = DummyService
+
+instance Service T where
+  defaultArgs = Args {}
+  run _ f =
+    with WebSocket.localConfig $ \webSocket ->
+      with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
+
 type EchoIntsDirectEndpoint
-   = Endpoint 'NoAuth "echoIntsDirect" [Int] ('Direct [Int])
+   = Endpoint 'T 'NoAuth "echoIntsDirect" [Int] ('Direct [Int])
 
 type EchoTextsDirectEndpoint
-   = Endpoint 'NoAuth "echoTextDirect" [Text] ('Direct [Text])
+   = Endpoint 'T 'NoAuth "echoTextDirect" [Text] ('Direct [Text])
 
 type EchoIntsStreamingEndpoint
-   = Endpoint ('Auth Token.T) "echoIntsStreaming" [Int] ('Streaming Int)
+   = Endpoint 'T ('Auth Token.T) "echoIntsStreaming" [Int] ('Streaming Int)
 
 type EchoTextsStreamingEndpoint
-   = Endpoint ('Auth Token.T) "echoTextsStreaming" [Text] ('Streaming Text)
+   = Endpoint 'T ('Auth Token.T) "echoTextsStreaming" [Text] ('Streaming Text)
 
 type RpcApi
    = EchoIntsDirectEndpoint
@@ -28,29 +45,38 @@ type RpcApi
      :<|> EchoIntsStreamingEndpoint
      :<|> EchoTextsStreamingEndpoint
 
-echoDirect :: a -> IO a
-echoDirect x = threadDelay (sec 0.01) >> return x
+echoDirect :: T -> a -> IO a
+echoDirect _ x = threadDelay (sec 0.01) >> return x
 
-echoStreaming :: AuthClaims auth -> [a] -> IO (Streamly.Serial a)
-echoStreaming _ xs =
+echoStreaming ::
+     forall a auth. T -> AuthClaims auth -> [a] -> IO (Streamly.Serial a)
+echoStreaming _ _ xs =
   return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
 
 handlers :: Handlers RpcApi
-handlers = echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming
+handlers =
+  echoDirect @[Int] :<|> echoDirect @[Text] :<|> echoStreaming @Int :<|>
+  echoStreaming @Text
 
 withRpcClient ::
-     forall spec transport. (Resource transport, Client spec transport)
-  => ResourceConfig transport
-  -> Proxy (spec, transport)
+     forall spec transport service.
+     (Resource transport, Client spec transport, Service service)
+  => Proxy (spec, transport)
+  -> (service -> transport)
   -> (ClientBindings spec -> IO ())
   -> IO ()
-withRpcClient config _ action =
-  with
-    config
-    (\transport -> do
-       serve handlers (Proxy :: Proxy (RpcApi, transport)) transport
+withRpcClient _ getTransport action =
+  run
+    defaultArgs
+    (\service -> do
+       serve
+         handlers
+         service
+         (Proxy :: Proxy (RpcApi, transport))
+         (getTransport service)
        threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
-       action $ makeClient (Proxy :: Proxy (spec, transport)) transport)
+       action $
+         makeClient (Proxy :: Proxy (spec, transport)) (getTransport service))
 
 increment :: Streamly.Serial Int
 increment =
@@ -86,9 +112,10 @@ withSubscribed config _ action =
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {format = JSON, token = Just $ Tagged ""}
 
-singleDirectTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
-singleDirectTest config =
-  around (withRpcClient config (Proxy :: Proxy (EchoIntsDirectEndpoint, a))) $
+singleDirectTest :: (RpcTransport t, Service service) => (service -> t) -> Spec
+singleDirectTest getTransport =
+  around
+    (withRpcClient (Proxy :: Proxy (EchoIntsDirectEndpoint, a)) getTransport) $
   context "with a single direct RPC" $ do
     it "makes a single call" $ \call -> do
       result <- call (sec 1) defaultHeaders [1, 2, 3]
@@ -97,9 +124,11 @@ singleDirectTest config =
       call (sec 0) defaultHeaders [1, 2, 3] `shouldThrow`
       (== TimeoutException (sec 0))
 
-singleStreamingTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
-singleStreamingTest config =
-  around (withRpcClient config (Proxy :: Proxy (EchoIntsStreamingEndpoint, a))) $
+singleStreamingTest ::
+     (RpcTransport t, Service service) => (service -> t) -> Spec
+singleStreamingTest getTransport =
+  around
+    (withRpcClient (Proxy :: Proxy (EchoIntsStreamingEndpoint, a)) getTransport) $
   context "with a single streaming RPC" $ do
     it "receives the last result for a single call" $ \call -> do
       results <- call (sec 1) tokenAuthJSON [1, 2, 3]
@@ -115,14 +144,15 @@ singleStreamingTest config =
           print resultList) `shouldThrow`
       (== TimeoutException (sec 0))
 
-multipleDirectTest :: (Resource a, RpcTransport a) => ResourceConfig a -> Spec
-multipleDirectTest config =
+multipleDirectTest ::
+     (RpcTransport t, Service service) => (service -> t) -> Spec
+multipleDirectTest getTransport =
   around
     (withRpcClient
-       config
        (Proxy :: Proxy ( EchoIntsDirectEndpoint
                          :<|> EchoTextsDirectEndpoint
-                       , a))) $
+                       , a))
+       getTransport) $
   context "when running multiple direct RPCs" $
   it "makes one call to each" $ \(echoInts :<|> echoTexts) -> do
     resultInts <- echoInts (sec 1) defaultHeaders [1, 2, 3]
@@ -131,14 +161,14 @@ multipleDirectTest config =
     resultTexts `shouldBe` ["a", "b", "c"]
 
 multipleStreamingTest ::
-     (Resource a, RpcTransport a) => ResourceConfig a -> Spec
-multipleStreamingTest config =
+     (RpcTransport t, Service service) => (service -> t) -> Spec
+multipleStreamingTest getTransport =
   around
     (withRpcClient
-       config
        (Proxy :: Proxy ( EchoIntsStreamingEndpoint
                          :<|> EchoTextsStreamingEndpoint
-                       , a))) $
+                       , a))
+       getTransport) $
   context "when running multiple streaming RPCs" $ do
     it "sees the last item for each call" $ \(echoInts :<|> echoTexts) -> do
       resultsInt <- echoInts (sec 1) tokenAuthJSON [1, 2, 3]
@@ -160,10 +190,10 @@ pubSubTest' config =
   it "functions correctly on the subscribing end" $ \(_id, results) ->
     Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
 
-directTests :: (Resource a, RpcTransport a) => [ResourceConfig a -> Spec]
+directTests :: (Service service, RpcTransport t) => [(service -> t) -> Spec]
 directTests = [singleDirectTest, multipleDirectTest]
 
-streamingTests :: (Resource a, RpcTransport a) => [ResourceConfig a -> Spec]
+streamingTests :: (Service service, RpcTransport t) => [(service -> t) -> Spec]
 streamingTests = [singleStreamingTest, multipleStreamingTest]
 
 pubSubTests :: (Resource a, PubSubTransport a) => [ResourceConfig a -> Spec]
@@ -185,14 +215,12 @@ webSocketConfig =
     }
 
 main :: IO ()
-main = do
-  let amqpMake = ($ Amqp.localConfig)
-      wsMake = ($ webSocketConfig)
+main =
   hspec $ do
     describe "AMQP bridge" $ do
-      describe "Direct RPC" $ mapM_ amqpMake directTests
-      describe "Streaming RPC" $ mapM_ amqpMake streamingTests
-      describe "Pub/Sub" $ mapM_ amqpMake pubSubTests
+      describe "Direct RPC" $ mapM_ ($ amqp) directTests
+      describe "Streaming RPC" $ mapM_ ($ amqp) streamingTests
+      -- describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
     describe "WebSocket bridge" $ do
-      describe "Direct RPC" $ mapM_ wsMake directTests
-      describe "Streaming RPC" $ mapM_ wsMake streamingTests
+      describe "Direct RPC" $ mapM_ ($ webSocket) directTests
+      describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests
