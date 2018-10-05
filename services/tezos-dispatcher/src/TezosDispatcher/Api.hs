@@ -10,4 +10,5 @@ import qualified TezosDispatcher
 import VestPrelude
 import qualified VestPrelude.Money as Money
 
-type RewardsEndpoint = Endpoint 'NoAuth "getRewards" () ('Direct ())
+type RewardsEndpoint
+   = Endpoint TezosDispatcher.T 'NoAuth "getRewards" () ('Direct ())

@@ -285,9 +285,9 @@ class Resource a where
 
 type family ResourceConfig a = cfg | cfg -> a
 
-type family ServiceArgs a = cfg | cfg -> a
-
 type PublicKey a = Tagged a (Text' "PublicKey")
+
+type family ServiceArgs a = cfg | cfg -> a
 
 -- TODO: can we put shared argument logic here, like reading secret key files?
 class (Data (ServiceArgs a), Typeable a) =>

@@ -19,4 +19,4 @@ type instance ServiceArgs T = TezosDispatcher
 
 instance Service T where
   defaultArgs = Args {}
-  start_ _args f = with Amqp.localConfig (\amqp -> f $ T {amqp})
+  run _args f = with Amqp.localConfig (\amqp -> f $ T {amqp})

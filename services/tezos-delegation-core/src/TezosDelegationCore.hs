@@ -4,7 +4,6 @@ module TezosDelegationCore
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import TezosDelegationCore.Api
 import qualified TezosDelegationCore.Db as Db
 import VestPrelude
 import qualified VestPrelude.Money as Money
@@ -25,7 +24,7 @@ type instance ServiceArgs T = TezosDelegationCore
 
 instance Service T where
   defaultArgs = Args {}
-  start_ _args f =
+  run _args f =
     with
       Amqp.localConfig
       (\amqp ->

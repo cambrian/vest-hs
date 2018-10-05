@@ -231,6 +231,6 @@ main =
       describe "Direct RPC" $ mapM_ ($ amqp) directTests
       describe "Streaming RPC" $ mapM_ ($ amqp) streamingTests
       describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
-    describe "WebSocket bridge" $ do
-      describe "Direct RPC" $ mapM_ ($ webSocket) directTests
-      describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests
+    -- describe "WebSocket bridge" $ do
+    --   describe "Direct RPC" $ mapM_ ($ webSocket) directTests
+    --   describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests
