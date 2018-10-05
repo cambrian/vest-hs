@@ -186,7 +186,9 @@ instance RpcTransport T where
                                         } =
     HashTable.lookup serverRequestHandlers route >>= \case
       Just _ -> throw $ AlreadyServing route
-      Nothing -> HashTable.insert serverRequestHandlers route handleMsg
+      Nothing -> do
+        print route
+        HashTable.insert serverRequestHandlers route handleMsg
     where
       handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
         HashTable.lookup serverResponseHandlers clientId >>= \case

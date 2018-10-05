@@ -24,6 +24,7 @@ import Data.Time.Clock as Reexports (NominalDiffTime, UTCTime)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
 import Data.Type.Bool as Reexports
+import Data.Typeable as Reexports
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
 import qualified Foreign.StablePtr as StablePtr
@@ -295,8 +296,8 @@ class (Data (ServiceArgs a), Typeable a) =>
   defaultArgs :: ServiceArgs a
   run :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
-  serviceName :: Text' "ServiceName"
-  serviceName = moduleName @a
+  serviceName' :: Text' "ServiceName"
+  serviceName' = moduleName' @a
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a
@@ -374,10 +375,8 @@ read = deserialize @'Haskell
 
 -- show is defined in protolude
 -- Not providing encode/decode because you should prefer serialize/deserialize @'JSON
-moduleName ::
+moduleName' ::
      forall a t. Typeable a
   => Text' t
-moduleName = Tagged . pack . dropLastToken_ . show $ typeRep (Proxy :: Proxy a)
-
-dropLastToken_ :: GHC.Base.String -> GHC.Base.String
-dropLastToken_ = reverse . tailSafe . dropWhile (/= '.') . reverse
+moduleName' =
+  Tagged . pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy a)

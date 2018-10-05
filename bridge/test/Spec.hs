@@ -28,16 +28,16 @@ instance Service T where
       with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
 
 type EchoIntsDirectEndpoint
-   = Endpoint 'T 'NoAuth "echoIntsDirect" [Int] ('Direct [Int])
+   = Endpoint T 'NoAuth "echoIntsDirect" [Int] ('Direct [Int])
 
 type EchoTextsDirectEndpoint
-   = Endpoint 'T 'NoAuth "echoTextDirect" [Text] ('Direct [Text])
+   = Endpoint T 'NoAuth "echoTextDirect" [Text] ('Direct [Text])
 
 type EchoIntsStreamingEndpoint
-   = Endpoint 'T ('Auth Token.T) "echoIntsStreaming" [Int] ('Streaming Int)
+   = Endpoint T ('Auth Token.T) "echoIntsStreaming" [Int] ('Streaming Int)
 
 type EchoTextsStreamingEndpoint
-   = Endpoint 'T ('Auth Token.T) "echoTextsStreaming" [Text] ('Streaming Text)
+   = Endpoint T ('Auth Token.T) "echoTextsStreaming" [Text] ('Streaming Text)
 
 type RpcApi
    = EchoIntsDirectEndpoint
@@ -55,12 +55,11 @@ echoStreaming _ _ xs =
 
 handlers :: Handlers RpcApi
 handlers =
-  echoDirect @[Int] :<|> echoDirect @[Text] :<|> echoStreaming @Int :<|>
-  echoStreaming @Text
+  echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming @Text
 
 withRpcClient ::
-     forall spec transport service.
-     (Resource transport, Client spec transport, Service service)
+     forall service spec transport.
+     (Server service RpcApi transport, Client spec transport)
   => Proxy (spec, transport)
   -> (service -> transport)
   -> (ClientBindings spec -> IO ())
@@ -112,7 +111,8 @@ withSubscribed config _ action =
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {format = JSON, token = Just $ Tagged ""}
 
-singleDirectTest :: (RpcTransport t, Service service) => (service -> t) -> Spec
+singleDirectTest ::
+     Server service RpcApi transport => (service -> transport) -> Spec
 singleDirectTest getTransport =
   around
     (withRpcClient (Proxy :: Proxy (EchoIntsDirectEndpoint, a)) getTransport) $
@@ -125,7 +125,7 @@ singleDirectTest getTransport =
       (== TimeoutException (sec 0))
 
 singleStreamingTest ::
-     (RpcTransport t, Service service) => (service -> t) -> Spec
+     Server service RpcApi transport => (service -> transport) -> Spec
 singleStreamingTest getTransport =
   around
     (withRpcClient (Proxy :: Proxy (EchoIntsStreamingEndpoint, a)) getTransport) $
@@ -145,13 +145,13 @@ singleStreamingTest getTransport =
       (== TimeoutException (sec 0))
 
 multipleDirectTest ::
-     (RpcTransport t, Service service) => (service -> t) -> Spec
+     Server service RpcApi transport => (service -> transport) -> Spec
 multipleDirectTest getTransport =
   around
     (withRpcClient
        (Proxy :: Proxy ( EchoIntsDirectEndpoint
                          :<|> EchoTextsDirectEndpoint
-                       , a))
+                       , t))
        getTransport) $
   context "when running multiple direct RPCs" $
   it "makes one call to each" $ \(echoInts :<|> echoTexts) -> do
@@ -161,13 +161,13 @@ multipleDirectTest getTransport =
     resultTexts `shouldBe` ["a", "b", "c"]
 
 multipleStreamingTest ::
-     (RpcTransport t, Service service) => (service -> t) -> Spec
+     Server service RpcApi transport => (service -> transport) -> Spec
 multipleStreamingTest getTransport =
   around
     (withRpcClient
        (Proxy :: Proxy ( EchoIntsStreamingEndpoint
                          :<|> EchoTextsStreamingEndpoint
-                       , a))
+                       , transport))
        getTransport) $
   context "when running multiple streaming RPCs" $ do
     it "sees the last item for each call" $ \(echoInts :<|> echoTexts) -> do
@@ -190,10 +190,12 @@ pubSubTest' config =
   it "functions correctly on the subscribing end" $ \(_id, results) ->
     Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
 
-directTests :: (Service service, RpcTransport t) => [(service -> t) -> Spec]
+directTests ::
+     Server service RpcApi transport => [(service -> transport) -> Spec]
 directTests = [singleDirectTest, multipleDirectTest]
 
-streamingTests :: (Service service, RpcTransport t) => [(service -> t) -> Spec]
+streamingTests ::
+     Server service RpcApi transport => [(service -> transport) -> Spec]
 streamingTests = [singleStreamingTest, multipleStreamingTest]
 
 pubSubTests :: (Resource a, PubSubTransport a) => [ResourceConfig a -> Spec]
