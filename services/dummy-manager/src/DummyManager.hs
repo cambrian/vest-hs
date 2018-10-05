@@ -20,9 +20,8 @@ data T = T
   { webSocket :: WebSocket.T
   }
 
-type instance ServiceArgs T = DummyManager
-
 instance Service T where
+  type ServiceArgs T = DummyManager
   defaultArgs = Args {}
   run _args f = with WebSocket.localConfig (\webSocket -> f $ T {webSocket})
 
@@ -73,14 +72,11 @@ echoThrice _ x = do
   return . Streamly.fromList . replicate 3 $ x
 
 concatTextAuth ::
-     T
-  -> AuthClaims Token.T
-  -> ConcatTextAuthRequest
-  -> IO ConcatTextAuthResponse
+     T -> Claims Token.T -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
 concatTextAuth _ _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
-echoThriceAuth :: T -> AuthClaims Token.T -> Text -> IO (Streamly.Serial Text)
+echoThriceAuth :: T -> Claims Token.T -> Text -> IO (Streamly.Serial Text)
 echoThriceAuth _ _ = return . Streamly.fromList . replicate 3
 
 handlers :: Handlers Api

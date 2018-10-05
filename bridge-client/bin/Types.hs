@@ -4,8 +4,6 @@ import BridgeClient
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types ()
 import qualified DummyManager
-import System.Directory
-import System.FilePath
 import System.Random
 import Text.Replace
 import VestPrelude
@@ -36,17 +34,20 @@ replaceRules =
   , Replace "interface" "export interface"
   ]
 
+data Args = Args
+  {
+  } deriving (Data, Show)
+
+argsConfig :: Args
+argsConfig =
+  Args {} &= help "Generates TypeScript types for the dummy-manager API." &=
+  summary "ts-types v0.1.0"
+
 main :: IO ()
 main = do
-  arguments <- getArgs
-  wd <- getCurrentDirectory
-  file <-
-    case head arguments of
-      Just _file -> return _file
-      Nothing -> die "no output file provided"
+  _ <- cmdArgs argsConfig
   versionText <- version
-  writeFile (wd </> file) $
-    pack . replaceWithList replaceRules $
+  putText . pack . replaceWithList replaceRules $
     unpack
       (versionText <> tagged <>
        (pack . formatTSDeclarations . concat $

@@ -28,17 +28,23 @@ specTsTypesToObject SpecTsTypes { directOrStreamingType
     , "res" .= res
     ]
 
+data Args = Args
+  { templateFile :: Text
+  } deriving (Data, Show)
+
+argsConfig :: Args
+argsConfig =
+  Args {templateFile = "" &= typ "TEMPLATE" &= argPos 0} &=
+  help "Generates TypeScript callers for the dummy-manager API." &=
+  summary "ts-callers v0.1.0"
+
 main :: IO ()
 main = do
-  arguments <- getArgs
+  parsedArgs <- cmdArgs argsConfig
+  let Args {templateFile} = parsedArgs
   wd <- getCurrentDirectory
-  (templateFile, outputFile) <-
-    case arguments of
-      (a:b:_) -> return (a, b)
-      _ -> die "no template file provided"
-  template <- eitherParseFile $ wd </> templateFile
-  either (die . pack) (writeFile (wd </> outputFile) . toStrict) $
-    template >>= (`eitherRender` env)
+  template <- eitherParseFile $ wd </> unpack templateFile
+  either (die . pack) (putText . toStrict) $ template >>= (`eitherRender` env)
   where
     env =
       fromPairs
