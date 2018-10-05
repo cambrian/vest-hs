@@ -8,8 +8,8 @@ import qualified Streamly.Prelude as Streamly
 import VestPrelude
 
 type family ClientBindings spec where
-  ClientBindings (Endpoint _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
-  ClientBindings (Endpoint _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
+  ClientBindings (Endpoint _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
+  ClientBindings (Endpoint _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -80,30 +80,34 @@ _call pusher route transport timeout_ headers req = do
       _ -> return ()
   result
 
-instance ( KnownSymbol route
+instance ( Service service
+         , KnownSymbol route
          , Show req
          , ToJSON req
          , Read res
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint h (route :: Symbol) req ('Direct res)) transport where
+         Client (Endpoint service _auth (route :: Symbol) req ('Direct res)) transport where
   makeClient ::
-       Proxy (Endpoint h route req ('Direct res), transport)
+       Proxy (Endpoint service _auth route req ('Direct res), transport)
     -> transport
     -> (Time Second -> Headers -> req -> IO res)
-  makeClient _ = _call directPusher (proxyText' (Proxy :: Proxy route))
+  makeClient _ =
+    _call directPusher (serviceRoute @service (Proxy :: Proxy route))
 
-instance ( KnownSymbol route
+instance ( Service service
+         , KnownSymbol route
          , Show req
          , ToJSON req
          , Read res
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint h (route :: Symbol) req ('Streaming res)) transport where
+         Client (Endpoint service _auth (route :: Symbol) req ('Streaming res)) transport where
   makeClient ::
-       Proxy (Endpoint h route req ('Streaming res), transport)
+       Proxy (Endpoint service _auth route req ('Streaming res), transport)
     -> transport
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
-  makeClient _ = _call streamingPusher (proxyText' (Proxy :: Proxy route))
+  makeClient _ =
+    _call streamingPusher (serviceRoute @service (Proxy :: Proxy route))

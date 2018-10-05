@@ -44,6 +44,7 @@ import Protolude as Reexports hiding
   , ignore
   , mask
   , mask_
+  , moduleName
   , onException
   , readMaybe
   , threadDelay
@@ -288,12 +289,14 @@ type family ServiceArgs a = cfg | cfg -> a
 type PublicKey a = Tagged a (Text' "PublicKey")
 
 -- TODO: can we put shared argument logic here, like reading secret key files?
-class (Data (ServiceArgs a)) =>
+class (Data (ServiceArgs a), Typeable a) =>
       Service a
   where
   defaultArgs :: ServiceArgs a
   start_ :: ServiceArgs a -> (a -> IO Void) -> IO Void
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
+  serviceName :: Text' "ServiceName"
+  serviceName = moduleName @a
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a
@@ -368,5 +371,13 @@ runtimeSerializationsOf' JSON = (serialize' @'JSON, deserializeUnsafe' @'JSON)
 
 read :: (Read a) => Text -> Maybe a
 read = deserialize @'Haskell
+
 -- show is defined in protolude
 -- Not providing encode/decode because you should prefer serialize/deserialize @'JSON
+moduleName ::
+     forall a t. Typeable a
+  => Text' t
+moduleName = Tagged . pack . dropLastToken_ . show $ typeRep (Proxy :: Proxy a)
+
+dropLastToken_ :: GHC.Base.String -> GHC.Base.String
+dropLastToken_ = reverse . tailSafe . dropWhile (/= '.') . reverse
