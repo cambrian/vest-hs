@@ -286,12 +286,12 @@ class Resource a where
 
 type PublicKey a = Tagged a (Text' "PublicKey")
 
-type family ServiceArgs a = cfg | cfg -> a
-
+-- type family ServiceArgs a = cfg | cfg -> a
 -- TODO: can we put shared argument logic here, like reading secret key files?
 class (Data (ServiceArgs a), Typeable a) =>
       Service a
   where
+  type ServiceArgs a
   defaultArgs :: ServiceArgs a
   run :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.

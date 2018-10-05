@@ -32,9 +32,8 @@ data AccessControl = Args
   , keyFile :: FilePath
   } deriving (Data)
 
-type instance ServiceArgs T = AccessControl
-
 instance Service T where
+  type ServiceArgs T = AccessControl
   defaultArgs = Args {accessFile = "access.yaml", keyFile = "key.yaml"}
   run Args {accessFile, keyFile} f = do
     (access :: Access) <- Yaml.decodeFileThrow accessFile

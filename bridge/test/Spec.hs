@@ -19,9 +19,8 @@ data T = T
   , webSocket :: WebSocket.T
   }
 
-type instance ServiceArgs T = DummyService
-
 instance Service T where
+  type ServiceArgs T = DummyService
   defaultArgs = Args {}
   run _ f =
     with webSocketTestConfig $ \webSocket ->
@@ -66,7 +65,8 @@ withRpcClient ::
   -> IO ()
 withRpcClient _ getTransport action =
   run
-    defaultArgs
+    @service
+    (defaultArgs @service)
     (\service -> do
        serve
          handlers
@@ -103,7 +103,8 @@ withSubscribed ::
   -> IO ()
 withSubscribed _ getTransport action =
   run
-    defaultArgs
+    @service
+    (defaultArgs @service)
     (\service -> do
        subscribed <-
          subscribe (Proxy :: Proxy (spec, transport)) (getTransport service)
