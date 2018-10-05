@@ -81,15 +81,14 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
   '[] :++ xs = xs
   (x ': xs) :++ ys = x ': (xs :++ ys)
 
-class ManySymbolVal (xs :: [Symbol]) where
-  manySymbolVal :: proxy xs -> [GHC.Base.String]
+class SymbolVals (xs :: [Symbol]) where
+  symbolVals :: proxy xs -> [GHC.Base.String]
 
-instance ManySymbolVal '[] where
-  manySymbolVal _ = []
+instance SymbolVals '[] where
+  symbolVals _ = []
 
-instance (KnownSymbol a, ManySymbolVal as) => ManySymbolVal (a ': as) where
-  manySymbolVal _ =
-    symbolVal (Proxy :: Proxy a) : manySymbolVal (Proxy :: Proxy as)
+instance (KnownSymbol a, SymbolVals as) => SymbolVals (a ': as) where
+  symbolVals _ = symbolVal (Proxy :: Proxy a) : symbolVals (Proxy :: Proxy as)
 
 type Int' t = Tagged t Int
 

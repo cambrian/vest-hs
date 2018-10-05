@@ -24,7 +24,7 @@ type instance ServiceArgs T = DummyService
 instance Service T where
   defaultArgs = Args {}
   run _ f =
-    with WebSocket.localConfig $ \webSocket ->
+    with webSocketTestConfig $ \webSocket ->
       with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
 
 type EchoIntsDirectEndpoint
@@ -209,21 +209,22 @@ pubSubTests ::
      Publisher service PubSubApi transport => [(service -> transport) -> Spec]
 pubSubTests = [pubSubTest']
 
--- webSocketConfig :: WebSocket.Config
--- webSocketConfig =
---   WebSocket.localConfig
---     { WebSocket.servers =
---         [ WebSocket.ServerInfo
---             { uri = Tagged "127.0.0.1"
---             , port = Tagged 3000
---             , path = Tagged "/"
---             , routes =
---                 map
---                   (namespace @T . Tagged . pack . manySymbolVal)
---                   (Proxy :: Proxy (Routes RpcApi))
---             }
---         ]
---     }
+webSocketTestConfig :: WebSocket.Config
+webSocketTestConfig =
+  WebSocket.localConfig
+    { WebSocket.servers =
+        [ WebSocket.ServerInfo
+            { uri = Tagged "127.0.0.1"
+            , port = Tagged 3000
+            , path = Tagged "/"
+            , routes =
+                map
+                  (namespace @T . Tagged . pack)
+                  (symbolVals (Proxy :: Proxy (Routes RpcApi)))
+            }
+        ]
+    }
+
 main :: IO ()
 main =
   hspec $ do
@@ -231,6 +232,6 @@ main =
       describe "Direct RPC" $ mapM_ ($ amqp) directTests
       describe "Streaming RPC" $ mapM_ ($ amqp) streamingTests
       describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
-    -- describe "WebSocket bridge" $ do
-    --   describe "Direct RPC" $ mapM_ ($ webSocket) directTests
-    --   describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests
+    describe "WebSocket bridge" $ do
+      describe "Direct RPC" $ mapM_ ($ webSocket) directTests
+      describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests
