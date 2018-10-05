@@ -19,9 +19,8 @@ data T = T
   , webSocket :: WebSocket.T
   }
 
-type instance ServiceArgs T = DummyService
-
 instance Service T where
+  type ServiceArgs T = DummyService
   defaultArgs = Args {}
   run _ f =
     with webSocketTestConfig $ \webSocket ->
@@ -49,7 +48,7 @@ echoDirect :: T -> a -> IO a
 echoDirect _ x = threadDelay (sec 0.01) >> return x
 
 echoStreaming ::
-     forall a auth. T -> AuthClaims auth -> [a] -> IO (Streamly.Serial a)
+     forall a auth. T -> Claims auth -> [a] -> IO (Streamly.Serial a)
 echoStreaming _ _ xs =
   return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
 
@@ -66,7 +65,8 @@ withRpcClient ::
   -> IO ()
 withRpcClient _ getTransport action =
   run
-    defaultArgs
+    @service
+    (defaultArgs @service)
     (\service -> do
        serve
          handlers
@@ -103,7 +103,8 @@ withSubscribed ::
   -> IO ()
 withSubscribed _ getTransport action =
   run
-    defaultArgs
+    @service
+    (defaultArgs @service)
     (\service -> do
        subscribed <-
          subscribe (Proxy :: Proxy (spec, transport)) (getTransport service)
@@ -209,7 +210,7 @@ pubSubTests ::
      Publisher service PubSubApi transport => [(service -> transport) -> Spec]
 pubSubTests = [pubSubTest']
 
-webSocketTestConfig :: WebSocket.Config
+webSocketTestConfig :: Config WebSocket.T
 webSocketTestConfig =
   WebSocket.localConfig
     { WebSocket.servers =

@@ -1,0 +1,10 @@
+roles:
+  test:
+    permissions:
+    - test
+
+subjects:
+  test:
+    publicKey: "testesdfdsfds"
+    roles:
+    - test

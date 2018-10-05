@@ -14,6 +14,8 @@ import Crypto.Saltine as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
+import Data.HashMap.Strict as Reexports (HashMap)
+import Data.HashSet as Reexports (HashSet)
 import Data.Hashable as Reexports (Hashable)
 import Data.Pool
 import Data.Pool as Reexports (Pool, tryWithResource, withResource)
@@ -265,13 +267,14 @@ data PoolConfig = PoolConfig
   }
 
 class Resource a where
-  make :: ResourceConfig a -> IO a
+  data Config a
+  make :: Config a -> IO a
   cleanup :: a -> IO ()
   -- ^ Minimal required definition.
-  with :: ResourceConfig a -> (a -> IO b) -> IO b
+  with :: Config a -> (a -> IO b) -> IO b
   with config = bracket (make config) cleanup
   -- ^ TODO: Retry on exception.
-  withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
+  withPool :: PoolConfig -> Config a -> (Pool a -> IO b) -> IO b
   -- ^ Use: withPool poolcfg cfg (\pool -> withResource pool (\resource -> do ...))
   withPool PoolConfig {idleTime, numResources} config =
     bracket
@@ -281,16 +284,14 @@ class Resource a where
       idleTime_ = nominalDiffTimeFromTime idleTime
       numResources_ = fromIntegral numResources
 
-type family ResourceConfig a = cfg | cfg -> a
-
 type PublicKey a = Tagged a (Text' "PublicKey")
 
-type family ServiceArgs a = cfg | cfg -> a
-
+-- type family ServiceArgs a = cfg | cfg -> a
 -- TODO: can we put shared argument logic here, like reading secret key files?
 class (Data (ServiceArgs a), Typeable a) =>
       Service a
   where
+  type ServiceArgs a -- can't be data because cmdArgs has to get the type name
   defaultArgs :: ServiceArgs a
   run :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.

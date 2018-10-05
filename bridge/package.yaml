@@ -73,6 +73,7 @@ default-extensions:
 - TypeApplications
 - TypeFamilies
 - TypeFamilyDependencies
+- TypeInType
 - TypeOperators
 - UndecidableInstances # Added. In theory could make compiler never terminate.
 

@@ -14,8 +14,8 @@ data RpcServerException =
 type family Handlers spec where
   Handlers (Endpoint service 'NoAuth _ req ('Direct res)) = service -> req -> IO res
   Handlers (Endpoint service 'NoAuth _ req ('Streaming res)) = service -> req -> IO (Streamly.Serial res)
-  Handlers (Endpoint service ('Auth auth) _ req ('Direct res)) = service -> AuthClaims auth -> req -> IO res
-  Handlers (Endpoint service ('Auth auth) _ req ('Streaming res)) = service -> AuthClaims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint service ('Auth auth) _ req ('Direct res)) = service -> Claims auth -> req -> IO res
+  Handlers (Endpoint service ('Auth auth) _ req ('Streaming res)) = service -> Claims auth -> req -> IO (Streamly.Serial res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -137,7 +137,7 @@ instance ( Service service
          ) =>
          Server service (Endpoint service ('Auth auth) route req ('Direct res)) transport where
   serve ::
-       (service -> AuthClaims auth -> req -> IO res)
+       (service -> Claims auth -> req -> IO res)
     -> service
     -> Proxy (Endpoint service ('Auth auth) route req ('Direct res), transport)
     -> transport
@@ -160,7 +160,7 @@ instance ( Service service
          ) =>
          Server service (Endpoint service ('Auth auth) route req ('Streaming res)) transport where
   serve ::
-       (service -> AuthClaims auth -> req -> IO (Streamly.Serial res))
+       (service -> Claims auth -> req -> IO (Streamly.Serial res))
     -> service
     -> Proxy ( Endpoint service ('Auth auth) route req ('Streaming res)
              , transport)

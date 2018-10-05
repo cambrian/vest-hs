@@ -3,7 +3,6 @@ module TezosDispatcher.Api
   ) where
 
 import Bridge
-import qualified Bridge.Rpc.Auth.Service as Auth.Service
 import qualified Bridge.Transports.Amqp as Amqp
 import qualified TezosDelegationCore
 import qualified TezosDispatcher

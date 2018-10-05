@@ -10,14 +10,14 @@ import qualified VestPrelude.Money as Money
 newtype Connection =
   Connection Db.Connection
 
-type instance ResourceConfig Connection = ConnectInfo
-
 instance Resource Connection where
-  make cfg = connect cfg >>- Connection
+  data Config Connection = Config ConnectInfo
+  make (Config cfg) = connect cfg >>- Connection
   cleanup (Connection conn) = close conn
 
-localConfig :: ConnectInfo
+localConfig :: Config Connection
 localConfig =
+  Config $
   ConnectInfo
     { connectHost = "localhost"
     , connectPort = 5432
