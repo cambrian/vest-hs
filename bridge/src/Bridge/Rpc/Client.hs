@@ -53,7 +53,7 @@ streamingPusher = do
 _call ::
      (Show req, ToJSON req, Read res, FromJSON res, RpcTransport transport)
   => IO (res -> IO (), IO x, IO' "Done" ())
-  -> NamespacedText' "Route"
+  -> Namespaced' "Route"
   -> transport
   -> Time Second
   -> Headers
