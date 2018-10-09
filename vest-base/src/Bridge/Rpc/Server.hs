@@ -5,7 +5,7 @@ module Bridge.Rpc.Server
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import VestPrelude
+import Vest.Prelude
 
 data RpcServerException =
   AlreadyServing (NamespacedText' "Route")

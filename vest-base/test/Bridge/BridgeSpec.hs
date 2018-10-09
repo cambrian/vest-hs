@@ -1,3 +1,7 @@
+module Bridge.BridgeSpec
+  ( spec
+  ) where
+
 import Bridge
 import qualified Bridge.Rpc.Auth.Token as Token
 import qualified Bridge.Transports.Amqp as Amqp
@@ -8,7 +12,7 @@ import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Test.Hspec
-import VestPrelude
+import Vest.Prelude
 
 data DummyService = Args
   {
@@ -144,7 +148,7 @@ singleStreamingTest getTransport =
       results <- call (sec 1) tokenAuthJSON [1, 2, 3]
       (Streamly.toList results >>- elem 3) `shouldReturn` True
       (Streamly.toList results >>- elem 3) `shouldReturn` True
-    -- Note: The timeout is not identified properly if the results are not forced.
+      -- Note: The timeout is not identified properly if the results are not forced.
     it "times out for a single call" $ \call ->
       (do results <- call (sec 0) tokenAuthJSON [1, 2, 3]
           resultList <- Streamly.toList results
@@ -226,13 +230,12 @@ webSocketTestConfig =
         ]
     }
 
-main :: IO ()
-main =
-  hspec $ do
-    describe "AMQP bridge" $ do
-      describe "Direct RPC" $ mapM_ ($ amqp) directTests
-      describe "Streaming RPC" $ mapM_ ($ amqp) streamingTests
-      describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
-    describe "WebSocket bridge" $ do
-      describe "Direct RPC" $ mapM_ ($ webSocket) directTests
-      describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests
+spec :: Spec
+spec = do
+  describe "AMQP bridge" $ do
+    describe "Direct RPC" $ mapM_ ($ amqp) directTests
+    describe "Streaming RPC" $ mapM_ ($ amqp) streamingTests
+    describe "Pub/Sub" $ mapM_ ($ amqp) pubSubTests
+  describe "WebSocket bridge" $ do
+    describe "Direct RPC" $ mapM_ ($ webSocket) directTests
+    describe "Streaming RPC" $ mapM_ ($ webSocket) streamingTests

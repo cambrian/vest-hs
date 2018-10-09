@@ -9,7 +9,7 @@ import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
-import VestPrelude
+import Vest.Prelude
 
 type HashTable k v = HashTable.BasicHashTable k v
 

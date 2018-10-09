@@ -1,9 +1,9 @@
-module Bridge.Rpc.Auth.Token
-  ( module Bridge.Rpc.Auth.Token
+module Bridge.Rpc.Auth.Signature
+  ( module Bridge.Rpc.Auth.Signature
   ) where
 
 import Bridge.Rpc.Prelude
-import VestPrelude
+import Vest.Prelude
 
 data T
 

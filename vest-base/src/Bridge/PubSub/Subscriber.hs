@@ -4,7 +4,7 @@ module Bridge.PubSub.Subscriber
 
 import Bridge.PubSub.Prelude
 import qualified Streamly
-import VestPrelude
+import Vest.Prelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where

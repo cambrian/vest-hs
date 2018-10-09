@@ -5,7 +5,7 @@ module Bridge.PubSub.Publisher
 import Bridge.PubSub.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import VestPrelude
+import Vest.Prelude
 
 type family Topics spec where
   Topics (Topic _ _ (name :: Symbol) _) = '[ name]

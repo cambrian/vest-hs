@@ -2,7 +2,7 @@ module Bridge.Rpc.Prelude
   ( module Bridge.Rpc.Prelude
   ) where
 
-import VestPrelude
+import Vest.Prelude
 
 -- | This implementation uses callbacks instread of streaming interfaces because
 -- streamly streams don't have persistence and TB[M]Queues are ugly.

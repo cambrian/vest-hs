@@ -1,5 +1,5 @@
-module VestPrelude.Db
-  ( module VestPrelude.Db
+module Vest.Db
+  ( module Vest.Db
   , module Reexports
   ) where
 
@@ -10,9 +10,9 @@ import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
 import qualified Money
-import VestPrelude
+import Vest.Prelude
 
--- Postgres serializations for VestPrelude types.
+-- Postgres serializations for Vest types.
 -- In theory you could implement this directly on Timestamp without having to create a UTCTime
 -- but that's a bunch of work for what's only a smallish win.
 -- No type is provided for Time / interval yet because postgresql-simple doesn't support DiffTime or

@@ -1,4 +1,4 @@
-name:                vest-prelude
+name:                vest-base
 version:             0.1.0.0
 author:              "Vest"
 copyright:           "2018 Vest"
@@ -6,12 +6,13 @@ copyright:           "2018 Vest"
 extra-source-files:
 - README.md
 
-synopsis:            Vest custom prelude (uses Protolude for standard prelude stuff).
+synopsis:            Vest standard library.
 category:            Prelude
 description:         See README.md.
 
 dependencies:
 - aeson                 >= 1.3  && < 2
+- amqp                  >= 0.18 && < 1
 - async                 >= 2.2  && < 3
 - base                  >= 4.10 && < 5
 - beam-core             >= 0.7  && < 1
@@ -19,6 +20,10 @@ dependencies:
 - containers            >= 0.5  && < 1
 - cmdargs               >= 0.10 && < 1
 - hashable              >= 1.2  && < 2
+- hashtables            >= 1.2  && < 2
+- hostname              >= 1.0  && < 2
+- hspec                 >= 2.5  && < 3
+- http-types            >= 0.12 && < 1
 - o-clock               >= 1.0  && < 2
 - postgresql-simple     >= 0.5  && < 1
 - protolude             >= 0.2  && < 1
@@ -38,6 +43,10 @@ dependencies:
 - utf8-string           >= 1.0  && < 2
 - uuid                  >= 1.3  && < 2
 - vector                >= 0.12 && < 1
+- wai                   >= 3.2  && < 4
+- wai-websockets        >= 3.0  && < 4
+- warp                  >= 3.2  && < 4
+- websockets            >= 0.12 && < 1
 
 # The default-extensions and ghc-options have been taken from here:
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
@@ -99,3 +108,10 @@ ghc-options:
 
 library:
   source-dirs: src
+
+tests:
+  test:
+    main: Spec.hs
+    source-dirs: test
+    dependencies:
+    - vest-base

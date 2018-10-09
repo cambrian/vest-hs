@@ -15,7 +15,7 @@ import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
-import VestPrelude
+import Vest.Prelude
 
 type HashTable k v = HashTable.BasicHashTable k v
 

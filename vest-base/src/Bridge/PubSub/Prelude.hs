@@ -2,7 +2,7 @@ module Bridge.PubSub.Prelude
   ( module Bridge.PubSub.Prelude
   ) where
 
-import VestPrelude
+import Vest.Prelude
 
 -- SubscribeOne (non-streaming version) is deliberately unimplemented, because
 -- RabbitMQ does not support message history. Candidate solutions are building

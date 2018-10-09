@@ -1,10 +1,9 @@
 resolver: lts-12.10
 
 packages:
-- bridge
-- bridge-client
-- services
-- vest-prelude
+# - bridge-client
+# - services
+- vest-base
 
 extra-deps:
 - aeson-1.4.1.0
