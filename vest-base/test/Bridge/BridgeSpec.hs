@@ -26,7 +26,7 @@ data T = T
 instance Service T where
   type ServiceArgs T = DummyService
   defaultArgs = Args {}
-  run _ f =
+  init _ f =
     with webSocketTestConfig $ \webSocket ->
       with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
 
@@ -66,14 +66,14 @@ withRpcClient ::
   -> (t -> transport)
   -> (ClientBindings spec -> IO ())
   -> IO ()
-withRpcClient _ getTransport action =
-  run
+withRpcClient _ getTransport f =
+  init
     @t
     (defaultArgs @t)
     (\t -> do
        serve handlers t (Proxy :: Proxy (RpcApi, transport)) (getTransport t)
        threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
-       action $ makeClient (Proxy :: Proxy (spec, transport)) (getTransport t))
+       f $ makeClient (Proxy :: Proxy (spec, transport)) (getTransport t))
 
 increment :: Streamly.Serial Int
 increment =
@@ -99,8 +99,8 @@ withSubscribed ::
   -> (t -> transport)
   -> (SubscriberBindings spec -> IO ())
   -> IO ()
-withSubscribed _ getTransport action =
-  run
+withSubscribed _ getTransport f =
+  init
     @t
     (defaultArgs @t)
     (\t -> do
@@ -111,7 +111,7 @@ withSubscribed _ getTransport action =
          streams
          (Proxy :: Proxy (PubSubApi, transport))
          (getTransport t)
-       action subscribed)
+       f subscribed)
 
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {format = JSON, token = Just $ Tagged ""}
@@ -218,7 +218,7 @@ webSocketTestConfig =
             , path = Tagged "/"
             , routes =
                 map
-                  (namespaced @T . Tagged . pack)
+                  (namespaced' @T . Tagged . pack)
                   (symbolVals (Proxy :: Proxy (Routes RpcApi)))
             }
         ]

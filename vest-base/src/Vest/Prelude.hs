@@ -286,15 +286,10 @@ class Resource a where
 
 type PublicKey a = Tagged a (Text' "PublicKey")
 
-class (Typeable a) =>
-      HasNamespace a
-  where
+class HasNamespace a where
   namespace :: Text' "Namespace"
-  namespace = moduleName' @a
-  namespaced :: Text' t -> NamespacedText' t
-  namespaced text = retag $ retag (namespace @a) <> "/" <> text
-
-instance Typeable a => HasNamespace a
+  namespaced' :: Text' t -> NamespacedText' t
+  namespaced' text = retag $ retag (namespace @a) <> "/" <> text
 
 -- TODO: can we put shared argument logic here, like reading secret key files?
 class (Data (ServiceArgs a), Typeable a) =>
@@ -302,16 +297,17 @@ class (Data (ServiceArgs a), Typeable a) =>
   where
   type ServiceArgs a -- can't be data because cmdArgs has to get the type name
   defaultArgs :: ServiceArgs a
-  run :: ServiceArgs a -> (a -> IO b) -> IO b
+  init :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
-  serviceName' :: Text' "ServiceName"
-  serviceName' = moduleName' @a
-  -- namespace :: Text' t -> NamespacedText' t
-  -- namespace text = retag $ retag (serviceName' @a) <> "/" <> text
+  serviceName :: Text' "ServiceName"
+  serviceName = moduleName' @a
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a
-    run args f
+    init args f
+
+instance Service a => HasNamespace a where
+  namespace = retag $ serviceName @a
 
 type family Symbols symbols where
   Symbols (Proxy c) = '[ c]

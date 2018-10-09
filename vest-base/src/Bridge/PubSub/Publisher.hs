@@ -67,4 +67,4 @@ instance ( HasNamespace t
   publish stream _ =
     _publish
       (\send -> Streamly.mapM_ (send . serialize' @f) stream)
-      (namespaced @t $ proxyText' (Proxy :: Proxy name))
+      (namespaced' @t $ proxyText' (Proxy :: Proxy name))

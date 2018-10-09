@@ -94,7 +94,7 @@ instance ( HasNamespace t
     -> transport
     -> (Time Second -> Headers -> req -> IO res)
   makeClient _ =
-    _call directPusher (namespaced @t $ proxyText' (Proxy :: Proxy route))
+    _call directPusher (namespaced' @t $ proxyText' (Proxy :: Proxy route))
 
 instance ( HasNamespace t
          , KnownSymbol route
@@ -110,4 +110,4 @@ instance ( HasNamespace t
     -> transport
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
   makeClient _ =
-    _call streamingPusher (namespaced @t $ proxyText' (Proxy :: Proxy route))
+    _call streamingPusher (namespaced' @t $ proxyText' (Proxy :: Proxy route))

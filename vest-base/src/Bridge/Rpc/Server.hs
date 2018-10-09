@@ -106,7 +106,7 @@ instance ( HasNamespace t
       directSender
       verifyEmpty
       (const $ handler t)
-      (namespaced @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
 
 instance ( HasNamespace t
          , KnownSymbol route
@@ -128,7 +128,7 @@ instance ( HasNamespace t
       streamingSender
       verifyEmpty
       (const $ handler t)
-      (namespaced @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
 
 instance ( HasNamespace t
          , HasAuth auth t
@@ -152,7 +152,7 @@ instance ( HasNamespace t
       directSender
       (verify (auth t))
       (handler t)
-      (namespaced @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
 
 instance ( HasNamespace t
          , HasAuth auth t
@@ -176,4 +176,4 @@ instance ( HasNamespace t
       streamingSender
       (verify (auth t))
       (handler t)
-      (namespaced @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
