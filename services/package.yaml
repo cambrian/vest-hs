@@ -15,8 +15,7 @@ dependencies:
 - base                  >= 4.10 && < 5
 - streamly              >= 0.5  && < 1
 - yaml                  >= 0.10 && < 1
-- bridge
-- vest-prelude
+- vest-base
 
 # The default-extensions and ghc-options have been taken from here:
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
@@ -80,17 +79,17 @@ ghc-options:
 library:
   source-dirs:
   - access-control/src
-  - dummy-manager/src
+  # - dummy-manager/src
   # - fiat-payment-server/src
   - tezos-delegation-core/src
   - tezos-dispatcher/src
 
 executables:
-  dummy-manager:
-    main:                Main.hs
-    source-dirs:         dummy-manager/bin
-    dependencies:
-    - services
+  # dummy-manager:
+  #   main:                Main.hs
+  #   source-dirs:         dummy-manager/bin
+  #   dependencies:
+  #   - services
   access-control:
     main:                Main.hs
     source-dirs:         access-control/bin
@@ -117,15 +116,15 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - services
-  dummy-manager-test:
-    main:                Spec.hs
-    source-dirs:         dummy-manager/test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - services
+  # dummy-manager-test:
+  #   main:                Spec.hs
+  #   source-dirs:         dummy-manager/test
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
+  #   dependencies:
+  #   - services
   tezos-delegation-core-test:
     main:                Spec.hs
     source-dirs:         tezos-delegation-core/test

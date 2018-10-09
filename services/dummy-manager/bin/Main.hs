@@ -1,7 +1,7 @@
 import Bridge
 import qualified Bridge.Transports.WebSocket as WebSocket
 import DummyManager
-import VestPrelude
+import Vest
 
 main :: IO Void
 main =

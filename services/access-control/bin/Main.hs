@@ -1,5 +1,5 @@
 import AccessControl
-import VestPrelude
+import Vest
 
 main :: IO Void
-main = start @T (const blockForever)
+main = start @T

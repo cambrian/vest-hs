@@ -2,22 +2,21 @@ module TezosDelegationCore.Db
   ( module TezosDelegationCore.Db
   ) where
 
-import VestPrelude
-import VestPrelude.Db hiding (Connection)
-import qualified VestPrelude.Db as Db (Connection)
-import qualified VestPrelude.Money as Money
+import Vest
+import Vest.Db hiding (Connection)
+import qualified Vest.Db as Db (Connection)
+import qualified Vest.Money as Money
 
 newtype Connection =
   Connection Db.Connection
 
 instance Resource Connection where
-  data Config Connection = Config ConnectInfo
-  make (Config cfg) = connect cfg >>- Connection
+  type ResourceConfig Connection = ConnectInfo
+  make cfg = connect cfg >>- Connection
   cleanup (Connection conn) = close conn
 
-localConfig :: Config Connection
+localConfig :: ConnectInfo
 localConfig =
-  Config $
   ConnectInfo
     { connectHost = "localhost"
     , connectPort = 5432

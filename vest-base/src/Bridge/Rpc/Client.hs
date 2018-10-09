@@ -8,6 +8,7 @@ import qualified Streamly.Prelude as Streamly
 import Vest.Prelude
 
 type family ClientBindings spec where
+  ClientBindings () = ()
   ClientBindings (Endpoint _ _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
   ClientBindings (Endpoint _ _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
   ClientBindings (a
@@ -16,6 +17,9 @@ type family ClientBindings spec where
 
 class Client t spec where
   makeClient :: t -> Proxy spec -> ClientBindings spec
+
+instance Client t () where
+  makeClient _ _ = ()
 
 instance (Client t a, Client t b) =>
          Client t (a

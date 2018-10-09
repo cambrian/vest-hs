@@ -16,9 +16,12 @@ class ( Data (ServiceArgs a)
   type RpcSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
-  -- ^ This isn't the cleanest but I can't think of anything better for the time being.
+  -- ^ rename?
   rpcHandlers :: Handlers (RpcSpec a)
   makePublishStreams :: a -> IO (Streams (PubSubSpec a))
+  --
+  -- End of minimal required definition.
+  --
   serviceName :: Text' "ServiceName"
   serviceName = moduleName' @a
   start :: IO Void

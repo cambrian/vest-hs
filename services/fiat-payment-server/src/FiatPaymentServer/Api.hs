@@ -4,8 +4,8 @@ module FiatPaymentServer.Api
 
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
-import VestPrelude
-import qualified VestPrelude.Money as Money
+import Vest
+import qualified Vest.Money as Money
 
 data ChargeRequest (currency :: Symbol) (unit :: Symbol) = ChargeRequest
   { size :: Money.Discrete currency unit

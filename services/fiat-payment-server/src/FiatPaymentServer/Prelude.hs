@@ -11,8 +11,8 @@ module FiatPaymentServer.Prelude
 import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 import qualified Streamly
-import VestPrelude
-import qualified VestPrelude.Money as Money
+import Vest
+import qualified Vest.Money as Money
 
 data PriceVirtualStakeRequest (currency :: Symbol) (unit :: Symbol) = PriceVirtualStakeRequest
   { size :: Money.Discrete currency unit

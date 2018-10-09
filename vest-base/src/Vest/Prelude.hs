@@ -66,6 +66,7 @@ import qualified Text.Read
 import Time.Rational (KnownDivRat)
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
+import Vest.Prelude.Alternative as Reexports
 
 -- Checks if x in xs at type level.
 type family Elem x xs where
@@ -130,11 +131,6 @@ newtype TimeoutException =
 -- DO NOT USE unless you really really know what you're doing.
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
 evilThrowTo = Evil.throwTo
-
-data a :<|> b =
-  a :<|> b
-
-infixr 8 :<|>
 
 infixl 1 >>-
 

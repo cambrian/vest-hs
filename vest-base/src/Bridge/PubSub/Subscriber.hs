@@ -8,6 +8,7 @@ import Vest.Prelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
+  SubscriberBindings () = ()
   SubscriberBindings (Topic _ _ _ _ a) = ( IO' "Unsubscribe" ()
                                          , Streamly.Serial a)
   SubscriberBindings (a
@@ -16,6 +17,9 @@ type family SubscriberBindings spec where
 
 class Subscriber t spec where
   subscribe :: t -> Proxy spec -> IO (SubscriberBindings spec)
+
+instance Subscriber t () where
+  subscribe _ _ = return ()
 
 instance (Subscriber t a, Subscriber t b) =>
          Subscriber t (a

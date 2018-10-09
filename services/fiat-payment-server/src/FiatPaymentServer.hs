@@ -14,8 +14,8 @@ import qualified Bridge.Transports.Amqp as Amqp
 import FiatPaymentServer.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import VestPrelude
-import qualified VestPrelude.Money as Money
+import Vest
+import qualified Vest.Money as Money
 
 -- Eventually this will live inside the exchanger
 type TezosPriceTopic

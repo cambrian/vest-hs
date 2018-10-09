@@ -4,7 +4,7 @@ module AccessControl
 
 import qualified Bridge.Transports.Amqp as Amqp
 import qualified Data.Yaml as Yaml
-import VestPrelude
+import Vest
 
 type Permission = Text' "Permission"
 
@@ -34,8 +34,10 @@ data AccessControl = Args
 
 instance Service T where
   type ServiceArgs T = AccessControl
+  type RpcSpec T = ()
+  type PubSubSpec T = ()
   defaultArgs = Args {accessFile = "access.yaml", keyFile = "key.yaml"}
-  run Args {accessFile, keyFile} f = do
+  init Args {accessFile, keyFile} f = do
     (access :: Access) <- Yaml.decodeFileThrow accessFile
     print access
     with Amqp.localConfig (\amqp -> f $ T {amqp})

@@ -10,7 +10,7 @@ import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
-import VestPrelude
+import Vest
 
 data DummyManager = Args
   {

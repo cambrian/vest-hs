@@ -1,6 +1,6 @@
 import qualified Bridge.Transports.Amqp as Amqp
 import FiatPaymentServer
-import VestPrelude
+import Vest
 
 config :: Config
 config = Config {}

@@ -7,8 +7,8 @@ import qualified Bridge.Transports.Amqp as Amqp
 import qualified TezosDelegationCore
 import qualified TezosDelegationCore.Db as Db
 import qualified TezosDispatcher
-import VestPrelude
-import qualified VestPrelude.Money as Money
+import Vest
+import qualified Vest.Money as Money
 
 -- TODO: authenticate
 type NotifyCycleEndpoint

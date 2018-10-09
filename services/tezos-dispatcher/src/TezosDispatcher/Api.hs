@@ -6,8 +6,8 @@ import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 import qualified TezosDelegationCore
 import qualified TezosDispatcher
-import VestPrelude
-import qualified VestPrelude.Money as Money
+import Vest
+import qualified Vest.Money as Money
 
 type RewardsEndpoint
    = Endpoint TezosDispatcher.T 'NoAuth "getRewards" () ('Direct ())
