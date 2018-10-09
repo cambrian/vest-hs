@@ -3,7 +3,8 @@ module Service where
 import Bridge
 import Vest.Prelude
 
--- TODO: can we put shared argument logic here, like reading secret key files?
+-- | TODO: can we put shared argument logic here, like reading secret key files?
+-- makeStreams and handlers are not defined on the Service because they cause circular imports :(
 class ( Data (ServiceArgs a)
       , Typeable a
       , Server a (RpcSpec a)
@@ -17,23 +18,25 @@ class ( Data (ServiceArgs a)
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ rename?
-  rpcHandlers :: Handlers (RpcSpec a)
-  makePublishStreams :: a -> IO (Streams (PubSubSpec a))
   --
   -- End of minimal required definition.
   --
   serviceName :: Text' "ServiceName"
   serviceName = moduleName' @a
-  start :: IO Void
-  start = startAndRun @a return
-  startAndRun :: (a -> IO b) -> IO Void
+  start :: (a -> IO (Streams (PubSubSpec a))) -> Handlers (RpcSpec a) -> IO Void
+  start makeStreams handlers = startAndRun @a makeStreams handlers return
+  startAndRun ::
+       (a -> IO (Streams (PubSubSpec a)))
+    -> Handlers (RpcSpec a)
+    -> (a -> IO b)
+    -> IO Void
   -- ^ This function allows you to start a service and run an arbitrary function in addition to
   -- serving and publishing according to spec.
-  startAndRun f = do
+  startAndRun makeStreams handlers f = do
     args <- cmdArgs $ defaultArgs @a
     init args $ \a -> do
-      serve (rpcHandlers @a) a (Proxy :: Proxy (RpcSpec a))
-      streams <- makePublishStreams a
+      serve handlers a (Proxy :: Proxy (RpcSpec a))
+      streams <- makeStreams a
       publish streams a (Proxy :: Proxy (PubSubSpec a))
       f a
       blockForever
