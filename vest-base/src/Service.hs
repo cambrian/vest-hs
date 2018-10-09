@@ -4,21 +4,36 @@ import Bridge
 import Vest.Prelude
 
 -- TODO: can we put shared argument logic here, like reading secret key files?
-class (Data (ServiceArgs a), Typeable a) =>
+class ( Data (ServiceArgs a)
+      , Typeable a
+      , Server a (RpcSpec a)
+      , Publisher a (PubSubSpec a)
+      ) =>
       Service a
   where
   type ServiceArgs a -- can't be data because cmdArgs has to get the type name
-  type RpcApi a
+  type PubSubSpec a
+  type RpcSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
-  rpcHandlers :: Handlers (RpcApi a)
+  rpcHandlers :: Handlers (RpcSpec a)
+  makePublishStreams :: a -> IO (Streams (PubSubSpec a))
   serviceName :: Text' "ServiceName"
   serviceName = moduleName' @a
-  start :: (a -> IO Void) -> IO Void
-  start f = do
+  start :: IO Void
+  start = startAndRun @a return
+  startAndRun :: (a -> IO b) -> IO Void
+  -- ^ This function allows you to start a service and run an arbitrary function in addition to
+  -- serving and publishing according to spec.
+  startAndRun f = do
     args <- cmdArgs $ defaultArgs @a
-    init args f
+    init args $ \a -> do
+      serve (rpcHandlers @a) a (Proxy :: Proxy (RpcSpec a))
+      streams <- makePublishStreams a
+      publish streams a (Proxy :: Proxy (PubSubSpec a))
+      f a
+      blockForever
 
 instance Service a => HasNamespace a where
   namespace = retag $ serviceName @a

@@ -1,5 +1,6 @@
 module Bridge.Transports.Amqp
   ( T(..)
+  , Config(..)
   , localConfig
   ) where
 
@@ -26,7 +27,14 @@ data ResponseMessage = ResponseMessage
   , resText :: Text' "Response"
   } deriving (Show, Read)
 
-localConfig :: Config T
+data Config = Config
+  { hostname :: Text
+  , virtualHost :: Text
+  , username :: Text
+  , password :: Text
+  }
+
+localConfig :: Config
 localConfig =
   Config
     { hostname = "localhost"
@@ -62,9 +70,8 @@ toAmqpMsg x =
   AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack $ x}
 
 instance Resource T where
-  data Config T = Config{hostname :: Text, virtualHost :: Text,
-                       username :: Text, password :: Text}
-  make :: Config T -> IO T
+  type ResourceConfig T = Config
+  make :: Config -> IO T
     -- Connects to RabbitMQ, begins listening on RPC queue.
   make Config {hostname, virtualHost, username, password} = do
     conn <- AMQP.openConnection (unpack hostname) virtualHost username password

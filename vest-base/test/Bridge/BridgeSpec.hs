@@ -3,12 +3,10 @@ module Bridge.BridgeSpec
   ) where
 
 import Bridge
-import qualified Bridge.Rpc.Auth.Token as Token
 import Bridge.Rpc.Prelude ()
 import qualified Bridge.Transports.Amqp as Amqp
 import qualified Bridge.Transports.WebSocket as WebSocket
 import qualified Data.List
-import Service
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Test.Hspec
@@ -32,13 +30,6 @@ instance HasRpcTransport WebSocket.T T where
 instance HasPubSubTransport Amqp.T T where
   pubSubTransport = amqp
 
-instance Service T where
-  type ServiceArgs T = DummyService
-  defaultArgs = Args {}
-  init _ f =
-    with webSocketTestConfig $ \webSocket ->
-      with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
-
 type EchoIntsDirectEndpoint transport
    = Endpoint T 'NoAuth transport "echoIntsDirect" [Int] ('Direct [Int])
 
@@ -57,6 +48,14 @@ type TestRpcApi transport
      :<|> EchoIntsStreamingEndpoint transport
      :<|> EchoTextsStreamingEndpoint transport
 
+instance HasNamespace T where
+  namespace = Tagged "test"
+
+withT :: (T -> IO a) -> IO a
+withT f =
+  with webSocketTestConfig $ \webSocket ->
+    with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
+
 echoDirect :: T -> a -> IO a
 echoDirect _ x = threadDelay (sec 0.01) >> return x
 
@@ -73,13 +72,10 @@ withRpcClient ::
   -> (ClientBindings spec -> IO ())
   -> IO ()
 withRpcClient _ f =
-  init
-    @T
-    (defaultArgs @T)
-    (\t -> do
-       serve handlers t (Proxy :: Proxy (TestRpcApi transport))
-       threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
-       f $ makeClient t (Proxy :: Proxy spec))
+  withT $ \t -> do
+    serve handlers t (Proxy :: Proxy (TestRpcApi transport))
+    threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
+    f $ makeClient t (Proxy :: Proxy spec)
 
 increment :: Streamly.Serial Int
 increment =
@@ -105,13 +101,10 @@ withSubscribed ::
   -> (SubscriberBindings spec -> IO ())
   -> IO ()
 withSubscribed _ f =
-  init
-    @T
-    (defaultArgs @T)
-    (\t -> do
-       subscribed <- subscribe t (Proxy :: Proxy spec)
-       publish streams t (Proxy :: Proxy (TestPubSubApi transport))
-       f subscribed)
+  withT $ \t -> do
+    subscribed <- subscribe t (Proxy :: Proxy spec)
+    publish streams t (Proxy :: Proxy (TestPubSubApi transport))
+    f subscribed
 
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {format = JSON, token = Just $ Tagged ""}
@@ -219,7 +212,7 @@ pubSubTests ::
   => [Spec]
 pubSubTests = [pubSubTest' @transport]
 
-webSocketTestConfig :: Config WebSocket.T
+webSocketTestConfig :: WebSocket.Config
 webSocketTestConfig =
   WebSocket.localConfig
     { WebSocket.servers =

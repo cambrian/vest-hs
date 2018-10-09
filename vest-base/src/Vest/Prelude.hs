@@ -267,14 +267,14 @@ data PoolConfig = PoolConfig
   }
 
 class Resource a where
-  data Config a
-  make :: Config a -> IO a
+  type ResourceConfig a
+  make :: ResourceConfig a -> IO a
   cleanup :: a -> IO ()
   -- ^ Minimal required definition.
-  with :: Config a -> (a -> IO b) -> IO b
+  with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config = bracket (make config) cleanup
   -- ^ TODO: Retry on exception.
-  withPool :: PoolConfig -> Config a -> (Pool a -> IO b) -> IO b
+  withPool :: PoolConfig -> ResourceConfig a -> (Pool a -> IO b) -> IO b
   -- ^ Use: withPool poolcfg cfg (\pool -> withResource pool (\resource -> do ...))
   withPool PoolConfig {idleTime, numResources} config =
     bracket
