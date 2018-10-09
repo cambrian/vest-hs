@@ -37,10 +37,10 @@ type EchoTextsDirectEndpoint
    = Endpoint T 'NoAuth "echoTextDirect" [Text] ('Direct [Text])
 
 type EchoIntsStreamingEndpoint
-   = Endpoint T ('Auth Token.T) "echoIntsStreaming" [Int] ('Streaming Int)
+   = Endpoint T 'NoAuth "echoIntsStreaming" [Int] ('Streaming Int)
 
 type EchoTextsStreamingEndpoint
-   = Endpoint T ('Auth Token.T) "echoTextsStreaming" [Text] ('Streaming Text)
+   = Endpoint T 'NoAuth "echoTextsStreaming" [Text] ('Streaming Text)
 
 type RpcApi
    = EchoIntsDirectEndpoint
@@ -51,9 +51,8 @@ type RpcApi
 echoDirect :: T -> a -> IO a
 echoDirect _ x = threadDelay (sec 0.01) >> return x
 
-echoStreaming ::
-     forall a auth. T -> Claims auth -> [a] -> IO (Streamly.Serial a)
-echoStreaming _ _ xs =
+echoStreaming :: T -> [a] -> IO (Streamly.Serial a)
+echoStreaming _ xs =
   return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
 
 handlers :: Handlers RpcApi
@@ -61,25 +60,20 @@ handlers =
   echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming @Text
 
 withRpcClient ::
-     forall service spec transport.
-     (Server service RpcApi transport, Client spec transport)
+     forall t spec transport.
+     (Service t, Server t RpcApi transport, Client spec transport)
   => Proxy (spec, transport)
-  -> (service -> transport)
+  -> (t -> transport)
   -> (ClientBindings spec -> IO ())
   -> IO ()
 withRpcClient _ getTransport action =
   run
-    @service
-    (defaultArgs @service)
-    (\service -> do
-       serve
-         handlers
-         service
-         (Proxy :: Proxy (RpcApi, transport))
-         (getTransport service)
+    @t
+    (defaultArgs @t)
+    (\t -> do
+       serve handlers t (Proxy :: Proxy (RpcApi, transport)) (getTransport t)
        threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
-       action $
-         makeClient (Proxy :: Proxy (spec, transport)) (getTransport service))
+       action $ makeClient (Proxy :: Proxy (spec, transport)) (getTransport t))
 
 increment :: Streamly.Serial Int
 increment =
@@ -99,31 +93,31 @@ streams :: Streams PubSubApi
 streams = increment
 
 withSubscribed ::
-     forall service spec transport.
-     (Publisher service PubSubApi transport, Subscriber spec transport)
+     forall t spec transport.
+     (Service t, Publisher t PubSubApi transport, Subscriber spec transport)
   => Proxy (spec, transport)
-  -> (service -> transport)
+  -> (t -> transport)
   -> (SubscriberBindings spec -> IO ())
   -> IO ()
 withSubscribed _ getTransport action =
   run
-    @service
-    (defaultArgs @service)
-    (\service -> do
+    @t
+    (defaultArgs @t)
+    (\t -> do
        subscribed <-
-         subscribe (Proxy :: Proxy (spec, transport)) (getTransport service)
+         subscribe (Proxy :: Proxy (spec, transport)) (getTransport t)
        publish
-         @service
+         @t
          streams
          (Proxy :: Proxy (PubSubApi, transport))
-         (getTransport service)
+         (getTransport t)
        action subscribed)
 
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {format = JSON, token = Just $ Tagged ""}
 
 singleDirectTest ::
-     Server service RpcApi transport => (service -> transport) -> Spec
+     (Service t, Server t RpcApi transport) => (t -> transport) -> Spec
 singleDirectTest getTransport =
   around
     (withRpcClient (Proxy :: Proxy (EchoIntsDirectEndpoint, a)) getTransport) $
@@ -136,7 +130,7 @@ singleDirectTest getTransport =
       (== TimeoutException (sec 0))
 
 singleStreamingTest ::
-     Server service RpcApi transport => (service -> transport) -> Spec
+     (Service t, Server t RpcApi transport) => (t -> transport) -> Spec
 singleStreamingTest getTransport =
   around
     (withRpcClient (Proxy :: Proxy (EchoIntsStreamingEndpoint, a)) getTransport) $
@@ -156,7 +150,7 @@ singleStreamingTest getTransport =
       (== TimeoutException (sec 0))
 
 multipleDirectTest ::
-     Server service RpcApi transport => (service -> transport) -> Spec
+     (Service t, Server t RpcApi transport) => (t -> transport) -> Spec
 multipleDirectTest getTransport =
   around
     (withRpcClient
@@ -172,7 +166,7 @@ multipleDirectTest getTransport =
     resultTexts `shouldBe` ["a", "b", "c"]
 
 multipleStreamingTest ::
-     Server service RpcApi transport => (service -> transport) -> Spec
+     (Service t, Server t RpcApi transport) => (t -> transport) -> Spec
 multipleStreamingTest getTransport =
   around
     (withRpcClient
@@ -195,7 +189,7 @@ multipleStreamingTest getTransport =
       resultList2 `shouldSatisfy` Data.List.all (== 2)
 
 pubSubTest' ::
-     Publisher service PubSubApi transport => (service -> transport) -> Spec
+     (Service t, Publisher t PubSubApi transport) => (t -> transport) -> Spec
 pubSubTest' getTransport =
   around (withSubscribed (Proxy :: Proxy (IncrementTopic, a)) getTransport) $
   context "when publishing an incrementing stream" $
@@ -203,15 +197,15 @@ pubSubTest' getTransport =
     Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
 
 directTests ::
-     Server service RpcApi transport => [(service -> transport) -> Spec]
+     (Service t, Server t RpcApi transport) => [(t -> transport) -> Spec]
 directTests = [singleDirectTest, multipleDirectTest]
 
 streamingTests ::
-     Server service RpcApi transport => [(service -> transport) -> Spec]
+     (Service t, Server t RpcApi transport) => [(t -> transport) -> Spec]
 streamingTests = [singleStreamingTest, multipleStreamingTest]
 
 pubSubTests ::
-     Publisher service PubSubApi transport => [(service -> transport) -> Spec]
+     (Service t, Publisher t PubSubApi transport) => [(t -> transport) -> Spec]
 pubSubTests = [pubSubTest']
 
 webSocketTestConfig :: Config WebSocket.T
@@ -224,7 +218,7 @@ webSocketTestConfig =
             , path = Tagged "/"
             , routes =
                 map
-                  (namespace @T . Tagged . pack)
+                  (namespaced @T . Tagged . pack)
                   (symbolVals (Proxy :: Proxy (Routes RpcApi)))
             }
         ]

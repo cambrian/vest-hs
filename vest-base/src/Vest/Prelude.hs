@@ -286,6 +286,16 @@ class Resource a where
 
 type PublicKey a = Tagged a (Text' "PublicKey")
 
+class (Typeable a) =>
+      HasNamespace a
+  where
+  namespace :: Text' "Namespace"
+  namespace = moduleName' @a
+  namespaced :: Text' t -> NamespacedText' t
+  namespaced text = retag $ retag (namespace @a) <> "/" <> text
+
+instance Typeable a => HasNamespace a
+
 -- TODO: can we put shared argument logic here, like reading secret key files?
 class (Data (ServiceArgs a), Typeable a) =>
       Service a
@@ -296,8 +306,8 @@ class (Data (ServiceArgs a), Typeable a) =>
   -- ^ This isn't the cleanest but I can't think of anything better for the time being.
   serviceName' :: Text' "ServiceName"
   serviceName' = moduleName' @a
-  namespace :: Text' t -> NamespacedText' t
-  namespace text = retag $ retag (serviceName' @a) <> "/" <> text
+  -- namespace :: Text' t -> NamespacedText' t
+  -- namespace text = retag $ retag (serviceName' @a) <> "/" <> text
   start :: (a -> IO Void) -> IO Void
   start f = do
     args <- cmdArgs $ defaultArgs @a

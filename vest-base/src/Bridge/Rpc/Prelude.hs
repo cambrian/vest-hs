@@ -29,7 +29,7 @@ data AuthOrNoAuth a
 
 class Auth t where
   data Claims t
-  verify :: Headers -> Text' "Request" -> IO (Maybe (Claims t))
+  verify :: t -> Headers -> Text' "Request" -> Maybe (Claims t)
 
 -- | Streaming endpoints should return cumulative results (missing an intermediate result is ok).
 data DirectOrStreaming a

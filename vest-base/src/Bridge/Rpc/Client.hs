@@ -80,7 +80,7 @@ _call pusher route transport timeout_ headers req = do
       _ -> return ()
   result
 
-instance ( Service service
+instance ( HasNamespace t
          , KnownSymbol route
          , Show req
          , ToJSON req
@@ -88,15 +88,15 @@ instance ( Service service
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint service _auth route req ('Direct res)) transport where
+         Client (Endpoint t _auth route req ('Direct res)) transport where
   makeClient ::
-       Proxy (Endpoint service _auth route req ('Direct res), transport)
+       Proxy (Endpoint t _auth route req ('Direct res), transport)
     -> transport
     -> (Time Second -> Headers -> req -> IO res)
   makeClient _ =
-    _call directPusher (namespace @service $ proxyText' (Proxy :: Proxy route))
+    _call directPusher (namespaced @t $ proxyText' (Proxy :: Proxy route))
 
-instance ( Service service
+instance ( HasNamespace t
          , KnownSymbol route
          , Show req
          , ToJSON req
@@ -104,12 +104,10 @@ instance ( Service service
          , FromJSON res
          , RpcTransport transport
          ) =>
-         Client (Endpoint service _auth route req ('Streaming res)) transport where
+         Client (Endpoint t _auth route req ('Streaming res)) transport where
   makeClient ::
-       Proxy (Endpoint service _auth route req ('Streaming res), transport)
+       Proxy (Endpoint t _auth route req ('Streaming res), transport)
     -> transport
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
   makeClient _ =
-    _call
-      streamingPusher
-      (namespace @service $ proxyText' (Proxy :: Proxy route))
+    _call streamingPusher (namespaced @t $ proxyText' (Proxy :: Proxy route))
