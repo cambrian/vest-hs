@@ -8,49 +8,46 @@ import Vest.Prelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
-  SubscriberBindings (Topic _ _ _ a) = (IO' "Unsubscribe" (), Streamly.Serial a)
+  SubscriberBindings (Topic _ _ _ _ a) = ( IO' "Unsubscribe" ()
+                                         , Streamly.Serial a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
 
-class (PubSubTransport transport) =>
-      Subscriber spec transport
-  where
-  subscribe ::
-       Proxy (spec, transport) -> transport -> IO (SubscriberBindings spec)
+class Subscriber t spec where
+  subscribe :: t -> Proxy spec -> IO (SubscriberBindings spec)
 
-instance (Subscriber a transport, Subscriber b transport) =>
-         Subscriber (a
-                     :<|> b) transport where
+instance (Subscriber t a, Subscriber t b) =>
+         Subscriber t (a
+                       :<|> b) where
   subscribe ::
-       Proxy ( a
-               :<|> b
-             , transport)
-    -> transport
+       t
+    -> Proxy (a
+              :<|> b)
     -> IO (SubscriberBindings a
            :<|> SubscriberBindings b)
-  subscribe _ transport = do
-    aStreams <- subscribe (Proxy :: Proxy (a, transport)) transport
-    bStreams <- subscribe (Proxy :: Proxy (b, transport)) transport
+  subscribe t _ = do
+    aStreams <- subscribe t (Proxy :: Proxy a)
+    bStreams <- subscribe t (Proxy :: Proxy b)
     return $ aStreams :<|> bStreams
 
 instance ( HasNamespace t
+         , HasPubSubTransport transport t
          , Deserializable f a
          , KnownSymbol name
-         , PubSubTransport transport
          ) =>
-         Subscriber (Topic t f name a) transport where
+         Subscriber t (Topic t f transport name a) where
   subscribe ::
-       Proxy (Topic t f name a, transport)
-    -> transport
+       t
+    -> Proxy (Topic t f transport name a)
     -> IO (IO' "Unsubscribe" (), Streamly.Serial a)
-  subscribe _ transport = do
+  subscribe t _ = do
     (push_, Tagged close, stream) <- pushStream
     let push = push_ <=< deserializeUnsafe' @f
     Tagged unsubscribe_ <-
       _subscribe
         push
         (namespaced' @t $ proxyText' (Proxy :: Proxy name))
-        transport
+        (pubSubTransport @transport t)
     let unsubscribe = Tagged $ close >> unsubscribe_
     return (unsubscribe, stream)

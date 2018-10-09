@@ -12,10 +12,10 @@ data RpcServerException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Handlers spec where
-  Handlers (Endpoint t 'NoAuth _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint t 'NoAuth _ req ('Streaming res)) = t -> req -> IO (Streamly.Serial res)
-  Handlers (Endpoint t ('Auth auth) _ req ('Direct res)) = t -> Claims auth -> req -> IO res
-  Handlers (Endpoint t ('Auth auth) _ req ('Streaming res)) = t -> Claims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint t 'NoAuth _ _ req ('Direct res)) = t -> req -> IO res
+  Handlers (Endpoint t 'NoAuth _ _ req ('Streaming res)) = t -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint t ('Auth auth) _ _ req ('Direct res)) = t -> Claims auth -> req -> IO res
+  Handlers (Endpoint t ('Auth auth) _ _ req ('Streaming res)) = t -> Claims auth -> req -> IO (Streamly.Serial res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -25,30 +25,28 @@ class (Auth a) =>
   where
   auth :: t -> a
 
-class (HasNamespace t, RpcTransport transport) =>
-      Server t spec transport
+class (HasNamespace t) =>
+      Server t spec
   where
-  serve :: Handlers spec -> t -> Proxy (spec, transport) -> transport -> IO ()
+  serve :: Handlers spec -> t -> Proxy spec -> IO ()
 
 instance ( HasUniqueRoutes (a
                             :<|> b)
-         , Server t a transport
-         , Server t b transport
+         , Server t a
+         , Server t b
          ) =>
          Server t (a
-                   :<|> b) transport where
+                   :<|> b) where
   serve ::
        (Handlers a
         :<|> Handlers b)
     -> t
-    -> Proxy ( a
-               :<|> b
-             , transport)
-    -> transport
+    -> Proxy (a
+              :<|> b)
     -> IO ()
-  serve (aHandlers :<|> bHandlers) t _ transport = do
-    serve aHandlers t (Proxy :: Proxy (a, transport)) transport
-    serve bHandlers t (Proxy :: Proxy (b, transport)) transport
+  serve (aHandlers :<|> bHandlers) t _ = do
+    serve aHandlers t (Proxy :: Proxy a)
+    serve bHandlers t (Proxy :: Proxy b)
 
 directSender :: (res -> IO ()) -> res -> IO ()
 directSender send = send
@@ -87,19 +85,18 @@ _serve sender verifyAuth handler = _consumeRequests asyncHandle
           (\(e :: RpcClientException) -> respond . serialize_ . Left $ e)
 
 instance ( HasNamespace t
+         , HasRpcTransport transport t
          , KnownSymbol route
          , Read req
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
          ) =>
-         Server t (Endpoint t 'NoAuth route req ('Direct res)) transport where
+         Server t (Endpoint t 'NoAuth transport route req ('Direct res)) where
   serve ::
        (t -> req -> IO res)
     -> t
-    -> Proxy (Endpoint t 'NoAuth route req ('Direct res), transport)
-    -> transport
+    -> Proxy (Endpoint t 'NoAuth transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
     _serve
@@ -107,21 +104,21 @@ instance ( HasNamespace t
       verifyEmpty
       (const $ handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
 
 instance ( HasNamespace t
+         , HasRpcTransport transport t
          , KnownSymbol route
          , Read req
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
          ) =>
-         Server t (Endpoint t 'NoAuth route req ('Streaming res)) transport where
+         Server t (Endpoint t 'NoAuth transport route req ('Streaming res)) where
   serve ::
        (t -> req -> IO (Streamly.Serial res))
     -> t
-    -> Proxy (Endpoint t 'NoAuth route req ('Streaming res), transport)
-    -> transport
+    -> Proxy (Endpoint t 'NoAuth transport route req ('Streaming res))
     -> IO ()
   serve handler t _ =
     _serve
@@ -129,23 +126,22 @@ instance ( HasNamespace t
       verifyEmpty
       (const $ handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
 
 instance ( HasNamespace t
          , HasAuth auth t
+         , HasRpcTransport transport t
          , KnownSymbol route
-         , Auth auth
          , Read req
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
          ) =>
-         Server t (Endpoint t ('Auth auth) route req ('Direct res)) transport where
+         Server t (Endpoint t ('Auth auth) transport route req ('Direct res)) where
   serve ::
        (t -> Claims auth -> req -> IO res)
     -> t
-    -> Proxy (Endpoint t ('Auth auth) route req ('Direct res), transport)
-    -> transport
+    -> Proxy (Endpoint t ('Auth auth) transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
     _serve
@@ -153,23 +149,22 @@ instance ( HasNamespace t
       (verify (auth t))
       (handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
 
 instance ( HasNamespace t
          , HasAuth auth t
+         , HasRpcTransport transport t
          , KnownSymbol route
-         , Auth auth
          , Read req
          , Show res
          , FromJSON req
          , ToJSON res
-         , RpcTransport transport
          ) =>
-         Server t (Endpoint t ('Auth auth) route req ('Streaming res)) transport where
+         Server t (Endpoint t ('Auth auth) transport route req ('Streaming res)) where
   serve ::
        (t -> Claims auth -> req -> IO (Streamly.Serial res))
     -> t
-    -> Proxy (Endpoint t ('Auth auth) route req ('Streaming res), transport)
-    -> transport
+    -> Proxy (Endpoint t ('Auth auth) transport route req ('Streaming res))
     -> IO ()
   serve handler t _ =
     _serve
@@ -177,3 +172,4 @@ instance ( HasNamespace t
       (verify (auth t))
       (handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)

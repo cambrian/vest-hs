@@ -37,7 +37,12 @@ data DirectOrStreaming a
   | Streaming a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-data Endpoint service (auth :: AuthOrNoAuth *) (route :: k) req (res :: DirectOrStreaming *)
+data Endpoint service (auth :: AuthOrNoAuth *) transport (route :: k) req (res :: DirectOrStreaming *)
+
+class (RpcTransport transport) =>
+      HasRpcTransport transport t
+  where
+  rpcTransport :: t -> transport
 
 data Headers = Headers
   { format :: SerializationFormat
@@ -46,12 +51,12 @@ data Headers = Headers
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type family Routes spec where
-  Routes (Endpoint _ _ (route :: Symbol) _ _) = '[ route]
+  Routes (Endpoint _ _ _ (route :: Symbol) _ _) = '[ route]
   Routes (a
           :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
-  NubRoutes (Endpoint _ _ (route :: Symbol) _ _) = '[ route]
+  NubRoutes (Endpoint _ _ _ (route :: Symbol) _ _) = '[ route]
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 

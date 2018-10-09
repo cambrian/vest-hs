@@ -22,4 +22,9 @@ class PubSubTransport t where
     -> t -- ^ Should be mutated to store cleanup details.
     -> IO (IO' "Unsubscribe" ())
 
-data Topic service (f :: SerializationFormat) (name :: k) a
+class (PubSubTransport transport) =>
+      HasPubSubTransport transport t
+  where
+  pubSubTransport :: t -> transport
+
+data Topic service (f :: SerializationFormat) transport (name :: k) a

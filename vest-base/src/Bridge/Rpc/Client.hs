@@ -8,30 +8,26 @@ import qualified Streamly.Prelude as Streamly
 import Vest.Prelude
 
 type family ClientBindings spec where
-  ClientBindings (Endpoint _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
-  ClientBindings (Endpoint _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
+  ClientBindings (Endpoint _ _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
+  ClientBindings (Endpoint _ _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
 
-class (RpcTransport transport) =>
-      Client spec transport
-  where
-  makeClient :: Proxy (spec, transport) -> transport -> ClientBindings spec
+class Client t spec where
+  makeClient :: t -> Proxy spec -> ClientBindings spec
 
-instance (Client a transport, Client b transport) =>
-         Client (a
-                 :<|> b) transport where
+instance (Client t a, Client t b) =>
+         Client t (a
+                   :<|> b) where
   makeClient ::
-       Proxy ( a
-               :<|> b
-             , transport)
-    -> transport
+       t
+    -> Proxy (a
+              :<|> b)
     -> ClientBindings a
        :<|> ClientBindings b
-  makeClient _ transport =
-    makeClient (Proxy :: Proxy (a, transport)) transport :<|>
-    makeClient (Proxy :: Proxy (b, transport)) transport
+  makeClient t _ =
+    makeClient t (Proxy :: Proxy a) :<|> makeClient t (Proxy :: Proxy b)
 
 directPusher :: IO (res -> IO (), IO res, IO' "Done" ())
 directPusher = do
@@ -80,34 +76,40 @@ _call pusher route transport timeout_ headers req = do
       _ -> return ()
   result
 
-instance ( HasNamespace t
+instance ( HasNamespace server
+         , HasRpcTransport transport t
          , KnownSymbol route
          , Show req
          , ToJSON req
          , Read res
          , FromJSON res
-         , RpcTransport transport
          ) =>
-         Client (Endpoint t _auth route req ('Direct res)) transport where
+         Client t (Endpoint server _auth transport route req ('Direct res)) where
   makeClient ::
-       Proxy (Endpoint t _auth route req ('Direct res), transport)
-    -> transport
+       t
+    -> Proxy (Endpoint server _auth transport route req ('Direct res))
     -> (Time Second -> Headers -> req -> IO res)
-  makeClient _ =
-    _call directPusher (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+  makeClient t _ =
+    _call
+      directPusher
+      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
 
-instance ( HasNamespace t
+instance ( HasNamespace server
+         , HasRpcTransport transport t
          , KnownSymbol route
          , Show req
          , ToJSON req
          , Read res
          , FromJSON res
-         , RpcTransport transport
          ) =>
-         Client (Endpoint t _auth route req ('Streaming res)) transport where
+         Client t (Endpoint server _auth transport route req ('Streaming res)) where
   makeClient ::
-       Proxy (Endpoint t _auth route req ('Streaming res), transport)
-    -> transport
+       t
+    -> Proxy (Endpoint server _auth transport route req ('Streaming res))
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
-  makeClient _ =
-    _call streamingPusher (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+  makeClient t _ =
+    _call
+      streamingPusher
+      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
