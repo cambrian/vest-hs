@@ -1,3 +1,3 @@
-# vest-prelude
+# vest-base
 
-Vest custom prelude (uses Protolude for standard prelude stuff).
+Vest core libraries (uses Protolude for standard prelude stuff).
