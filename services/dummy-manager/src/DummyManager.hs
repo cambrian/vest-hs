@@ -15,10 +15,10 @@ data DummyAuth =
 
 instance Verifier DummyAuth where
   type Claims DummyAuth = ()
-  verify _ _ _ = Just ()
+  verifyRequest _ _ _ = Just ()
 
 instance Signer DummyAuth where
-  sign _ headers _ = headers
+  signRequest _ headers _ = headers
 
 instance Auth DummyAuth where
   type AuthVerifier DummyAuth = DummyAuth
