@@ -76,7 +76,7 @@ ghc-options:
 
 library:
   source-dirs:
-  # - access-control/src
+  - access-control/src
   # - dummy-manager/src
   # - fiat-payment-server/src
   - tezos-delegation-core/src
@@ -88,11 +88,11 @@ executables:
   #   source-dirs:        dummy-manager/bin
   #   dependencies:
   #   - services
-  # access-control:
-  #   main:               Main.hs
-  #   source-dirs:        access-control/bin
-  #   dependencies:
-  #   - services
+  access-control:
+    main:               Main.hs
+    source-dirs:        access-control/bin
+    dependencies:
+    - services
   tezos-delegation-core:
     main:                 Main.hs
     source-dirs:          tezos-delegation-core/bin
@@ -105,15 +105,15 @@ executables:
     - services
 
 tests:
-  # access-control-test:
-  #   main:                     Spec.hs
-  #   source-dirs:              access-control/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   dependencies:
-  #   - services
+  access-control-test:
+    main:                     Spec.hs
+    source-dirs:              access-control/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - services
   # dummy-manager-test:
   #   main:                     Spec.hs
   #   source-dirs:              dummy-manager/test
