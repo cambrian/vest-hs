@@ -19,6 +19,7 @@ dependencies:
 - beam-postgres         >= 0.3  && < 1
 - containers            >= 0.5  && < 1
 - cmdargs               >= 0.10 && < 1
+- cryptonite            >= 0.25 && < 1
 - hashable              >= 1.2  && < 2
 - hashtables            >= 1.2  && < 2
 - hostname              >= 1.0  && < 2
@@ -28,7 +29,6 @@ dependencies:
 - postgresql-simple     >= 0.5  && < 1
 - protolude             >= 0.2  && < 1
 - resource-pool         >= 0.2  && < 1
-- saltine               >= 0.1  && < 1
 - safe-exceptions       >= 0.1  && < 1
 - safe-money            >= 0.7  && < 1
 - safe-money-aeson      >= 0.1  && < 1

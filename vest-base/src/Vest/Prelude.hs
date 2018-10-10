@@ -10,7 +10,6 @@ import Control.Concurrent.STM.TVar as Reexports
 import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Reexports
 import qualified Control.Monad.STM as Reexports
-import Crypto.Saltine as Reexports
 import Data.Aeson as Reexports (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson (decode, encode)
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
@@ -280,8 +279,6 @@ class Resource a where
       idleTime_ = nominalDiffTimeFromTime idleTime
       numResources_ = fromIntegral numResources
 
-type PublicKey a = Tagged a (Text' "PublicKey")
-
 class HasNamespace a where
   namespace :: Text' "Namespace"
   namespaced' :: Text' t -> NamespacedText' t
@@ -306,56 +303,52 @@ instance ToJSON Timestamp
 instance FromJSON Timestamp
 
 -- | Serialization
-data SerializationFormat
-  = Haskell
-  | JSON
-  deriving (Eq, Ord, Show, Read, Data, Generic, Hashable, ToJSON, FromJSON)
-
-newtype DeserializeException (f :: SerializationFormat) =
-  DeserializeException Text
+newtype DeserializeException =
+  DeserializeException (Text' "Format", Text)
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-class Serializable (f :: SerializationFormat) a where
+class SerializationFormat fmt where
+  deserializeException :: Text -> DeserializeException
+
+instance SerializationFormat "Haskell" where
+  deserializeException = DeserializeException . (Tagged "Haskell", )
+
+instance SerializationFormat "JSON" where
+  deserializeException = DeserializeException . (Tagged "JSON", )
+
+class (SerializationFormat fmt) =>
+      Serializable fmt a
+  where
   serialize :: a -> Text
   serialize' :: a -> Text' t
-  serialize' = Tagged . serialize @f
+  serialize' = Tagged . serialize @fmt
 
-instance Show a => Serializable 'Haskell a where
+instance Show a => Serializable "Haskell" a where
   serialize = show
 
-instance ToJSON a => Serializable 'JSON a where
+instance ToJSON a => Serializable "JSON" a where
   serialize = pack . ByteString.Lazy.UTF8.toString . Aeson.encode
 
-class (Typeable f) =>
-      Deserializable (f :: SerializationFormat) a
+class (SerializationFormat fmt) =>
+      Deserializable fmt a
   where
   deserialize :: Text -> Maybe a
   deserialize' :: Text' t -> Maybe a
-  deserialize' = deserialize @f . untag
+  deserialize' = deserialize @fmt . untag
   deserializeUnsafe :: Text -> IO a
   deserializeUnsafe text =
-    fromJustUnsafe (DeserializeException @f text) $ deserialize @f text
+    fromJustUnsafe (deserializeException @fmt text) $ deserialize @fmt text
   deserializeUnsafe' :: Text' t -> IO a
-  deserializeUnsafe' = deserializeUnsafe @f . untag
+  deserializeUnsafe' = deserializeUnsafe @fmt . untag
 
-instance Read a => Deserializable 'Haskell a where
+instance Read a => Deserializable "Haskell" a where
   deserialize = Text.Read.readMaybe . unpack
 
-instance FromJSON a => Deserializable 'JSON a where
+instance FromJSON a => Deserializable "JSON" a where
   deserialize = Aeson.decode . ByteString.Lazy.UTF8.fromString . unpack
 
-runtimeSerializationsOf' ::
-     (Show a, Read b, ToJSON a, FromJSON b)
-  => SerializationFormat
-  -> (a -> Text' t, Text' v -> IO b)
--- This function is awkwardly named on purpose. Typically you know which serialization format
--- to use at compile time, but sometimes a runtime match is necessary.
-runtimeSerializationsOf' Haskell =
-  (serialize' @'Haskell, deserializeUnsafe' @'Haskell)
-runtimeSerializationsOf' JSON = (serialize' @'JSON, deserializeUnsafe' @'JSON)
-
 read :: (Read a) => Text -> Maybe a
-read = deserialize @'Haskell
+read = deserialize @"Haskell"
 
 -- show is defined in protolude
 -- Not providing encode/decode because you should prefer serialize/deserialize @'JSON

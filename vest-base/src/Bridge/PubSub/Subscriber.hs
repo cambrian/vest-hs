@@ -37,17 +37,17 @@ instance (Subscriber t a, Subscriber t b) =>
 
 instance ( HasNamespace t
          , HasPubSubTransport transport t
-         , Deserializable f a
+         , Deserializable fmt a
          , KnownSymbol name
          ) =>
-         Subscriber t (Topic t f transport name a) where
+         Subscriber t (Topic fmt t transport name a) where
   subscribe ::
        t
-    -> Proxy (Topic t f transport name a)
+    -> Proxy (Topic fmt t transport name a)
     -> IO (IO' "Unsubscribe" (), Streamly.Serial a)
   subscribe t _ = do
     (push_, Tagged close, stream) <- pushStream
-    let push = push_ <=< deserializeUnsafe' @f
+    let push = push_ <=< deserializeUnsafe' @fmt
     Tagged unsubscribe_ <-
       _subscribe
         push

@@ -13,7 +13,7 @@ data Role = Role
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data Subject = Subject
-  { publicKey :: Text' "PublicKey"
+  { publicKey :: PublicKey
   , roles :: [Text' "RoleName"]
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
@@ -32,9 +32,15 @@ data AccessControl = Args
   , keyFile :: FilePath
   } deriving (Data)
 
+type PubKeyEndpoint
+   = Endpoint T 'NoAuth Amqp.T "publicKey" () ('Direct PublicKey)
+
+instance HasRpcTransport Amqp.T T where
+  rpcTransport = amqp
+
 instance Service T where
   type ServiceArgs T = AccessControl
-  type RpcSpec T = ()
+  type RpcSpec T = PubKeyEndpoint
   type PubSubSpec T = ()
   defaultArgs = Args {accessFile = "access.yaml", keyFile = "key.yaml"}
   init Args {accessFile, keyFile} f = do

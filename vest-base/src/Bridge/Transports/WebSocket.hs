@@ -135,7 +135,7 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
   HashTable.insert
     serverResponseHandlers
     clientId
-    (WS.sendTextData conn . serialize @'JSON)
+    (WS.sendTextData conn . serialize @"JSON")
   WS.forkPingThread conn pingInterval
   Exception.finally
     (serveClient serverRequestHandlers clientId conn)
@@ -149,7 +149,7 @@ serveClient ::
 serveClient serverRequestHandlers clientId conn =
   forever $ do
     msg <- WS.receiveData conn
-    deserialize @'JSON msg >|>| -- Do nothing if request message does not deserialize.
+    deserialize @"JSON" msg >|>| -- Do nothing if request message does not deserialize.
       (\reqMsg -> do
          let RequestMessage {route} = reqMsg
          maybeHandler <- HashTable.lookup serverRequestHandlers route
@@ -164,7 +164,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
   withAsync
     (async . forever $ do
        msg <- WS.receiveData conn
-       case deserialize @'JSON msg of
+       case deserialize @"JSON" msg of
          Nothing -> return () -- Swallow if entire message is garbled.
          Just ResponseMessage {requestId, resText} -> do
            maybeHandler <- HashTable.lookup clientResponseHandlers requestId
@@ -172,7 +172,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
            maybeHandler >|>| ($ resText))
     (const . forever $ do
        request <- takeMVar requestMVar
-       WS.sendTextData conn (serialize @'JSON request))
+       WS.sendTextData conn (serialize @"JSON" request))
 
 instance RpcTransport T where
   _consumeRequests ::

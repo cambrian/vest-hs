@@ -9,11 +9,20 @@ import Vest.Prelude
 
 type family ClientBindings spec where
   ClientBindings () = ()
-  ClientBindings (Endpoint _ _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
-  ClientBindings (Endpoint _ _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
+  ClientBindings (Endpoint _ _ _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
+  ClientBindings (Endpoint _ _ _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
+
+class (Auth a) =>
+      HasAuthSigner a t
+  where
+  authSigner :: t -> AuthSigner a
+
+-- | Empty auth signer is always defined.
+instance HasAuthSigner () t where
+  authSigner _ = ()
 
 class Client t spec where
   makeClient :: t -> Proxy spec -> ClientBindings spec
@@ -51,26 +60,32 @@ streamingPusher = do
   return (push, return results, Tagged done)
 
 _call ::
-     (Show req, ToJSON req, Read res, FromJSON res, RpcTransport transport)
+     forall fmt req res signer transport x.
+     ( Serializable fmt req
+     , Deserializable fmt (Either RpcClientException res)
+     , Signer signer
+     , RpcTransport transport
+     )
   => IO (res -> IO (), IO x, IO' "Done" ())
+  -> signer
   -> NamespacedText' "Route"
   -> transport
   -> Time Second
   -> Headers
   -> req
   -> IO x
-_call pusher route transport timeout_ headers req = do
+_call pusher signer route transport timeout_ headers req = do
   (push, result, Tagged done) <- pusher
   (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
-  let fmt = format headers
-      (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' fmt
+  let reqText = serialize' @fmt req
+      headersWithSignature = sign signer headers reqText
       handleResponse resOrExcText = do
-        deserializeUnsafe_ resOrExcText >>= \case
+        deserializeUnsafe' @fmt resOrExcText >>= \case
           Left exc -> throw (exc :: RpcClientException)
           Right res -> push res
         renewTimeout
   Tagged doCleanup <-
-    _issueRequest handleResponse route transport headers (serialize_ req)
+    _issueRequest handleResponse route transport headersWithSignature reqText
   mainThread <- myThreadId
   void . async $ do
     timeoutOrDone_ <- timeoutOrDone
@@ -80,40 +95,80 @@ _call pusher route transport timeout_ headers req = do
       _ -> return ()
   result
 
-instance ( HasNamespace server
+instance ( Serializable fmt req
+         , Deserializable fmt (Either RpcClientException res)
+         , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
-         , Show req
-         , ToJSON req
-         , Read res
-         , FromJSON res
          ) =>
-         Client t (Endpoint server _auth transport route req ('Direct res)) where
+         Client t (Endpoint fmt 'NoAuth server transport route req ('Direct res)) where
   makeClient ::
        t
-    -> Proxy (Endpoint server _auth transport route req ('Direct res))
+    -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Direct res))
     -> (Time Second -> Headers -> req -> IO res)
   makeClient t _ =
     _call
+      @fmt
       directPusher
+      (authSigner @() t)
       (namespaced' @server $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
-instance ( HasNamespace server
+instance ( Serializable fmt req
+         , Deserializable fmt (Either RpcClientException (ResultItem res))
+         , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
-         , Show req
-         , ToJSON req
-         , Read res
-         , FromJSON res
          ) =>
-         Client t (Endpoint server _auth transport route req ('Streaming res)) where
+         Client t (Endpoint fmt 'NoAuth server transport route req ('Streaming res)) where
   makeClient ::
        t
-    -> Proxy (Endpoint server _auth transport route req ('Streaming res))
+    -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Streaming res))
     -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
   makeClient t _ =
     _call
+      @fmt
       streamingPusher
+      (authSigner @() t)
+      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
+
+instance ( Serializable fmt req
+         , Deserializable fmt (Either RpcClientException res)
+         , HasNamespace server
+         , HasAuthSigner auth t
+         , HasRpcTransport transport t
+         , KnownSymbol route
+         ) =>
+         Client t (Endpoint fmt ('Auth auth) server transport route req ('Direct res)) where
+  makeClient ::
+       t
+    -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Direct res))
+    -> (Time Second -> Headers -> req -> IO res)
+  makeClient t _ =
+    _call
+      @fmt
+      directPusher
+      (authSigner @auth t)
+      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (rpcTransport @transport t)
+
+instance ( Serializable fmt req
+         , Deserializable fmt (Either RpcClientException (ResultItem res))
+         , HasNamespace server
+         , HasAuthSigner auth t
+         , HasRpcTransport transport t
+         , KnownSymbol route
+         ) =>
+         Client t (Endpoint fmt ('Auth auth) server transport route req ('Streaming res)) where
+  makeClient ::
+       t
+    -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Streaming res))
+    -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
+  makeClient t _ =
+    _call
+      @fmt
+      streamingPusher
+      (authSigner @auth t)
       (namespaced' @server $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)

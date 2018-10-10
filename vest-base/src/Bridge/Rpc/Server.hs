@@ -9,13 +9,13 @@ import Vest.Prelude
 
 type family Routes spec where
   Routes () = '[]
-  Routes (Endpoint _ _ _ (route :: Symbol) _ _) = '[ route]
+  Routes (Endpoint _ _ _ _ (route :: Symbol) _ _) = '[ route]
   Routes (a
           :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
   NubRoutes () = '[]
-  NubRoutes (Endpoint _ _ _ (route :: Symbol) _ _) = '[ route]
+  NubRoutes (Endpoint _ _ _ _ (route :: Symbol) _ _) = '[ route]
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
@@ -23,10 +23,10 @@ type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 type family Handlers spec where
   Handlers () = ()
-  Handlers (Endpoint t 'NoAuth _ _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint t 'NoAuth _ _ req ('Streaming res)) = t -> req -> IO (Streamly.Serial res)
-  Handlers (Endpoint t ('Auth auth) _ _ req ('Direct res)) = t -> Claims auth -> req -> IO res
-  Handlers (Endpoint t ('Auth auth) _ _ req ('Streaming res)) = t -> Claims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
+  Handlers (Endpoint _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
+  Handlers (Endpoint _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Streamly.Serial res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -36,9 +36,13 @@ data RpcServerException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 class (Auth a) =>
-      HasAuth a t
+      HasAuthVerifier a t
   where
-  auth :: t -> a
+  authVerifier :: t -> AuthVerifier a
+
+-- | Empty auth verifier is always defined.
+instance HasAuthVerifier () t where
+  authVerifier _ = ()
 
 class (HasNamespace t) =>
       Server t spec
@@ -74,120 +78,117 @@ streamingSender send resStream = do
   Streamly.mapM_ (send . Result) resStream
   send EndOfResults
 
-verifyEmpty :: Headers -> Text' "Request" -> Maybe ()
-verifyEmpty _ _ = Just ()
-
 _serve ::
-     (Read req, FromJSON req, Show res, ToJSON res, RpcTransport transport)
+     forall fmt req res verifier transport x.
+     ( Deserializable fmt req
+     , Serializable fmt (Either RpcClientException res)
+     , Verifier verifier
+     , RpcTransport transport
+     )
   => ((res -> IO ()) -> x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
-  -> (Headers -> Text' "Request" -> Maybe claims)
-  -> (claims -> req -> IO x)
+     -- res itself may be ResultItem a in the case of a streaming sender
+  -> verifier
+  -> (Claims verifier -> req -> IO x)
   -> NamespacedText' "Route"
   -> transport
   -> IO ()
-_serve sender verifyAuth handler = _consumeRequests asyncHandle
+_serve sender verifier handler = _consumeRequests asyncHandle
   where
     asyncHandle headers reqText respond =
-      async $ do
-        let fmt = format headers
-            (serialize_, deserializeUnsafe_) = runtimeSerializationsOf' fmt
-        catch
-          (do claims <- fromJustUnsafe BadAuth $ verifyAuth headers reqText
-              req <-
-                catchAny
-                  (deserializeUnsafe_ reqText)
-                  (const $ throw $ BadCall (fmt, reqText))
-              res <- handler claims req
-              sender (respond . serialize_ . Right) res)
-          (\(e :: RpcClientException) -> respond . serialize_ . Left $ e)
+      async $
+      catch
+        (do claims <- fromJustUnsafe BadAuth $ verify verifier headers reqText
+            req <- catch (deserializeUnsafe' @fmt reqText) (throw . BadCall)
+            x <- handler claims req
+            sender
+              (respond .
+               serialize' @fmt @(Either RpcClientException res) . Right)
+              x)
+        (respond . serialize' @fmt @(Either RpcClientException res) . Left)
 
 instance ( HasNamespace t
          , HasRpcTransport transport t
+         , Deserializable fmt req
+         , Serializable fmt (Either RpcClientException res)
          , KnownSymbol route
-         , Read req
-         , Show res
-         , FromJSON req
-         , ToJSON res
          ) =>
-         Server t (Endpoint t 'NoAuth transport route req ('Direct res)) where
+         Server t (Endpoint fmt 'NoAuth t transport route req ('Direct res)) where
   serve ::
        (t -> req -> IO res)
     -> t
-    -> Proxy (Endpoint t 'NoAuth transport route req ('Direct res))
+    -> Proxy (Endpoint fmt 'NoAuth t transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
     _serve
+      @fmt
       directSender
-      verifyEmpty
+      ()
       (const $ handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( HasNamespace t
          , HasRpcTransport transport t
+         , Deserializable fmt req
+         , Serializable fmt (Either RpcClientException (ResultItem res))
          , KnownSymbol route
-         , Read req
-         , Show res
-         , FromJSON req
-         , ToJSON res
          ) =>
-         Server t (Endpoint t 'NoAuth transport route req ('Streaming res)) where
+         Server t (Endpoint fmt 'NoAuth t transport route req ('Streaming res)) where
   serve ::
        (t -> req -> IO (Streamly.Serial res))
     -> t
-    -> Proxy (Endpoint t 'NoAuth transport route req ('Streaming res))
+    -> Proxy (Endpoint fmt 'NoAuth t transport route req ('Streaming res))
     -> IO ()
   serve handler t _ =
     _serve
+      @fmt
       streamingSender
-      verifyEmpty
+      ()
       (const $ handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( HasNamespace t
-         , HasAuth auth t
+         , HasAuthVerifier auth t
          , HasRpcTransport transport t
+         , Deserializable fmt req
+         , Serializable fmt (Either RpcClientException res)
          , KnownSymbol route
-         , Read req
-         , Show res
-         , FromJSON req
-         , ToJSON res
          ) =>
-         Server t (Endpoint t ('Auth auth) transport route req ('Direct res)) where
+         Server t (Endpoint fmt ('Auth auth) t transport route req ('Direct res)) where
   serve ::
-       (t -> Claims auth -> req -> IO res)
+       (t -> AuthClaims auth -> req -> IO res)
     -> t
-    -> Proxy (Endpoint t ('Auth auth) transport route req ('Direct res))
+    -> Proxy (Endpoint fmt ('Auth auth) t transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
     _serve
+      @fmt
       directSender
-      (verify (auth t))
+      (authVerifier @auth t)
       (handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( HasNamespace t
-         , HasAuth auth t
+         , HasAuthVerifier auth t
          , HasRpcTransport transport t
+         , Deserializable fmt req
+         , Serializable fmt (Either RpcClientException (ResultItem res))
          , KnownSymbol route
-         , Read req
-         , Show res
-         , FromJSON req
-         , ToJSON res
          ) =>
-         Server t (Endpoint t ('Auth auth) transport route req ('Streaming res)) where
+         Server t (Endpoint fmt ('Auth auth) t transport route req ('Streaming res)) where
   serve ::
-       (t -> Claims auth -> req -> IO (Streamly.Serial res))
+       (t -> AuthClaims auth -> req -> IO (Streamly.Serial res))
     -> t
-    -> Proxy (Endpoint t ('Auth auth) transport route req ('Streaming res))
+    -> Proxy (Endpoint fmt ('Auth auth) t transport route req ('Streaming res))
     -> IO ()
   serve handler t _ =
     _serve
+      @fmt
       streamingSender
-      (verify (auth t))
+      (authVerifier @auth t)
       (handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)

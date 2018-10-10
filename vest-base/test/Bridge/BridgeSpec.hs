@@ -31,16 +31,16 @@ instance HasPubSubTransport Amqp.T T where
   pubSubTransport = amqp
 
 type EchoIntsDirectEndpoint transport
-   = Endpoint T 'NoAuth transport "echoIntsDirect" [Int] ('Direct [Int])
+   = Endpoint "Haskell" 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
 
 type EchoTextsDirectEndpoint transport
-   = Endpoint T 'NoAuth transport "echoTextDirect" [Text] ('Direct [Text])
+   = Endpoint "Haskell" 'NoAuth T transport "echoTextDirect" [Text] ('Direct [Text])
 
 type EchoIntsStreamingEndpoint transport
-   = Endpoint T 'NoAuth transport "echoIntsStreaming" [Int] ('Streaming Int)
+   = Endpoint "Haskell" 'NoAuth T transport "echoIntsStreaming" [Int] ('Streaming Int)
 
 type EchoTextsStreamingEndpoint transport
-   = Endpoint T 'NoAuth transport "echoTextsStreaming" [Text] ('Streaming Text)
+   = Endpoint "Haskell" 'NoAuth T transport "echoTextsStreaming" [Text] ('Streaming Text)
 
 type TestRpcApi transport
    = EchoIntsDirectEndpoint transport
@@ -87,7 +87,7 @@ increment =
             else Nothing
    in Streamly.unfoldrM f 0
 
-type IncrementTopic transport = Topic T 'Haskell transport "increment" Int
+type IncrementTopic transport = Topic "Haskell" T transport "increment" Int
 
 type TestPubSubApi transport = IncrementTopic transport
 
@@ -107,7 +107,7 @@ withSubscribed _ f =
     f subscribed
 
 tokenAuthJSON :: Headers
-tokenAuthJSON = Headers {format = JSON, token = Just $ Tagged ""}
+tokenAuthJSON = Headers {token = Nothing}
 
 singleDirectTest ::
      forall transport. HasRpcTransport transport T

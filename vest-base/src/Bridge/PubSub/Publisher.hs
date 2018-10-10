@@ -66,9 +66,9 @@ instance ( HasNamespace t
          , Serializable f a
          , KnownSymbol name
          ) =>
-         Publisher t (Topic t f transport name a) where
+         Publisher t (Topic f t transport name a) where
   publish ::
-       Streamly.Serial a -> t -> Proxy (Topic t f transport name a) -> IO ()
+       Streamly.Serial a -> t -> Proxy (Topic f t transport name a) -> IO ()
   publish stream t _ =
     _publish
       (\send -> Streamly.mapM_ (send . serialize' @f) stream)
