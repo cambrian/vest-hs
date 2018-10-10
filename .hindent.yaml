@@ -4,7 +4,7 @@ line-breaks:
 force-trailing-newline: true
 
 # Hindent takes a subset of the extensions we use... Be sure to keep this in sync with .hlint.yaml
-# and the various package.yaml files
+# and the various package.yaml files.
 extensions:
 - BangPatterns
 - ConstraintKinds
@@ -23,7 +23,6 @@ extensions:
 - FlexibleInstances
 - FunctionalDependencies
 - GADTs
-# - GeneralizedNewtypeDeriving
 - InstanceSigs
 - KindSignatures
 - LambdaCase

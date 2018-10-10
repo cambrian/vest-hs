@@ -1,8 +1,9 @@
 resolver: lts-12.10
 
 packages:
-# - bridge-client
+- typescript
 - services
+- tezos
 - vest-base
 
 extra-deps:

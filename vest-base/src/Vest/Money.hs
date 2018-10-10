@@ -25,6 +25,6 @@ type XTZ = Discrete "XTZ" "mutez"
 
 type USD = Discrete "USD" "cent"
 
--- Put empty class at bottom of file because it messes up syntax highlighting
+-- Put empty class at bottom of file because it messes up syntax highlighting.
 class (KnownSymbol currency, KnownSymbol unit, GoodScale (Scale currency unit)) =>
       Unit currency unit

@@ -1,9 +1,5 @@
--- GHC does not count getTypeScriptDeclarations as a use of a derived TypeScript instance, so the
--- instance definitions are erroneously marked as orphans.
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
-module BridgeClient
-  ( module BridgeClient
+module Typescript
+  ( module Typescript
   ) where
 
 import qualified Bridge.Rpc.Auth.Token as Token

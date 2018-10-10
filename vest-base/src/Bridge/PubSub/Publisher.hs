@@ -31,9 +31,10 @@ type family Streams spec where
   Streams (a
            :<|> b) = (Streams a
                       :<|> Streams b)
-  -- Would be better to declare like this, but type-level lists cannot be used as argument types
+  -- Would be better to declare like this, but type-level lists cannot be used as argument types:
   -- Streams '[] = '[]
   -- Streams (Topic _ _ _ _ a ': topics) = ('[ Streamly.Serial a] :++ Streams topics)
+  -- Watch here: https://www.reddit.com/r/haskell/comments/9n0qan/typefamily_monoid/.
 
 class (HasNamespace t) =>
       Publisher t spec

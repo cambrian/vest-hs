@@ -1,10 +1,10 @@
+-- Union of two APIs. Adapted from Servant.
 module Vest.Prelude.Alternative
   ( (:<|>)(..)
   ) where
 
 import Control.Applicative (liftA2)
 
--- import Data.Biapplicative (Biapplicative(..))
 import Data.Bifoldable (Bifoldable(..))
 import Data.Bifunctor (Bifunctor(..))
 import Data.Bitraversable (Bitraversable(..))
@@ -12,15 +12,6 @@ import Data.Semigroup (Semigroup(..))
 import Data.Typeable (Typeable)
 import Protolude
 
--- import Prelude ()
--- | Union of two APIs. Taken from Servant.
---
--- Example:
---
--- >>> :{
---type MyApi = "books" :> Get '[JSON] [Book] -- GET /books
---        :<|> "books" :> ReqBody '[JSON] Book :> Post '[JSON] () -- POST /books
--- :}
 data a :<|> b =
   a :<|> b
   deriving (Typeable, Eq, Show, Functor, Traversable, Foldable, Bounded)
@@ -44,14 +35,5 @@ instance Bifoldable (:<|>) where
 instance Bifunctor (:<|>) where
   bimap f g ~(a :<|> b) = f a :<|> g b
 
--- instance Biapplicative (:<|>) where
---   bipure = (:<|>)
---   (f :<|> g) <<*>> (a :<|> b) = f a :<|> g b
 instance Bitraversable (:<|>) where
   bitraverse f g ~(a :<|> b) = liftA2 (:<|>) (f a) (g b)
--- $setup
--- >>> import Servant.API
--- >>> import Data.Aeson
--- >>> import Data.Text
--- >>> data Book
--- >>> instance ToJSON Book where { toJSON = undefined }

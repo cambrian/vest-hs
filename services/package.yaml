@@ -1,24 +1,24 @@
-name:                services
-version:             0.1.0.0
-author:              "Vest"
-copyright:           "2018 Vest"
+name:               services
+version:            0.1.0.0
+author:             "Vest"
+copyright:          "2018 Vest"
 
 extra-source-files:
 - README.md
 
-synopsis:            Package containing all of the Vest backend services.
-description:         See README.md.
+synopsis:           Package containing all of the Vest backend services.
+description:        See README.md.
 
 dependencies:
-- aeson                 >= 1.4  && < 2
-- aeson-typescript      >= 0.1  && < 1
-- base                  >= 4.10 && < 5
-- cryptonite            >= 0.25 && < 1
-- streamly              >= 0.5  && < 1
-- yaml                  >= 0.10 && < 1
+- aeson             >= 1.4  && < 2
+- aeson-typescript  >= 0.1  && < 1
+- base              >= 4.10 && < 5
+- cryptonite        >= 0.25 && < 1
+- streamly          >= 0.5  && < 1
+- yaml              >= 0.10 && < 1
 - vest-base
 
-# The default-extensions and ghc-options have been taken from here:
+# The default-extensions and ghc-options were inspired by this post (and modified for convenience):
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
 
 default-extensions:
@@ -43,7 +43,6 @@ default-extensions:
 - FlexibleInstances
 - FunctionalDependencies
 - GADTs
-# - GeneralizedNewtypeDeriving
 - ImpredicativeTypes
 - InstanceSigs
 - KindSignatures
@@ -75,11 +74,10 @@ ghc-options:
 - -Wincomplete-uni-patterns
 - -Wredundant-constraints
 - -fno-warn-orphans
-# - -Wmissing-import-lists
 
 library:
   source-dirs:
-  - access-control/src
+  # - access-control/src
   # - dummy-manager/src
   # - fiat-payment-server/src
   - tezos-delegation-core/src
@@ -87,39 +85,39 @@ library:
 
 executables:
   # dummy-manager:
-  #   main:                Main.hs
-  #   source-dirs:         dummy-manager/bin
+  #   main:               Main.hs
+  #   source-dirs:        dummy-manager/bin
   #   dependencies:
   #   - services
-  access-control:
-    main:                Main.hs
-    source-dirs:         access-control/bin
-    dependencies:
-    - services
+  # access-control:
+  #   main:               Main.hs
+  #   source-dirs:        access-control/bin
+  #   dependencies:
+  #   - services
   tezos-delegation-core:
-    main:                Main.hs
-    source-dirs:         tezos-delegation-core/bin
+    main:                 Main.hs
+    source-dirs:          tezos-delegation-core/bin
     dependencies:
     - services
   tezos-dispatcher:
-    main:                Main.hs
-    source-dirs:         tezos-dispatcher/bin
+    main:                 Main.hs
+    source-dirs:          tezos-dispatcher/bin
     dependencies:
     - services
 
 tests:
-  access-control-test:
-    main:                Spec.hs
-    source-dirs:         access-control/test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - services
+  # access-control-test:
+  #   main:                     Spec.hs
+  #   source-dirs:              access-control/test
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
+  #   dependencies:
+  #   - services
   # dummy-manager-test:
-  #   main:                Spec.hs
-  #   source-dirs:         dummy-manager/test
+  #   main:                     Spec.hs
+  #   source-dirs:              dummy-manager/test
   #   ghc-options:
   #   - -threaded
   #   - -rtsopts
@@ -127,8 +125,8 @@ tests:
   #   dependencies:
   #   - services
   tezos-delegation-core-test:
-    main:                Spec.hs
-    source-dirs:         tezos-delegation-core/test
+    main:                       Spec.hs
+    source-dirs:                tezos-delegation-core/test
     ghc-options:
     - -threaded
     - -rtsopts
@@ -136,8 +134,8 @@ tests:
     dependencies:
     - services
   tezos-dispatcher-test:
-    main:                Spec.hs
-    source-dirs:         tezos-dispatcher/test
+    main:                       Spec.hs
+    source-dirs:                tezos-dispatcher/test
     ghc-options:
     - -threaded
     - -rtsopts

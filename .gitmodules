@@ -1,3 +1,3 @@
-[submodule "bridge-client/foreign"]
-	path = bridge-client/foreign
+[submodule "typescript/bridge-client"]
+	path = typescript/bridge-client
 	url = https://github.com/1protocol/bridge-client

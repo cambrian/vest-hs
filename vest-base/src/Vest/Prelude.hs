@@ -190,7 +190,7 @@ data StreamPushAfterCloseException =
 -- recently pushed item, even if it is already closed.
 pushStream :: IO (a -> IO (), IO' "CloseStream" (), Streamly.Serial a)
 pushStream = do
-  t <- newTVarIO (Nothing, False, 0 :: Word64) -- stores (Maybe value, closed, counter)
+  t <- newTVarIO (Nothing, False, 0 :: Word64) -- Stores (Maybe value, closed, counter).
   let push a =
         atomically $ do
           (_, closed, counter) <- readTVar t
@@ -351,7 +351,7 @@ read :: (Read a) => Text -> Maybe a
 read = deserialize @"Haskell"
 
 -- show is defined in protolude
--- Not providing encode/decode because you should prefer serialize/deserialize @'JSON
+-- Not providing encode/decode because you should prefer serialize/deserialize @'JSON.
 moduleName' ::
      forall a t. Typeable a
   => Text' t

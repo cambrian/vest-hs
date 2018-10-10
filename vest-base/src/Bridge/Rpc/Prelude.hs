@@ -4,25 +4,25 @@ module Bridge.Rpc.Prelude
 
 import Vest.Prelude
 
--- | This implementation uses callbacks instread of streaming interfaces because
--- streamly streams don't have persistence and TB[M]Queues are ugly.
+-- | This implementation uses callbacks instread of streaming interfaces because Streamly streams
+-- don't have persistence and TB[M]Queues are ugly.
 class RpcTransport t where
   _consumeRequests ::
        (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> NamespacedText' "Route"
-       -- ^ Called per request, supplied with (headers request respondToClient)
+       -- ^ Called per request, supplied with (headers request respondToClient).
     -> t
     -> IO ()
-    -- ^ Returns a stream of requests, with response function per-request
+    -- ^ Returns a stream of requests, with response function per-request.
   _issueRequest ::
-       (Text' "Response" -> IO ()) -- ^ Called per response
+       (Text' "Response" -> IO ()) -- ^ Called per response.
     -> NamespacedText' "Route"
     -> t
     -> Headers
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
 
--- | Reimplementation of Maybe, but is self-documenting
+-- | Reimplementation of Maybe, but is self-documenting.
 data AuthOrNoAuth a
   = NoAuth
   | Auth a

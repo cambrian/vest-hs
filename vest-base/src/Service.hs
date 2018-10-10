@@ -3,7 +3,7 @@ module Service where
 import Bridge
 import Vest.Prelude
 
--- | TODO: can we put shared argument logic here, like reading secret key files?
+-- | TODO: Can we put shared argument logic here, like reading secret key files?
 -- makeStreams and handlers are not defined on the Service because they cause circular imports :(
 class ( Data (ServiceArgs a)
       , Typeable a
@@ -12,7 +12,7 @@ class ( Data (ServiceArgs a)
       ) =>
       Service a
   where
-  type ServiceArgs a -- can't be data because cmdArgs has to get the type name
+  type ServiceArgs a -- Can't be data because cmdArgs has to get the type name.
   type PubSubSpec a
   type RpcSpec a
   defaultArgs :: ServiceArgs a
