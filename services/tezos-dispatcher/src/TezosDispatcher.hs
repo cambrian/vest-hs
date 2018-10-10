@@ -2,10 +2,8 @@ module TezosDispatcher
   ( module TezosDispatcher
   ) where
 
-import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 import Vest
-import qualified Vest.Money as Money
 
 data TezosDispatcher = Args
   {

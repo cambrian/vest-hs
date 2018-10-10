@@ -1,6 +1,5 @@
 module Vest.Db
-  ( module Vest.Db
-  , module Reexports
+  ( module Reexports
   ) where
 
 import Database.Beam as Reexports hiding (insert)

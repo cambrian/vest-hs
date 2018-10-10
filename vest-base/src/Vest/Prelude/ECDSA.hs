@@ -1,12 +1,11 @@
-module ECDSA
+module Vest.Prelude.ECDSA
   ( module Reexports
   ) where
 
--- use: import qualified ECDSA
--- TODO: come up with consistent import practices
 import Crypto.PubKey.ECC.ECDSA as Reexports
 import qualified Crypto.PubKey.ECC.Types as Types
-import Vest.Prelude
+import Data.Aeson (FromJSON, ToJSON)
+import GHC.Generics (Generic)
 
 deriving instance Generic Types.CurveBinary
 

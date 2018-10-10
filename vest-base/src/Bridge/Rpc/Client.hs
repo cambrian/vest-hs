@@ -79,7 +79,7 @@ _call pusher signer route transport timeout_ headers req = do
   (push, result, Tagged done) <- pusher
   (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
   let reqText = serialize' @fmt req
-      headersWithSignature = sign signer headers reqText
+      headersWithSignature = signRequest signer headers reqText
       handleResponse resOrExcText = do
         deserializeUnsafe' @fmt resOrExcText >>= \case
           Left exc -> throw (exc :: RpcClientException)

@@ -33,8 +33,8 @@ class ( Data (ServiceArgs a)
   -- ^ This function allows you to start a service and run an arbitrary function in addition to
   -- serving and publishing according to spec.
   startAndRun makeStreams handlers f = do
-    args <- cmdArgs $ defaultArgs @a
-    init args $ \a -> do
+    args_ <- cmdArgs $ defaultArgs @a
+    init args_ $ \a -> do
       serve handlers a (Proxy :: Proxy (RpcSpec a))
       streams <- makeStreams a
       publish streams a (Proxy :: Proxy (PubSubSpec a))
