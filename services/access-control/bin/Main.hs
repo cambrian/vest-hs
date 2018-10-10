@@ -1,8 +1,9 @@
 import AccessControl
+import qualified ECDSA
 import Vest
 
-handlePubKey :: () -> T -> IO (Text' "PublicKey")
-handlePubKey () T {} =
+handlePubKey :: T -> () -> IO ECDSA.PublicKey
+handlePubKey T {keys} () = return $ ECDSA.toPublicKey keys
 
 main :: IO Void
-main = start @T (const $ return ()) ()
+main = start @T (const $ return ()) handlePubKey
