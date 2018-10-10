@@ -1,3 +1,0 @@
-[submodule "typescript/bridge-client"]
-	path = typescript/bridge-client
-	url = https://github.com/1protocol/bridge-client
