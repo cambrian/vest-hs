@@ -2,11 +2,9 @@ module TezosDelegationCore
   ( module TezosDelegationCore
   ) where
 
-import Bridge
 import qualified Bridge.Transports.Amqp as Amqp
 import qualified TezosDelegationCore.Db as Db
 import Vest
-import qualified Vest.Money as Money
 
 data TezosDelegationCore = Args
   {

@@ -67,11 +67,13 @@ default-extensions:
 - UndecidableInstances
 
 ghc-options:
+- -Werror
 - -Wall
 - -Wcompat
 - -Wincomplete-record-updates
 - -Wincomplete-uni-patterns
 - -Wredundant-constraints
+- -Wpartial-fields
 - -fno-warn-orphans
 
 library:

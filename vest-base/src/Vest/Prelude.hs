@@ -66,6 +66,7 @@ import Time.Rational (KnownDivRat)
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
 import Vest.Prelude.Alternative as Reexports
+import Vest.Prelude.ECDSA as Reexports
 
 -- Checks if x in xs at type level.
 type family Elem x xs where

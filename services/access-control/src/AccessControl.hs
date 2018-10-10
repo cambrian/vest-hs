@@ -5,9 +5,9 @@ module AccessControl
 import qualified Bridge.Transports.Amqp as Amqp
 import Data.Aeson
 import qualified Data.Yaml as Yaml
-import qualified ECDSA
 import Vest
 
+-- This can be an enum type in the future
 type Permission = Text' "Permission"
 
 data Role = Role
@@ -15,7 +15,7 @@ data Role = Role
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data Subject = Subject
-  { publicKeyText :: ECDSA.PublicKey
+  { publicKeyText :: PublicKey
   , roles :: [Text' "RoleName"]
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
@@ -25,9 +25,9 @@ data Access = Access
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data T = T
-  { amqp :: Amqp.T
-  , access :: Access
-  , keys :: ECDSA.KeyPair
+  { access :: Access
+  , amqp :: Amqp.T
+  , keys :: KeyPair
   }
 
 data AccessControl = Args
@@ -36,7 +36,10 @@ data AccessControl = Args
   } deriving (Data)
 
 type PubKeyEndpoint
-   = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct ECDSA.PublicKey)
+   = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
+
+type AccessTokenEndpoint
+   = Endpoint "Haskell" 'NoAuth T Amqp.T "accessToken" () ('Direct PublicKey)
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
@@ -48,5 +51,6 @@ instance Service T where
   defaultArgs = Args {accessFile = "access.yaml", keyFile = "key.yaml"}
   init Args {accessFile, keyFile} f = do
     (access :: Access) <- Yaml.decodeFileThrow accessFile
+    (keys :: KeyPair) <- Yaml.decodeFileThrow keyFile
     print access
-    with Amqp.localConfig (\amqp -> f $ T {amqp})
+    with Amqp.localConfig (\amqp -> f $ T {access, amqp, keys})
