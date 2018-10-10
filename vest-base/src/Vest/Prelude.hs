@@ -66,7 +66,6 @@ import Time.Rational (KnownDivRat)
 import Time.Timestamp as Reexports
 import Time.Units as Reexports
 import Vest.Prelude.Alternative as Reexports
-import Vest.Prelude.ECDSA as Reexports
 
 -- Checks if x in xs at type level.
 type family Elem x xs where
@@ -220,8 +219,8 @@ timeoutRenewable ::
      Time Second
   -> IO a
   -> IO (IO' "RenewTimeout" (), IO (Either TimeoutException a))
-timeoutRenewable timeout_ action = do
-  let micros = toNum @Microsecond timeout_
+timeoutRenewable timeout action = do
+  let micros = toNum @Microsecond timeout
   delay <- newDelay micros
   resultMVar <- newEmptyMVar
   void . async $ do
@@ -233,7 +232,7 @@ timeoutRenewable timeout_ action = do
     putMVar resultMVar (Just result)
   let result =
         readMVar resultMVar >>- \case
-          Nothing -> Left $ TimeoutException timeout_
+          Nothing -> Left $ TimeoutException timeout
           Just a -> Right a
   return (Tagged $ updateDelay delay micros, result)
 
@@ -274,11 +273,13 @@ class Resource a where
   -- ^ Use: withPool poolcfg cfg (\pool -> withResource pool (\resource -> do ...))
   withPool PoolConfig {idleTime, numResources} config =
     bracket
-      (createPool (make config) cleanup 1 idleTime_ numResources_)
+      (createPool
+         (make config)
+         cleanup
+         1
+         (nominalDiffTimeFromTime idleTime)
+         (fromIntegral numResources))
       destroyAllResources
-    where
-      idleTime_ = nominalDiffTimeFromTime idleTime
-      numResources_ = fromIntegral numResources
 
 class HasNamespace a where
   namespace :: Text' "Namespace"
@@ -350,6 +351,12 @@ instance FromJSON a => Deserializable "JSON" a where
 
 read :: (Read a) => Text -> Maybe a
 read = deserialize @"Haskell"
+
+read' :: (Read a) => Text' t -> Maybe a
+read' = deserialize' @"Haskell"
+
+show' :: (Show a) => a -> Text' t
+show' = serialize' @"Haskell"
 
 -- show is defined in protolude
 -- Not providing encode/decode because you should prefer serialize/deserialize @'JSON.

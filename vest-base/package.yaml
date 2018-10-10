@@ -104,6 +104,7 @@ ghc-options:
 - -Wincomplete-uni-patterns
 - -Wredundant-constraints
 - -Wpartial-fields
+- -Wno-name-shadowing
 - -fno-warn-orphans
 
 library:

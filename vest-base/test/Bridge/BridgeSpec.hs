@@ -106,9 +106,6 @@ withSubscribed _ f =
     publish streams t (Proxy :: Proxy (TestPubSubApi transport))
     f subscribed
 
-tokenAuthJSON :: Headers
-tokenAuthJSON = Headers {token = Nothing}
-
 emptyRpcTest :: Spec
 emptyRpcTest =
   around
@@ -130,11 +127,10 @@ singleDirectTest =
        (Proxy :: Proxy (EchoIntsDirectEndpoint transport))) $
   context "with a single direct RPC" $ do
     it "makes a single call" $ \call -> do
-      result <- call (sec 1) defaultHeaders [1, 2, 3]
+      result <- call (sec 1) [1, 2, 3]
       result `shouldBe` [1, 2, 3]
     it "times out for a single call" $ \call ->
-      call (sec 0) defaultHeaders [1, 2, 3] `shouldThrow`
-      (== TimeoutException (sec 0))
+      call (sec 0) [1, 2, 3] `shouldThrow` (== TimeoutException (sec 0))
 
 singleStreamingTest ::
      forall transport. HasRpcTransport transport T
@@ -146,15 +142,15 @@ singleStreamingTest =
        (Proxy :: Proxy (EchoIntsStreamingEndpoint transport))) $
   context "with a single streaming RPC" $ do
     it "receives the last result for a single call" $ \call -> do
-      results <- call (sec 1) tokenAuthJSON [1, 2, 3]
+      results <- call (sec 1) [1, 2, 3]
       (Streamly.toList results >>- elem 3) `shouldReturn` True
     it "sees the last item for every fanout" $ \call -> do
-      results <- call (sec 1) tokenAuthJSON [1, 2, 3]
+      results <- call (sec 1) [1, 2, 3]
       (Streamly.toList results >>- elem 3) `shouldReturn` True
       (Streamly.toList results >>- elem 3) `shouldReturn` True
       -- Note: The timeout is not identified properly if the results are not forced.
     it "times out for a single call" $ \call ->
-      (do results <- call (sec 0) tokenAuthJSON [1, 2, 3]
+      (do results <- call (sec 0) [1, 2, 3]
           resultList <- Streamly.toList results
           print resultList) `shouldThrow`
       (== TimeoutException (sec 0))
@@ -170,8 +166,8 @@ multipleDirectTest =
                         :<|> EchoTextsDirectEndpoint transport))) $
   context "when running multiple direct RPCs" $
   it "makes one call to each" $ \(echoInts :<|> echoTexts) -> do
-    resultInts <- echoInts (sec 1) defaultHeaders [1, 2, 3]
-    resultTexts <- echoTexts (sec 1) defaultHeaders ["a", "b", "c"]
+    resultInts <- echoInts (sec 1) [1, 2, 3]
+    resultTexts <- echoTexts (sec 1) ["a", "b", "c"]
     resultInts `shouldBe` [1, 2, 3]
     resultTexts `shouldBe` ["a", "b", "c"]
 
@@ -186,13 +182,13 @@ multipleStreamingTest =
                         :<|> EchoTextsStreamingEndpoint transport))) $
   context "when running multiple streaming RPCs" $ do
     it "sees the last item for each call" $ \(echoInts :<|> echoTexts) -> do
-      resultsInt <- echoInts (sec 1) tokenAuthJSON [1, 2, 3]
-      resultsText <- echoTexts (sec 1) tokenAuthJSON ["a", "b", "c"]
+      resultsInt <- echoInts (sec 1) [1, 2, 3]
+      resultsText <- echoTexts (sec 1) ["a", "b", "c"]
       (Streamly.toList resultsInt >>- elem 3) `shouldReturn` True
       (Streamly.toList resultsText >>- elem "c") `shouldReturn` True
     it "handles concurrent calls" $ \(echoInts :<|> _) -> do
-      results1 <- echoInts (sec 1) tokenAuthJSON $ replicate 3 1
-      results2 <- echoInts (sec 1) tokenAuthJSON $ replicate 3 2
+      results1 <- echoInts (sec 1) $ replicate 3 1
+      results2 <- echoInts (sec 1) $ replicate 3 2
       resultList1 <- Streamly.toList results1
       resultList2 <- Streamly.toList results2
       resultList1 `shouldSatisfy` Data.List.all (== 1)

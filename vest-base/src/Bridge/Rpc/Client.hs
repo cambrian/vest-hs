@@ -4,14 +4,15 @@ module Bridge.Rpc.Client
 
 import Bridge.Rpc.Auth
 import Bridge.Rpc.Prelude
+import qualified Data.HashMap.Strict as HashMap
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Vest.Prelude
 
 type family ClientBindings spec where
   ClientBindings () = ()
-  ClientBindings (Endpoint _ _ _ _ _ req ('Direct res)) = Time Second -> Headers -> req -> IO res
-  ClientBindings (Endpoint _ _ _ _ _ req ('Streaming res)) = Time Second -> Headers -> req -> IO (Streamly.Serial res)
+  ClientBindings (Endpoint _ _ _ _ _ req ('Direct res)) = Time Second -> req -> IO res
+  ClientBindings (Endpoint _ _ _ _ _ req ('Streaming res)) = Time Second -> req -> IO (Streamly.Serial res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -64,7 +65,7 @@ _call ::
      forall fmt req res signer transport x.
      ( Serializable fmt req
      , Deserializable fmt (Either RpcClientException res)
-     , Signer signer
+     , RequestSigner signer
      , RpcTransport transport
      )
   => IO (res -> IO (), IO x, IO' "Done" ())
@@ -72,19 +73,19 @@ _call ::
   -> NamespacedText' "Route"
   -> transport
   -> Time Second
-  -> Headers
   -> req
   -> IO x
-_call pusher signer route transport timeout_ headers req = do
+_call pusher signer route transport timeout req = do
   (push, result, Tagged done) <- pusher
-  (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout_ done
-  let reqText = serialize' @fmt req
-      headersWithSignature = signRequest signer headers reqText
+  (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout done
+  let headers = HashMap.empty
+      reqText = serialize' @fmt req
       handleResponse resOrExcText = do
         deserializeUnsafe' @fmt resOrExcText >>= \case
           Left exc -> throw (exc :: RpcClientException)
           Right res -> push res
         renewTimeout
+  headersWithSignature <- signRequest signer headers reqText
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
   mainThread <- myThreadId
@@ -106,7 +107,7 @@ instance ( Serializable fmt req
   makeClient ::
        t
     -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Direct res))
-    -> (Time Second -> Headers -> req -> IO res)
+    -> (Time Second -> req -> IO res)
   makeClient t _ =
     _call
       @fmt
@@ -125,7 +126,7 @@ instance ( Serializable fmt req
   makeClient ::
        t
     -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Streaming res))
-    -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
+    -> (Time Second -> req -> IO (Streamly.Serial res))
   makeClient t _ =
     _call
       @fmt
@@ -145,7 +146,7 @@ instance ( Serializable fmt req
   makeClient ::
        t
     -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Direct res))
-    -> (Time Second -> Headers -> req -> IO res)
+    -> (Time Second -> req -> IO res)
   makeClient t _ =
     _call
       @fmt
@@ -165,7 +166,7 @@ instance ( Serializable fmt req
   makeClient ::
        t
     -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Streaming res))
-    -> (Time Second -> Headers -> req -> IO (Streamly.Serial res))
+    -> (Time Second -> req -> IO (Streamly.Serial res))
   makeClient t _ =
     _call
       @fmt

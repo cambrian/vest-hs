@@ -7,39 +7,41 @@ import Data.Aeson
 import qualified Data.Yaml as Yaml
 import Vest
 
--- This can be an enum type in the future
-type Permission = Text' "Permission"
-
-data Role = Role
-  { permissions :: [Permission]
-  } deriving (Read, Show, Generic, ToJSON, FromJSON)
+import AccessControl.Permissions
 
 data Subject = Subject
-  { publicKeyText :: PublicKey
-  , roles :: [Text' "RoleName"]
+  { name :: Text
+  , roles :: HashSet (Text' "RoleName")
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data Access = Access
-  { roles :: HashMap (Text' "RoleName") Role
-  , subjects :: HashMap (Text' "SubjectName") Subject
+  { roles :: HashMap (Text' "RoleName") (HashSet Permission)
+  , subjects :: HashMap PublicKey Subject
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
-
-data T = T
-  { access :: Access
-  , amqp :: Amqp.T
-  , keys :: KeyPair
-  }
 
 data AccessControl = Args
   { accessFile :: FilePath
   , keyFile :: FilePath
   } deriving (Data)
 
+data T = T
+  { access :: Access
+  , amqp :: Amqp.T
+  , keyPair :: KeyPair
+  }
+
+data AccessToken = AccessToken
+  { publicKey :: PublicKey
+  , name :: Text
+  , permissions :: HashSet Permission
+  , expiration :: Timestamp
+  } deriving (Read, Show)
+
 type PubKeyEndpoint
    = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
 
 type AccessTokenEndpoint
-   = Endpoint "Haskell" 'NoAuth T Amqp.T "accessToken" () ('Direct PublicKey)
+   = Endpoint "Haskell" 'NoAuth T Amqp.T "accessToken" PublicKey ('Direct (SignedText' "AccessToken"))
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
@@ -47,10 +49,11 @@ instance HasRpcTransport Amqp.T T where
 instance Service T where
   type ServiceArgs T = AccessControl
   type RpcSpec T = PubKeyEndpoint
+                   :<|> AccessTokenEndpoint
   type PubSubSpec T = ()
   defaultArgs = Args {accessFile = "access.yaml", keyFile = "key.yaml"}
   init Args {accessFile, keyFile} f = do
     (access :: Access) <- Yaml.decodeFileThrow accessFile
-    (keys :: KeyPair) <- Yaml.decodeFileThrow keyFile
+    (keyPair :: KeyPair) <- Yaml.decodeFileThrow keyFile
     print access
-    with Amqp.localConfig (\amqp -> f $ T {access, amqp, keys})
+    with Amqp.localConfig (\amqp -> f $ T {access, amqp, keyPair})

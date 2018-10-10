@@ -10,11 +10,12 @@ synopsis:           Package containing all of the Vest backend services.
 description:        See README.md.
 
 dependencies:
-- aeson             >= 1.4  && < 2
-- aeson-typescript  >= 0.1  && < 1
-- base              >= 4.10 && < 5
-- streamly          >= 0.5  && < 1
-- yaml              >= 0.10 && < 1
+- aeson                 >= 1.4  && < 2
+- aeson-typescript      >= 0.1  && < 1
+- base                  >= 4.10 && < 5
+- streamly              >= 0.5  && < 1
+- unordered-containers  >= 0.2  && < 1
+- yaml                  >= 0.10 && < 1
 - vest-base
 
 # The default-extensions and ghc-options were inspired by this post (and modified for convenience):
@@ -74,6 +75,7 @@ ghc-options:
 - -Wincomplete-uni-patterns
 - -Wredundant-constraints
 - -Wpartial-fields
+- -Wno-name-shadowing
 - -fno-warn-orphans
 
 library:
@@ -81,8 +83,8 @@ library:
   - access-control/src
   # - dummy-manager/src
   # - fiat-payment-server/src
-  - tezos-delegation-core/src
-  - tezos-dispatcher/src
+  # - tezos-delegation-core/src
+  # - tezos-dispatcher/src
 
 executables:
   # dummy-manager:
@@ -95,16 +97,16 @@ executables:
     source-dirs:        access-control/bin
     dependencies:
     - services
-  tezos-delegation-core:
-    main:                 Main.hs
-    source-dirs:          tezos-delegation-core/bin
-    dependencies:
-    - services
-  tezos-dispatcher:
-    main:                 Main.hs
-    source-dirs:          tezos-dispatcher/bin
-    dependencies:
-    - services
+  # tezos-delegation-core:
+  #   main:                 Main.hs
+  #   source-dirs:          tezos-delegation-core/bin
+  #   dependencies:
+  #   - services
+  # tezos-dispatcher:
+  #   main:                 Main.hs
+  #   source-dirs:          tezos-dispatcher/bin
+  #   dependencies:
+  #   - services
 
 tests:
   access-control-test:
@@ -125,21 +127,21 @@ tests:
   #   - -with-rtsopts=-N
   #   dependencies:
   #   - services
-  tezos-delegation-core-test:
-    main:                       Spec.hs
-    source-dirs:                tezos-delegation-core/test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - services
-  tezos-dispatcher-test:
-    main:                       Spec.hs
-    source-dirs:                tezos-dispatcher/test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - services
+  # tezos-delegation-core-test:
+  #   main:                       Spec.hs
+  #   source-dirs:                tezos-delegation-core/test
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
+  #   dependencies:
+  #   - services
+  # tezos-dispatcher-test:
+  #   main:                       Spec.hs
+  #   source-dirs:                tezos-dispatcher/test
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
+  #   dependencies:
+  #   - services

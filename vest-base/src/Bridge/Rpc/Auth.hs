@@ -1,6 +1,6 @@
 module Bridge.Rpc.Auth
-  ( Verifier(..)
-  , Signer(..)
+  ( RequestVerifier(..)
+  , RequestSigner(..)
   , Auth(..)
   , AuthClaims
   ) where
@@ -8,30 +8,33 @@ module Bridge.Rpc.Auth
 import Bridge.Rpc.Prelude (Headers)
 import Vest.Prelude
 
-class Verifier a where
-  type Claims a
-  verifyRequest :: a -> Headers -> Text' "Request" -> Maybe (Claims a)
+class RequestSigner a where
+  signRequest :: a -> Headers -> Text' "Request" -> IO Headers
+  -- ^ signing is an IO operation because it may require randomness
 
-class Signer a where
-  signRequest :: a -> Headers -> Text' "Request" -> Headers
+class RequestVerifier a where
+  type VerifierClaims a
+  verifyRequest ::
+       a -> Headers -> Text' "Request" -> IO (Maybe (VerifierClaims a))
+  -- ^ verifying is an IO operation because it may need to check for expired credentials
 
-class (Signer (AuthSigner a), Verifier (AuthVerifier a)) =>
+class (RequestSigner (AuthSigner a), RequestVerifier (AuthVerifier a)) =>
       Auth a
   where
   type AuthSigner a
   type AuthVerifier a
 
-type AuthClaims a = Claims (AuthVerifier a)
+type AuthClaims a = VerifierClaims (AuthVerifier a)
 
 -- Empty auth instance. This is not intended to be used externally; you should prefer
 -- auth 'Nothing instead of 'Auth ().
-instance Verifier () where
-  type Claims () = ()
-  verifyRequest () _ _ = Just ()
+instance RequestSigner () where
+  signRequest () headers _ = return headers
 
-instance Signer () where
-  signRequest () headers _ = headers
+instance RequestVerifier () where
+  type VerifierClaims () = ()
+  verifyRequest () _ _ = return $ Just ()
 
 instance Auth () where
-  type AuthVerifier () = ()
   type AuthSigner () = ()
+  type AuthVerifier () = ()

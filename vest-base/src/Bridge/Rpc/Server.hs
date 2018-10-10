@@ -83,14 +83,14 @@ _serve ::
      forall fmt req res verifier transport x.
      ( Deserializable fmt req
      , Serializable fmt (Either RpcClientException res)
-     , Verifier verifier
+     , RequestVerifier verifier
      , RpcTransport transport
      )
   => ((res -> IO ()) -> x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
      -- res itself may be ResultItem a in the case of a streaming sender
   -> verifier
-  -> (Claims verifier -> req -> IO x)
+  -> (VerifierClaims verifier -> req -> IO x)
   -> NamespacedText' "Route"
   -> transport
   -> IO ()
@@ -100,7 +100,7 @@ _serve sender verifier handler = _consumeRequests asyncHandle
       async $
       catch
         (do claims <-
-              fromJustUnsafe BadAuth $ verifyRequest verifier headers reqText
+              verifyRequest verifier headers reqText >>= fromJustUnsafe BadAuth
             req <- catch (deserializeUnsafe' @fmt reqText) (throw . BadCall)
             x <- handler claims req
             sender

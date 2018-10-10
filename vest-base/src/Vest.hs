@@ -5,4 +5,5 @@ module Vest
 
 import Bridge as Reexports
 import Service as Reexports
+import Vest.ECDSA as Reexports
 import Vest.Prelude as Reexports

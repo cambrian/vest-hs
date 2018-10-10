@@ -41,10 +41,7 @@ class (RpcTransport transport) =>
   where
   rpcTransport :: a -> transport
 
-data Headers = Headers
-  { token :: Maybe (Text' "AuthToken")
-  -- TODO: Signatures and such.
-  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+type Headers = HashMap (Text' "Header") Text
 
 data ResultItem a
   = Result a
@@ -55,6 +52,3 @@ data RpcClientException
   = BadAuth
   | BadCall DeserializeException
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
-
-defaultHeaders :: Headers
-defaultHeaders = Headers {token = Nothing}
