@@ -2,6 +2,7 @@ module Bridge.Rpc.Server
   ( module Bridge.Rpc.Server
   ) where
 
+import Bridge.Rpc.Auth
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly

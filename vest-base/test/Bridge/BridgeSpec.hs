@@ -109,6 +109,17 @@ withSubscribed _ f =
 tokenAuthJSON :: Headers
 tokenAuthJSON = Headers {token = Nothing}
 
+emptyRpcTest :: Spec
+emptyRpcTest =
+  around
+    (\f ->
+       withT $ \t -> do
+         serve () t (Proxy :: Proxy ())
+         threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
+         f $ makeClient t (Proxy :: Proxy ())) $
+  context "with empty handlers and API" $
+  it "doesn't complain" $ \() -> True `shouldBe` True
+
 singleDirectTest ::
      forall transport. HasRpcTransport transport T
   => Spec
@@ -230,6 +241,7 @@ webSocketTestConfig =
 
 spec :: Spec
 spec = do
+  describe "Empty API" emptyRpcTest
   describe "AMQP bridge" $ do
     describe "Direct RPC" $ mapM_ identity (directTests @Amqp.T)
     describe "Streaming RPC" $ mapM_ identity (streamingTests @Amqp.T)

@@ -2,6 +2,7 @@ module Bridge.Rpc.Client
   ( module Bridge.Rpc.Client
   ) where
 
+import Bridge.Rpc.Auth
 import Bridge.Rpc.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly

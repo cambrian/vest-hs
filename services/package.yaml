@@ -13,6 +13,7 @@ dependencies:
 - aeson                 >= 1.4  && < 2
 - aeson-typescript      >= 0.1  && < 1
 - base                  >= 4.10 && < 5
+- cryptonite            >= 0.25 && < 1
 - streamly              >= 0.5  && < 1
 - yaml                  >= 0.10 && < 1
 - vest-base

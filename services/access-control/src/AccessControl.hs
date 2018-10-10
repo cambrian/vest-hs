@@ -3,17 +3,27 @@ module AccessControl
   ) where
 
 import qualified Bridge.Transports.Amqp as Amqp
+import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
+import Data.Aeson
 import qualified Data.Yaml as Yaml
 import Vest
 
 type Permission = Text' "Permission"
+
+type PublicKey = ECDSA.PublicKey
+
+instance Generic PublicKey
+
+instance ToJSON PublicKey
+
+instance FromJSON PublicKey
 
 data Role = Role
   { permissions :: [Permission]
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data Subject = Subject
-  { publicKey :: PublicKey
+  { publicKeyText :: ECDSA.PublicKey -- Since deriving ToJSON/FromJSON is buggy on PublicKey
   , roles :: [Text' "RoleName"]
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
@@ -33,7 +43,7 @@ data AccessControl = Args
   } deriving (Data)
 
 type PubKeyEndpoint
-   = Endpoint T 'NoAuth Amqp.T "publicKey" () ('Direct PublicKey)
+   = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
