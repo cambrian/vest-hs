@@ -41,6 +41,9 @@ instance Bifunctor (:<|>) where
 instance Bitraversable (:<|>) where
   bitraverse f g ~(a :<|> b) = liftA2 (:<|>) (f a) (g b)
 
+proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
+proxyText' = Tagged . pack . symbolVal
+
 -- Checks if x in xs at type level.
 type family Elem x xs where
   Elem x '[] = 'False
@@ -65,8 +68,7 @@ instance SymbolTexts' '[] where
 
 instance (KnownSymbol a, SymbolTexts' as) => SymbolTexts' (a ': as) where
   symbolTexts' _ =
-    (Tagged $ pack $ symbolVal (Proxy :: Proxy a)) :
-    symbolTexts' (Proxy :: Proxy as)
+    proxyText' (Proxy :: Proxy a) : symbolTexts' (Proxy :: Proxy as)
 
 type family Symbols symbols where
   Symbols (Proxy c) = '[ c]

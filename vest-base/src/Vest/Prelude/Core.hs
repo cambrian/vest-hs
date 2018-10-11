@@ -75,9 +75,6 @@ infixl 1 >>-
 (>>-) :: (Functor f) => f a -> (a -> b) -> f b
 (>>-) ma f = map f ma
 
-proxyText' :: (KnownSymbol a) => Proxy a -> Text' t
-proxyText' = Tagged . pack . symbolVal
-
 blockForever :: IO Void
 blockForever = do
   _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
