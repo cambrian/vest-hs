@@ -1,6 +1,6 @@
-module Service where
+module Vest.Service where
 
-import Bridge
+import Vest.Bridge
 import Vest.Prelude
 
 -- | TODO: Can we put shared argument logic here, like reading secret key files?

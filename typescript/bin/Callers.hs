@@ -1,12 +1,11 @@
 import Data.Aeson.Types (Object)
 import Data.Text.Lazy (toStrict)
 import qualified DummyManager
-import Service
 import System.Directory
 import System.FilePath
 import Text.EDE
 import Typescript
-import Vest.Prelude
+import Vest
 
 callersToGenerate :: [Object]
 callersToGenerate =

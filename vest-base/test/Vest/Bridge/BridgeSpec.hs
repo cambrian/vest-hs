@@ -1,15 +1,15 @@
-module Bridge.BridgeSpec
+module Vest.Bridge.BridgeSpec
   ( spec
   ) where
 
-import Bridge
-import Bridge.Rpc.Prelude ()
-import qualified Bridge.Transports.Amqp as Amqp
-import qualified Bridge.Transports.WebSocket as WebSocket
 import qualified Data.List
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Test.Hspec
+import Vest.Bridge
+import Vest.Bridge.Rpc.Prelude ()
+import qualified Vest.Bridge.Transports.Amqp as Amqp
+import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 import Vest.Prelude
 
 data DummyService = Args
@@ -249,10 +249,10 @@ spec = do
   describe "Empty API" $ do
     describe "RPC" emptyRpcTest
     describe "PubSub" emptyPubSubTest
-  describe "AMQP bridge" $ do
+  describe "AMQP Vest.Bridge" $ do
     describe "Direct RPC" $ mapM_ identity (directTests @Amqp.T)
     describe "Streaming RPC" $ mapM_ identity (streamingTests @Amqp.T)
     describe "Pub/Sub" $ mapM_ identity (pubSubTests @Amqp.T)
-  describe "WebSocket bridge" $ do
+  describe "WebSocket Vest.Bridge" $ do
     describe "Direct RPC" $ mapM_ identity (directTests @WebSocket.T)
     describe "Streaming RPC" $ mapM_ identity (streamingTests @WebSocket.T)

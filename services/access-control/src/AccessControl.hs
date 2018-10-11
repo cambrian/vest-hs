@@ -2,10 +2,10 @@ module AccessControl
   ( module AccessControl
   ) where
 
-import qualified Bridge.Transports.Amqp as Amqp
 import Data.Aeson
 import qualified Data.Yaml as Yaml
 import Vest
+import qualified Vest.Bridge.Transports.Amqp as Amqp
 
 import AccessControl.Permissions as AccessControl
 

@@ -1,5 +1,5 @@
-module Bridge.Rpc.Prelude
-  ( module Bridge.Rpc.Prelude
+module Vest.Bridge.Rpc.Prelude
+  ( module Vest.Bridge.Rpc.Prelude
   ) where
 
 import Vest.Prelude

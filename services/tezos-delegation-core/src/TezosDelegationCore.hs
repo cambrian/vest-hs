@@ -2,9 +2,9 @@ module TezosDelegationCore
   ( module TezosDelegationCore
   ) where
 
-import qualified Bridge.Transports.Amqp as Amqp
 import qualified TezosDelegationCore.Db as Db
 import Vest
+import qualified Vest.Bridge.Transports.Amqp as Amqp
 
 data TezosDelegationCore = Args
   {

@@ -1,4 +1,4 @@
-module Bridge.Transports.WebSocket
+module Vest.Bridge.Transports.WebSocket
   ( T(..)
   , Config(..)
   , ServerInfo(..)
@@ -7,7 +7,7 @@ module Bridge.Transports.WebSocket
   , localConfig
   ) where
 
-import Bridge.Rpc
+import Vest.Bridge.Rpc
 import qualified Control.Exception as Exception
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
@@ -19,7 +19,7 @@ import Vest.Prelude
 
 type HashTable k v = HashTable.BasicHashTable k v
 
--- WebSockets don't exactly fit into the bridge model, since WebSocket connections are between
+-- WebSockets don't exactly fit into the Vest.Bridge model, since WebSocket connections are between
 -- clients and servers, rather than through a messaging service. That said, we provide a WebSocket
 -- transport so that components can serve public WebSocket endpoints to e.g. browsers.
 data RequestMessage = RequestMessage

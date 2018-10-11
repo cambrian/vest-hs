@@ -1,9 +1,9 @@
-module Bridge.Rpc.Client
-  ( module Bridge.Rpc.Client
+module Vest.Bridge.Rpc.Client
+  ( module Vest.Bridge.Rpc.Client
   ) where
 
-import Bridge.Rpc.Auth
-import Bridge.Rpc.Prelude
+import Vest.Bridge.Rpc.Auth
+import Vest.Bridge.Rpc.Prelude
 import qualified Data.HashMap.Strict as HashMap
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly

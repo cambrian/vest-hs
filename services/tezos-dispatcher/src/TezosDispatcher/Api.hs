@@ -2,11 +2,11 @@ module TezosDispatcher.Api
   ( module TezosDispatcher.Api
   ) where
 
-import Bridge
-import qualified Bridge.Transports.Amqp as Amqp
 import qualified TezosDelegationCore
 import qualified TezosDispatcher
 import Vest
+import Vest.Bridge
+import qualified Vest.Bridge.Transports.Amqp as Amqp
 import qualified Vest.Money as Money
 
 type RewardsEndpoint

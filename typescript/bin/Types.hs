@@ -1,12 +1,11 @@
-import Bridge.Rpc.Prelude (ResultItem, RpcClientException)
-import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types ()
 import qualified DummyManager
 import System.Random
 import Text.Replace
 import Typescript
-import Vest.Prelude
+import Vest
+import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 
 typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =
@@ -64,7 +63,7 @@ main = do
         , getTypeScriptDeclarations
             (Proxy :: Proxy (Either RpcClientException Text))
         , getTypeScriptDeclarations (Proxy :: Proxy ResultItem)
-        , getTypeScriptDeclarations (Proxy :: Proxy RequestMessage)
-        , getTypeScriptDeclarations (Proxy :: Proxy ResponseMessage)
+        , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
+        , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)
         , concat typesToGenerate
         ]))

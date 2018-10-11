@@ -1,11 +1,11 @@
-module Bridge.Transports.Amqp
+module Vest.Bridge.Transports.Amqp
   ( T(..)
   , Config(..)
   , localConfig
   ) where
 
-import Bridge.PubSub
-import Bridge.Rpc
+import Vest.Bridge.PubSub
+import Vest.Bridge.Rpc
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP

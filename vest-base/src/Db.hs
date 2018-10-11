@@ -1,4 +1,4 @@
-module Vest.Db
+module Db
   ( module Reexports
   ) where
 
@@ -9,7 +9,7 @@ import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
 import qualified Money
-import Vest.Prelude
+import Vest
 
 -- Postgres serializations for Vest types.
 -- In theory you could implement this directly on Timestamp without having to create a UTCTime

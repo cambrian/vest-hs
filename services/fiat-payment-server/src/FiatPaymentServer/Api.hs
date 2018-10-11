@@ -2,9 +2,9 @@ module FiatPaymentServer.Api
   ( module FiatPaymentServer.Api
   ) where
 
-import Bridge
-import qualified Bridge.Transports.Amqp as Amqp
 import Vest
+import Vest.Bridge
+import qualified Vest.Bridge.Transports.Amqp as Amqp
 import qualified Vest.Money as Money
 
 data ChargeRequest (currency :: Symbol) (unit :: Symbol) = ChargeRequest

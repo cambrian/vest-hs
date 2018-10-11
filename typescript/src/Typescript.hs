@@ -2,18 +2,11 @@ module Typescript
   ( module Typescript
   ) where
 
-import Bridge.Rpc.Prelude
-  ( AuthOrNoAuth(..)
-  , DirectOrStreaming(..)
-  , Endpoint
-  , ResultItem
-  , RpcClientException
-  )
-import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import DummyManager (DummyAuth)
-import Vest.Prelude
+import Vest
+import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 
 data SpecTsTypes = SpecTsTypes
   { hasAuth :: Bool
@@ -163,6 +156,6 @@ $(deriveTypeScript defaultOptions ''RpcClientException)
 
 $(deriveTypeScript defaultOptions ''ResultItem)
 
-$(deriveTypeScript defaultOptions ''RequestMessage)
+$(deriveTypeScript defaultOptions ''WebSocket.RequestMessage)
 
-$(deriveTypeScript defaultOptions ''ResponseMessage)
+$(deriveTypeScript defaultOptions ''WebSocket.ResponseMessage)

@@ -9,12 +9,12 @@ module FiatPaymentServer
   , start
   ) where
 
-import Bridge
-import qualified Bridge.Transports.Amqp as Amqp
 import FiatPaymentServer.Prelude
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Vest
+import Vest.Bridge
+import qualified Vest.Bridge.Transports.Amqp as Amqp
 import qualified Vest.Money as Money
 
 -- Eventually this will live inside the exchanger

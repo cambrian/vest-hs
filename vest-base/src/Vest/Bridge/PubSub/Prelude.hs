@@ -1,5 +1,5 @@
-module Bridge.PubSub.Prelude
-  ( module Bridge.PubSub.Prelude
+module Vest.Bridge.PubSub.Prelude
+  ( module Vest.Bridge.PubSub.Prelude
   ) where
 
 import Vest.Prelude

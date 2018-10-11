@@ -3,12 +3,12 @@ module DummyManager
   ( module DummyManager
   ) where
 
-import qualified Bridge.Transports.WebSocket as WebSocket
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import qualified Streamly
 import qualified Streamly.Prelude as Streamly
 import Vest
+import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 
 data DummyAuth =
   DummyAuth

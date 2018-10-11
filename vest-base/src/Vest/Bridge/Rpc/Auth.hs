@@ -1,11 +1,11 @@
-module Bridge.Rpc.Auth
+module Vest.Bridge.Rpc.Auth
   ( RequestVerifier(..)
   , RequestSigner(..)
   , Auth(..)
   , AuthClaims
   ) where
 
-import Bridge.Rpc.Prelude (Headers)
+import Vest.Bridge.Rpc.Prelude (Headers)
 import Vest.Prelude
 
 class RequestSigner a where
