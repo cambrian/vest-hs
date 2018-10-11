@@ -5,8 +5,8 @@ module Typescript
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import DummyManager (DummyAuth)
+import qualified Transports.WebSocket as WebSocket
 import Vest
-import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 
 data SpecTsTypes = SpecTsTypes
   { hasAuth :: Bool

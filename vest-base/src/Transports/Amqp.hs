@@ -1,4 +1,4 @@
-module Vest.Bridge.Transports.Amqp
+module Transports.Amqp
   ( T(..)
   , Config(..)
   , localConfig

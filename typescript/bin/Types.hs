@@ -3,9 +3,9 @@ import Data.Aeson.Types ()
 import qualified DummyManager
 import System.Random
 import Text.Replace
+import qualified Transports.WebSocket as WebSocket
 import Typescript
 import Vest
-import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 
 typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =

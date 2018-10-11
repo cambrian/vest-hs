@@ -5,20 +5,20 @@ module Vest.Bridge.BridgeSpec
 import qualified Data.List
 import qualified Stream
 import Test.Hspec
+import qualified Transports.Amqp as Amqp
+import qualified Transports.WebSocket as WebSocket
 import Vest.Bridge
 import Vest.Bridge.Rpc.Prelude ()
-import qualified Vest.Bridge.Transports.Amqp as Amqp
-import qualified Vest.Bridge.Transports.WebSocket as WebSocket
 import Vest.Prelude
 
-data DummyService = Args
-  {
-  } deriving (Eq, Show, Read, Generic, Data)
-
+-- For some reason this gets an overlapping HasNamespace T instance if it imports Vest.Service at all
 data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T
   }
+
+instance HasNamespace T where
+  namespace = Tagged "test"
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
@@ -46,9 +46,6 @@ type TestRpcApi transport
      :<|> EchoTextsDirectEndpoint transport
      :<|> EchoIntsStreamingEndpoint transport
      :<|> EchoTextsStreamingEndpoint transport
-
-instance HasNamespace T where
-  namespace = Tagged "test"
 
 withT :: (T -> IO a) -> IO a
 withT f =

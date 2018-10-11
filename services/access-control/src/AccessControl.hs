@@ -4,8 +4,8 @@ module AccessControl
 
 import Data.Aeson
 import qualified Data.Yaml as Yaml
+import qualified Transports.Amqp as Amqp
 import Vest
-import qualified Vest.Bridge.Transports.Amqp as Amqp
 
 import AccessControl.Permissions as AccessControl
 

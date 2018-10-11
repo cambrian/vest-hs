@@ -1,4 +1,4 @@
-module Vest.Bridge.Transports.WebSocket
+module Transports.WebSocket
   ( T(..)
   , Config(..)
   , ServerInfo(..)
