@@ -46,13 +46,15 @@ localConfig =
 -- Has logic for being both a server and client. Probably not worth separating.
 data T = T
   { conn :: AMQP.Connection
-  , chan :: AMQP.Channel
+  , publishChan :: AMQP.Channel
   , responseQueue :: Text' "ResponseQueue"
-  , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: HashTable (NamespacedText' "Route") AMQP.ConsumerTag
+  , responseConsumer :: (AMQP.Channel, AMQP.ConsumerTag)
+  , consumedRoutes :: HashTable (NamespacedText' "Route") ( AMQP.Channel
+                                                          , AMQP.ConsumerTag)
   , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , publisherThreads :: HashTable (NamespacedText' "TopicName") (Async ())
-  , subscribers :: HashTable (Text' "SubscriberId") AMQP.ConsumerTag
+  , subscribers :: HashTable (Text' "SubscriberId") ( AMQP.Channel
+                                                    , AMQP.ConsumerTag)
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
@@ -69,21 +71,25 @@ toAmqpMsg :: Text -> AMQP.Message
 toAmqpMsg x =
   AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack $ x}
 
+cancelConsumer :: (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
+cancelConsumer (chan, tag) = AMQP.cancelConsumer chan tag
+
 instance Resource T where
   type ResourceConfig T = Config
   make :: Config -> IO T
     -- Connects to RabbitMQ, begins listening on RPC queue.
   make Config {hostname, virtualHost, username, password} = do
     conn <- AMQP.openConnection (unpack hostname) virtualHost username password
-    chan <- AMQP.openChannel conn
+    publishChan <- AMQP.openChannel conn
+    responseConsumerChan <- AMQP.openChannel conn
     queueName <- newQueueName
-    AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
+    AMQP.declareQueue responseConsumerChan AMQP.newQueue {AMQP.queueName}
     responseHandlers <- HashTable.new
     let handleMsg ResponseMessage {requestId, resText} =
           HashTable.lookup responseHandlers requestId >>= mapM_ ($ resText)
     responseConsumerTag <-
       AMQP.consumeMsgs
-        chan
+        responseConsumerChan
         queueName
         AMQP.Ack
         (\(msg, env) -> do
@@ -96,9 +102,9 @@ instance Resource T where
     return
       T
         { conn
-        , chan
+        , publishChan
         , responseQueue = Tagged queueName
-        , responseConsumerTag
+        , responseConsumer = (responseConsumerChan, responseConsumerTag)
         , consumedRoutes
         , responseHandlers
         , publisherThreads
@@ -108,19 +114,18 @@ instance Resource T where
     -- Closes AMQP consumers, closes connection, and deletes response queue.
     -- Unsubscribes from any subscribed topics.
   cleanup T { conn
-            , chan
             , responseQueue
-            , responseConsumerTag
+            , responseConsumer
             , consumedRoutes
             , publisherThreads
             , subscribers
             } = do
-    AMQP.cancelConsumer chan responseConsumerTag
-    HashTable.mapM_ (AMQP.cancelConsumer chan . snd) consumedRoutes
+    cancelConsumer responseConsumer
+    HashTable.mapM_ (cancelConsumer . snd) consumedRoutes
     HashTable.mapM_ (cancel . snd) publisherThreads
-    HashTable.mapM_ (uncurry (unsubscribe chan)) subscribers
-    _ <- AMQP.deleteQueue chan (untag responseQueue)
-    AMQP.closeConnection conn -- Also closes chan.
+    HashTable.mapM_ (uncurry unsubscribe) subscribers
+    _ <- AMQP.deleteQueue (fst responseConsumer) (untag responseQueue)
+    AMQP.closeConnection conn -- Also closes chans.
 
 instance RpcTransport T where
   _consumeRequests ::
@@ -129,14 +134,13 @@ instance RpcTransport T where
     -> T
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
-  -- TODO: Declare a chan per consumer thread.
-  -- (i.e. per call to AMQP.consumeMsgs)
-  _consumeRequests asyncHandler route T {chan, consumedRoutes} = do
+  _consumeRequests asyncHandler route T {conn, publishChan, consumedRoutes} = do
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServing route
     let Tagged queueName = route
-    _ <- AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
+    consumerChan <- AMQP.openChannel conn
+    _ <- AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
     let asyncHandle RequestMessage { id = requestId
                                    , headers
                                    , responseQueue
@@ -145,20 +149,20 @@ instance RpcTransport T where
           let respond resText =
                 void $
                 AMQP.publishMsg
-                  chan
+                  publishChan
                   "" -- Default exchange just sends message to queue specified by routing key.
                   (untag responseQueue) -- Exchange routing key.
                   (toAmqpMsg . show $ ResponseMessage {requestId, resText})
           asyncHandler headers reqText respond
     consumerTag <-
       AMQP.consumeMsgs
-        chan
+        consumerChan
         queueName
         AMQP.Ack
         (\(msg, env) -> do
            (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if message fails to read.
            AMQP.ackEnv env)
-    HashTable.insert consumedRoutes route consumerTag
+    HashTable.insert consumedRoutes route (consumerChan, consumerTag)
   _issueRequest ::
        (Text' "Response" -> IO ())
     -> NamespacedText' "Route"
@@ -166,11 +170,11 @@ instance RpcTransport T where
     -> Headers
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
-  _issueRequest respond route T {chan, responseQueue, responseHandlers} headers reqText = do
+  _issueRequest respond route T {publishChan, responseQueue, responseHandlers} headers reqText = do
     id <- newUUID
     HashTable.insert responseHandlers id respond
     AMQP.publishMsg
-      chan
+      publishChan
       ""
       (untag route)
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
@@ -182,10 +186,10 @@ declarePubSubExchange chan exchangeName =
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
 
-unsubscribe :: AMQP.Channel -> Text' "SubscriberId" -> AMQP.ConsumerTag -> IO ()
-unsubscribe chan subscriberId consumerTag = do
-  AMQP.cancelConsumer chan consumerTag
-  AMQP.deleteQueue chan (untag subscriberId) & void
+unsubscribe :: Text' "SubscriberId" -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
+unsubscribe subscriberId (consumerChan, consumerTag) = do
+  AMQP.cancelConsumer consumerChan consumerTag
+  AMQP.deleteQueue consumerChan (untag subscriberId) & void
 
 instance PubSubTransport T where
   _publish ::
@@ -193,15 +197,15 @@ instance PubSubTransport T where
     -> NamespacedText' "TopicName"
     -> T
     -> IO ()
-  -- Like _serve, has race condition on publisherThreads. Not likely to be a problem
-  _publish publisher topic T {chan, publisherThreads} = do
+  -- Like _serve, has race condition on publisherThreads. Not likely to be a problem.
+  _publish publisher topic T {publishChan, publisherThreads} = do
     HashTable.lookup publisherThreads topic >>= \case
       Just _ -> throw $ AlreadyPublishing topic
       Nothing -> return ()
     let Tagged exchangeName = topic
-    declarePubSubExchange chan exchangeName
+    declarePubSubExchange publishChan exchangeName
     let send (Tagged a) =
-          void . AMQP.publishMsg chan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
+          void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
     publisherThread <- async $ publisher send
     HashTable.insert publisherThreads topic publisherThread
   _subscribe ::
@@ -209,22 +213,21 @@ instance PubSubTransport T where
     -> NamespacedText' "TopicName"
     -> T
     -> IO (IO' "Unsubscribe" ())
-  -- TODO: Declare a chan per consumer thread.
-  -- (i.e. per call to AMQP.consumeMsgs)
-  _subscribe push (Tagged exchangeName) T {chan, subscribers} = do
-    declarePubSubExchange chan exchangeName
+  _subscribe push (Tagged exchangeName) T {conn, subscribers} = do
+    consumerChan <- AMQP.openChannel conn
+    declarePubSubExchange consumerChan exchangeName
     queueName <- newQueueName
-    AMQP.declareQueue chan AMQP.newQueue {AMQP.queueName}
-    AMQP.bindQueue chan queueName exchangeName "" -- Routing key blank.
+    AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
+    AMQP.bindQueue consumerChan queueName exchangeName "" -- Routing key blank.
     consumerTag <-
       AMQP.consumeMsgs
-        chan
+        consumerChan
         queueName
         AMQP.NoAck
         (push . Tagged . fromAmqpMsg . fst)
     let subscriberId = Tagged queueName
-    HashTable.insert subscribers subscriberId consumerTag
+    HashTable.insert subscribers subscriberId (consumerChan, consumerTag)
     let unsubscribe_ = do
           HashTable.delete subscribers subscriberId
-          unsubscribe chan subscriberId consumerTag
+          unsubscribe subscriberId (consumerChan, consumerTag)
     return $ Tagged unsubscribe_
