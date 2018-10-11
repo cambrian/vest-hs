@@ -2,17 +2,16 @@ module Vest.Bridge.Rpc.Client
   ( module Vest.Bridge.Rpc.Client
   ) where
 
+import qualified Data.HashMap.Strict as HashMap
+import qualified Stream
 import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
-import qualified Data.HashMap.Strict as HashMap
-import qualified Streamly
-import qualified Streamly.Prelude as Streamly
 import Vest.Prelude
 
 type family ClientBindings spec where
   ClientBindings () = ()
   ClientBindings (Endpoint _ _ _ _ _ req ('Direct res)) = Time Second -> req -> IO res
-  ClientBindings (Endpoint _ _ _ _ _ req ('Streaming res)) = Time Second -> req -> IO (Streamly.Serial res)
+  ClientBindings (Endpoint _ _ _ _ _ req ('Streaming res)) = Time Second -> req -> IO (Stream res)
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -52,13 +51,12 @@ directPusher = do
       done = void result
   return (push, result, Tagged done)
 
-streamingPusher ::
-     IO (ResultItem res -> IO (), IO (Streamly.Serial res), IO' "Done" ())
+streamingPusher :: IO (ResultItem res -> IO (), IO (Stream res), IO' "Done" ())
 streamingPusher = do
   (push_, Tagged close, results) <- pushStream
   let push (Result res) = push_ res
       push EndOfResults = close
-      done = Streamly.mapM_ return results
+      done = Stream.mapM_ return results
   return (push, return results, Tagged done)
 
 _call ::
@@ -126,7 +124,7 @@ instance ( Serializable fmt req
   makeClient ::
        t
     -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Streaming res))
-    -> (Time Second -> req -> IO (Streamly.Serial res))
+    -> (Time Second -> req -> IO (Stream res))
   makeClient t _ =
     _call
       @fmt
@@ -166,7 +164,7 @@ instance ( Serializable fmt req
   makeClient ::
        t
     -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Streaming res))
-    -> (Time Second -> req -> IO (Streamly.Serial res))
+    -> (Time Second -> req -> IO (Stream res))
   makeClient t _ =
     _call
       @fmt

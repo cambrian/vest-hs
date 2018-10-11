@@ -3,14 +3,12 @@ module Vest.Bridge.PubSub.Subscriber
   ) where
 
 import Vest.Bridge.PubSub.Prelude
-import qualified Streamly
 import Vest.Prelude
 
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Topic _ _ _ _ a) = ( IO' "Unsubscribe" ()
-                                         , Streamly.Serial a)
+  SubscriberBindings (Topic _ _ _ _ a) = (IO' "Unsubscribe" (), Stream a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -48,7 +46,7 @@ instance ( HasNamespace t
   subscribe ::
        t
     -> Proxy (Topic fmt t transport name a)
-    -> IO (IO' "Unsubscribe" (), Streamly.Serial a)
+    -> IO (IO' "Unsubscribe" (), Stream a)
   subscribe t _ = do
     (push_, Tagged close, stream) <- pushStream
     let push = push_ <=< deserializeUnsafe' @fmt

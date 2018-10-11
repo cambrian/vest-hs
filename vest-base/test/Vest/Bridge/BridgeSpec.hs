@@ -3,8 +3,7 @@ module Vest.Bridge.BridgeSpec
   ) where
 
 import qualified Data.List
-import qualified Streamly
-import qualified Streamly.Prelude as Streamly
+import qualified Stream
 import Test.Hspec
 import Vest.Bridge
 import Vest.Bridge.Rpc.Prelude ()
@@ -59,9 +58,9 @@ withT f =
 echoDirect :: T -> a -> IO a
 echoDirect _ x = threadDelay (sec 0.01) >> return x
 
-echoStreaming :: T -> [a] -> IO (Streamly.Serial a)
+echoStreaming :: T -> [a] -> IO (Stream a)
 echoStreaming _ xs =
-  return $ Streamly.fromList xs & Streamly.mapM (<$ threadDelay (sec 0.01))
+  return $ Stream.fromList xs & Stream.mapM (<$ threadDelay (sec 0.01))
 
 handlers :: Handlers (TestRpcApi Amqp.T)
 handlers = echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming
@@ -76,7 +75,7 @@ withRpcClient _ f =
     serve handlers t (Proxy :: Proxy (TestRpcApi transport))
     f $ makeClient t (Proxy :: Proxy spec)
 
-increment :: Streamly.Serial Int
+increment :: Stream Int
 increment =
   let f s = do
         threadDelay (sec 0.01)
@@ -84,7 +83,7 @@ increment =
           if s < 5
             then Just (s, s + 1 :: Int)
             else Nothing
-   in Streamly.unfoldrM f 0
+   in Stream.unfoldrM f 0
 
 type IncrementTopic transport = Topic "Haskell" T transport "increment" Int
 
@@ -152,15 +151,15 @@ singleStreamingTest =
   context "with a single streaming RPC" $ do
     it "receives the last result for a single call" $ \call -> do
       results <- call (sec 1) [1, 2, 3]
-      (Streamly.toList results >>- elem 3) `shouldReturn` True
+      (Stream.toList results >>- elem 3) `shouldReturn` True
     it "sees the last item for every fanout" $ \call -> do
       results <- call (sec 1) [1, 2, 3]
-      (Streamly.toList results >>- elem 3) `shouldReturn` True
-      (Streamly.toList results >>- elem 3) `shouldReturn` True
+      (Stream.toList results >>- elem 3) `shouldReturn` True
+      (Stream.toList results >>- elem 3) `shouldReturn` True
       -- Note: The timeout is not identified properly if the results are not forced.
     it "times out for a single call" $ \call ->
       (do results <- call (sec 0) [1, 2, 3]
-          resultList <- Streamly.toList results
+          resultList <- Stream.toList results
           print resultList) `shouldThrow`
       (== TimeoutException (sec 0))
 
@@ -193,13 +192,13 @@ multipleStreamingTest =
     it "sees the last item for each call" $ \(echoInts :<|> echoTexts) -> do
       resultsInt <- echoInts (sec 1) [1, 2, 3]
       resultsText <- echoTexts (sec 1) ["a", "b", "c"]
-      (Streamly.toList resultsInt >>- elem 3) `shouldReturn` True
-      (Streamly.toList resultsText >>- elem "c") `shouldReturn` True
+      (Stream.toList resultsInt >>- elem 3) `shouldReturn` True
+      (Stream.toList resultsText >>- elem "c") `shouldReturn` True
     it "handles concurrent calls" $ \(echoInts :<|> _) -> do
       results1 <- echoInts (sec 1) $ replicate 3 1
       results2 <- echoInts (sec 1) $ replicate 3 2
-      resultList1 <- Streamly.toList results1
-      resultList2 <- Streamly.toList results2
+      resultList1 <- Stream.toList results1
+      resultList2 <- Stream.toList results2
       resultList1 `shouldSatisfy` Data.List.all (== 1)
       resultList2 `shouldSatisfy` Data.List.all (== 2)
 
@@ -210,7 +209,7 @@ pubSubTest' =
   around (withSubscribed @transport (Proxy :: Proxy (IncrementTopic transport))) $
   context "when publishing an incrementing stream" $
   it "functions correctly on the subscribing end" $ \(_id, results) ->
-    Streamly.toList (Streamly.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
+    Stream.toList (Stream.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
 
 directTests ::
      forall transport. HasRpcTransport transport T

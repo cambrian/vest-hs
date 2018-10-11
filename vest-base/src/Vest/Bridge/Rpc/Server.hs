@@ -2,10 +2,9 @@ module Vest.Bridge.Rpc.Server
   ( module Vest.Bridge.Rpc.Server
   ) where
 
+import qualified Stream
 import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
-import qualified Streamly
-import qualified Streamly.Prelude as Streamly
 import Vest.Prelude
 
 type family Routes spec where
@@ -25,9 +24,9 @@ type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 type family Handlers spec where
   Handlers () = ()
   Handlers (Endpoint _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
-  Handlers (Endpoint _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream res)
   Handlers (Endpoint _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Streamly.Serial res)
+  Handlers (Endpoint _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -74,9 +73,9 @@ instance ( HasUniqueRoutes (a
 directSender :: (res -> IO ()) -> res -> IO ()
 directSender send = send
 
-streamingSender :: (ResultItem res -> IO ()) -> Streamly.Serial res -> IO ()
+streamingSender :: (ResultItem res -> IO ()) -> Stream res -> IO ()
 streamingSender send resStream = do
-  Streamly.mapM_ (send . Result) resStream
+  Stream.mapM_ (send . Result) resStream
   send EndOfResults
 
 _serve ::
@@ -138,7 +137,7 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint fmt 'NoAuth t transport route req ('Streaming res)) where
   serve ::
-       (t -> req -> IO (Streamly.Serial res))
+       (t -> req -> IO (Stream res))
     -> t
     -> Proxy (Endpoint fmt 'NoAuth t transport route req ('Streaming res))
     -> IO ()
@@ -182,7 +181,7 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint fmt ('Auth auth) t transport route req ('Streaming res)) where
   serve ::
-       (t -> AuthClaims auth -> req -> IO (Streamly.Serial res))
+       (t -> AuthClaims auth -> req -> IO (Stream res))
     -> t
     -> Proxy (Endpoint fmt ('Auth auth) t transport route req ('Streaming res))
     -> IO ()

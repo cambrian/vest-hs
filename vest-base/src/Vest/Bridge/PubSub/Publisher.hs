@@ -2,9 +2,8 @@ module Vest.Bridge.PubSub.Publisher
   ( module Vest.Bridge.PubSub.Publisher
   ) where
 
+import qualified Stream
 import Vest.Bridge.PubSub.Prelude
-import qualified Streamly
-import qualified Streamly.Prelude as Streamly
 import Vest.Prelude
 
 type family Topics spec where
@@ -27,7 +26,7 @@ data PubSubPublisherException =
 
 type family Streams spec where
   Streams () = ()
-  Streams (Topic _ _ _ _ a) = Streamly.Serial a
+  Streams (Topic _ _ _ _ a) = Stream a
   Streams (a
            :<|> b) = (Streams a
                       :<|> Streams b)
@@ -68,10 +67,9 @@ instance ( HasNamespace t
          , KnownSymbol name
          ) =>
          Publisher t (Topic f t transport name a) where
-  publish ::
-       Streamly.Serial a -> t -> Proxy (Topic f t transport name a) -> IO ()
+  publish :: Stream a -> t -> Proxy (Topic f t transport name a) -> IO ()
   publish stream t _ =
     _publish
-      (\send -> Streamly.mapM_ (send . serialize' @f) stream)
+      (\send -> Stream.mapM_ (send . serialize' @f) stream)
       (namespaced' @t $ proxyText' (Proxy :: Proxy name))
       (pubSubTransport @transport t)

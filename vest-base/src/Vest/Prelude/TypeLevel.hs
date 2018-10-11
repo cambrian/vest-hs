@@ -61,7 +61,7 @@ type family (x :: [k]) :++ (y :: [k]) :: [k] where
   (x ': xs) :++ ys = x ': (xs :++ ys)
 
 class SymbolTexts' (xs :: [Symbol]) where
-  symbolTexts' :: proxy xs -> [Text' t]
+  symbolTexts' :: Proxy xs -> [Text' t]
 
 instance SymbolTexts' '[] where
   symbolTexts' _ = []
