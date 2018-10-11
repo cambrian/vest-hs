@@ -15,10 +15,7 @@ import Data.HashSet as Vest.Prelude.Core (HashSet)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
 import Data.Proxy as Vest.Prelude.Core
 import Protolude as Vest.Prelude.Core hiding
-  ( Fixity
-  , Infix
-  , Prefix
-  , bracket
+  ( bracket
   , bracketOnError
   , bracket_
   , catch
@@ -41,11 +38,10 @@ import Protolude as Vest.Prelude.Core hiding
   )
 
 import Data.Aeson as Vest.Prelude.Core (FromJSON, ToJSON)
-import Data.Data as Vest.Prelude.Core
+import Data.Data as Vest.Prelude.Core (Data(..))
 import Data.Tagged as Vest.Prelude.Core
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import qualified Foreign.StablePtr as StablePtr
-import GHC.TypeLits as Vest.Prelude.Core (AppendSymbol)
 
 type Int' t = Tagged t Int
 

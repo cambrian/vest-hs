@@ -11,7 +11,7 @@ import Data.Bifunctor (Bifunctor(..))
 import Data.Bitraversable (Bitraversable(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Type.Bool as Vest.Prelude.TypeLevel
-import GHC.TypeLits
+import GHC.TypeLits as Vest.Prelude.TypeLevel (AppendSymbol)
 import Vest.Prelude.Core
 
 -- Union of two APIs. Adapted from Servant.
