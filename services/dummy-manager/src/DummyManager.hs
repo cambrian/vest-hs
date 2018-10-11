@@ -13,12 +13,12 @@ import Vest
 data DummyAuth =
   DummyAuth
 
-instance Verifier DummyAuth where
-  type Claims DummyAuth = ()
-  verifyRequest _ _ _ = Just ()
+instance RequestVerifier DummyAuth where
+  type VerifierClaims DummyAuth = ()
+  verifyRequest _ _ _ = return $ Just ()
 
-instance Signer DummyAuth where
-  signRequest _ headers _ = headers
+instance RequestSigner DummyAuth where
+  signRequest _ headers _ = return headers
 
 instance Auth DummyAuth where
   type AuthVerifier DummyAuth = DummyAuth
@@ -88,11 +88,15 @@ echoThrice _ x = do
   return . Streamly.fromList . replicate 3 $ x
 
 concatTextAuth ::
-     T -> Claims DummyAuth -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
+     T
+  -> VerifierClaims DummyAuth
+  -> ConcatTextAuthRequest
+  -> IO ConcatTextAuthResponse
 concatTextAuth _ _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
-echoThriceAuth :: T -> Claims DummyAuth -> Text -> IO (Streamly.Serial Text)
+echoThriceAuth ::
+     T -> VerifierClaims DummyAuth -> Text -> IO (Streamly.Serial Text)
 echoThriceAuth _ _ = return . Streamly.fromList . replicate 3
 
 handlers :: Handlers Api

@@ -16,10 +16,10 @@ modules should stay in sync with one another, even if they use different version
 dependencies).
 
 ## Updating Types
-1. Run `stack exec ts-types typescript/bridge-client/src/generated/types.ts` from the root of this
+1. Run `stack exec ts-types > typescript/bridge-client/src/generated/types.ts` from the root of this
    repository. If this script errors or (more likely) did not compile in the first place, add
    TypeScript derivations where necessary in the codebase.
-2. Run `stack exec ts-callers typescript/bridge-client/templates/callers.ede typescript/bridge-client/src/generated/callers.ts`
+2. Run `stack exec ts-callers typescript/bridge-client/templates/callers.ede > typescript/bridge-client/src/generated/callers.ts`
    from the root of this repository.
 3. The `bridge-client` should now fail to compile. Follow the instructions in `index.ts` to
    successfully integrate the new types.
