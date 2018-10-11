@@ -3,7 +3,7 @@ module Vest.Prelude.Stream
   ) where
 
 import qualified Streamly
-import qualified Streamly.Prelude as Streamly
+import qualified Streamly.Prelude as Stream
 import Vest.Prelude.Core
 
 type Stream a = Streamly.Serial a
@@ -28,7 +28,7 @@ pushStream = do
       close =
         atomically $ modifyTVar' t (\(x, _, counter) -> (x, True, counter))
       stream =
-        Streamly.unfoldrM
+        Stream.unfoldrM
           (\highestSeen ->
              atomically $ do
                (value, closed, counter) <- readTVar t
@@ -43,16 +43,16 @@ pushStream = do
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar is Nothing until the first value is received.
-makeStreamVar :: Streamly.Serial a -> IO (TVar (Maybe a))
+makeStreamVar :: Stream a -> IO (TVar (Maybe a))
 makeStreamVar as = do
   var <- newTVarIO Nothing
-  async $ Streamly.mapM_ (atomically . writeTVar var . Just) as
+  async $ Stream.mapM_ (atomically . writeTVar var . Just) as
   return var
 
 -- Creates a TVar that is updated with the latest value from as.
 -- The TVar has an explicit initial value.
-makeStreamVar' :: a -> Streamly.Serial a -> IO (TVar a)
+makeStreamVar' :: a -> Stream a -> IO (TVar a)
 makeStreamVar' init as = do
   var <- newTVarIO init
-  async $ Streamly.mapM_ (atomically . writeTVar var) as
+  async $ Stream.mapM_ (atomically . writeTVar var) as
   return var
