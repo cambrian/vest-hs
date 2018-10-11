@@ -7,7 +7,6 @@ module Vest.Bridge.Transports.WebSocket
   , localConfig
   ) where
 
-import Vest.Bridge.Rpc
 import qualified Control.Exception as Exception
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
@@ -15,6 +14,7 @@ import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
+import Vest.Bridge.Rpc
 import Vest.Prelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -152,15 +152,16 @@ serveClient ::
   -> Text' "ClientId"
   -> WS.Connection
   -> IO ()
+-- ^ If the message fails to parse or the route is not served, swallows the request.
 serveClient serverRequestHandlers clientId conn =
   forever $ do
     msg <- WS.receiveData conn
-    deserialize @"JSON" msg >|>| -- Do nothing if request message does not deserialize.
+    forM_
+      (deserialize @"JSON" msg)
       (\reqMsg -> do
          let RequestMessage {route} = reqMsg
          maybeHandler <- HashTable.lookup serverRequestHandlers route
-         -- If the route is not served, swallow the request.
-         maybeHandler >|>| (\h -> h clientId reqMsg))
+         forM_ maybeHandler (\h -> h clientId reqMsg))
 
 wsClientApp ::
      HashTable (Text' "RequestId") (Text' "Response" -> IO ())
@@ -175,7 +176,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
          Just ResponseMessage {requestId, resText} -> do
            maybeHandler <- HashTable.lookup clientResponseHandlers requestId
             -- If the route is not served, swallow the request.
-           maybeHandler >|>| ($ resText))
+           forM_ maybeHandler ($ resText))
     (const . forever $ do
        request <- takeMVar requestMVar
        WS.sendTextData conn (serialize @"JSON" request))

@@ -1,5 +1,8 @@
-module Vest.Service where
+module Vest.Service
+  ( module Vest.Service
+  ) where
 
+import System.Console.CmdArgs as Vest.Service
 import Vest.Bridge
 import Vest.Prelude
 

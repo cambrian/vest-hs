@@ -238,8 +238,9 @@ webSocketTestConfig =
             , path = Tagged "/"
             , routes =
                 map
-                  (namespaced' @T . Tagged . pack)
-                  (symbolVals (Proxy :: Proxy (Routes (TestRpcApi WebSocket.T))))
+                  (namespaced' @T)
+                  (symbolTexts'
+                     (Proxy :: Proxy (Routes (TestRpcApi WebSocket.T))))
             }
         ]
     }

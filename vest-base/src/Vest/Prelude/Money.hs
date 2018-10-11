@@ -1,11 +1,14 @@
-module Vest.Money
-  ( module Vest.Money
+module Vest.Prelude.Money
+  ( module Vest.Prelude.Money
   ) where
 
 import Money
-import Money.Aeson ()
-import Vest.Prelude
+import Vest.Prelude.Core
 
+-- use:
+-- import Vest
+-- import qualified Money
+-- (this refers to the external Money package)
 type instance Scale "XTZ" "XTZ" = '(1000000, 1)
 
 type instance Scale "XTZ" "tezos" = '(1, 1)

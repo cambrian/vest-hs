@@ -1,4 +1,4 @@
-module Vest.ECDSA
+module Vest.Prelude.ECDSA
   ( module Reexports
   , SignedText'
   , sign'
@@ -17,7 +17,7 @@ import Crypto.PubKey.ECC.ECDSA as Reexports
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
 import qualified Crypto.PubKey.ECC.Types as Types
 import Data.Aeson (FromJSONKey, ToJSONKey)
-import Vest.Prelude
+import Vest.Prelude.Core
 
 deriving instance Generic Types.CurveBinary
 

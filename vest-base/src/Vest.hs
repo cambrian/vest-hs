@@ -4,7 +4,5 @@ module Vest
   ) where
 
 import Vest.Bridge as Reexports
-import Vest.ECDSA as Reexports
-import Vest.Money as Reexports
-import Vest.Prelude as Reexports
+import Vest.Prelude as Reexports hiding (ignore)
 import Vest.Service as Reexports

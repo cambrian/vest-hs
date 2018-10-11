@@ -4,12 +4,12 @@ module Vest.Bridge.Transports.Amqp
   , localConfig
   ) where
 
-import Vest.Bridge.PubSub
-import Vest.Bridge.Rpc
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
+import Vest.Bridge.PubSub
+import Vest.Bridge.Rpc
 import Vest.Prelude
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -93,7 +93,7 @@ instance Resource T where
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           (read . fromAmqpMsg $ msg) >|>| handleMsg
+           forM_ (read $ fromAmqpMsg msg) handleMsg
            -- ^ Do nothing if response message malformed.
            AMQP.ackEnv env)
     consumedRoutes <- HashTable.new
@@ -160,7 +160,7 @@ instance RpcTransport T where
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           (read . fromAmqpMsg $ msg) >|>| asyncHandle -- Do nothing if message fails to read.
+           forM_ (read $ fromAmqpMsg msg) asyncHandle -- Do nothing if message fails to read.
            AMQP.ackEnv env)
     HashTable.insert consumedRoutes route (consumerChan, consumerTag)
   _issueRequest ::
