@@ -87,11 +87,11 @@ library:
   # - tezos-dispatcher/src
 
 executables:
-  access-control:
-    main:                 Main.hs
-    source-dirs:          access-control/bin
-    dependencies:
-    - services
+  # access-control:
+  #   main:                 Main.hs
+  #   source-dirs:          access-control/bin
+  #   dependencies:
+  #   - services
   dummy-manager:
     main:                 Main.hs
     source-dirs:          dummy-manager/bin
@@ -109,15 +109,15 @@ executables:
   #   - services
 
 tests:
-  access-control-test:
-    main:                       Spec.hs
-    source-dirs:                access-control/test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - services
+  # access-control-test:
+  #   main:                       Spec.hs
+  #   source-dirs:                access-control/test
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
+  #   dependencies:
+  #   - services
   dummy-manager-test:
     main:                       Spec.hs
     source-dirs:                dummy-manager/test

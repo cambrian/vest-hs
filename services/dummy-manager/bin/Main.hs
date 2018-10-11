@@ -1,5 +1,3 @@
-import Bridge
-import qualified Bridge.Transports.WebSocket as WebSocket
 import DummyManager
 import Vest
 
