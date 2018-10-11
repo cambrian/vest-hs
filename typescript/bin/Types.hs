@@ -1,12 +1,18 @@
-import Bridge.Rpc.Prelude (Headers, ResultItem, RpcClientException)
+import Bridge.Rpc.Prelude (ResultItem, RpcClientException)
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
-import BridgeClient
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types ()
 import qualified DummyManager
 import System.Random
 import Text.Replace
-import VestPrelude
+import Typescript
+import Vest.Prelude
+
+typesToGenerate :: [[TSDeclaration]]
+typesToGenerate =
+  [ generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
+  -- Put any additional APIs here.
+  ]
 
 version :: IO Text
 version = do
@@ -27,6 +33,7 @@ replaceRules =
       "export type Text<T extends string> = Tagged<T, string>"
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
+  , Replace "Text_<\"Header\">" "string"
   , Replace "Text_" "Text"
   , Replace "\"" "\'"
   , Replace ";" ""
@@ -52,14 +59,12 @@ main = do
       (versionText <> tagged <>
        (pack . formatTSDeclarations . concat $
         [ getTypeScriptDeclarations (Proxy :: Proxy Text_)
-        , getTypeScriptDeclarations (Proxy :: Proxy SerializationFormat)
-        , getTypeScriptDeclarations (Proxy :: Proxy Headers)
+        , getTypeScriptDeclarations (Proxy :: Proxy DeserializeException)
         , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
         , getTypeScriptDeclarations
             (Proxy :: Proxy (Either RpcClientException Text))
         , getTypeScriptDeclarations (Proxy :: Proxy ResultItem)
         , getTypeScriptDeclarations (Proxy :: Proxy RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy ResponseMessage)
-        , generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
-        ]) <>
-       "\n")
+        , concat typesToGenerate
+        ]))

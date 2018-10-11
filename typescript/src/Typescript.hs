@@ -2,36 +2,22 @@ module Typescript
   ( module Typescript
   ) where
 
-import qualified Bridge.Rpc.Auth.Token as Token
 import Bridge.Rpc.Prelude
   ( AuthOrNoAuth(..)
   , DirectOrStreaming(..)
   , Endpoint
-  , Headers
   , ResultItem
   , RpcClientException
   )
 import Bridge.Transports.WebSocket (RequestMessage, ResponseMessage)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
-import VestPrelude
-
--- Hacky way to match on auth type when we generate TypeScript callers, since we can't use the type
--- family for that purpose. Sometime might be worth cleaning up.
-data AuthType
-  = NoAuth'
-  | TokenAuth'
-  deriving (Show)
-
--- See note for AuthType.
-data DirectOrStreamingType
-  = DirectType
-  | StreamingType
-  deriving (Show)
+import DummyManager (DummyAuth)
+import Vest.Prelude
 
 data SpecTsTypes = SpecTsTypes
-  { directOrStreamingType :: DirectOrStreamingType
-  , authType :: AuthType
+  { hasAuth :: Bool
+  , isStreaming :: Bool
   , route :: Text' "route"
   , req :: Text' "tsReqType"
   , res :: Text' "tsResType"
@@ -64,38 +50,20 @@ instance (Collector a, Collector b) =>
     makeSpecTsTypes (Proxy :: Proxy a) ++ makeSpecTsTypes (Proxy :: Proxy b)
 
 instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint service 'NoAuth (route :: Symbol) req ('Direct res)) where
+         Collector (Endpoint format 'NoAuth service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
-       Proxy (Endpoint service auth route req ('Direct res)) -> [TSDeclaration]
-  generateTsDeclarations _ =
-    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
-    (getTypeScriptDeclarations (Proxy :: Proxy res))
-  makeSpecTsTypes ::
-       Proxy (Endpoint service auth route req ('Direct res)) -> [SpecTsTypes]
-  makeSpecTsTypes _ =
-    [ SpecTsTypes
-        { directOrStreamingType = DirectType
-        , authType = NoAuth'
-        , route = proxyText' (Proxy :: Proxy route)
-        , req = toTsTypeText' (Proxy :: Proxy req)
-        , res = toTsTypeText' (Proxy :: Proxy res)
-        }
-    ]
-
-instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint service 'NoAuth (route :: Symbol) req ('Streaming res)) where
-  generateTsDeclarations ::
-       Proxy (Endpoint service auth route req ('Streaming res))
+       Proxy (Endpoint format auth service transport route req ('Direct res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
   makeSpecTsTypes ::
-       Proxy (Endpoint service auth route req ('Streaming res)) -> [SpecTsTypes]
+       Proxy (Endpoint format auth service transport route req ('Direct res))
+    -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
-        { directOrStreamingType = StreamingType
-        , authType = NoAuth'
+        { hasAuth = False
+        , isStreaming = False
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
@@ -103,38 +71,62 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     ]
 
 instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint service ('Auth Token.T) (route :: Symbol) req ('Direct res)) where
+         Collector (Endpoint format 'NoAuth service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
-       Proxy (Endpoint service auth route req ('Direct res)) -> [TSDeclaration]
-  generateTsDeclarations _ =
-    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
-    (getTypeScriptDeclarations (Proxy :: Proxy res))
-  makeSpecTsTypes ::
-       Proxy (Endpoint service auth route req ('Direct res)) -> [SpecTsTypes]
-  makeSpecTsTypes _ =
-    [ SpecTsTypes
-        { directOrStreamingType = DirectType
-        , authType = TokenAuth'
-        , route = proxyText' (Proxy :: Proxy route)
-        , req = toTsTypeText' (Proxy :: Proxy req)
-        , res = toTsTypeText' (Proxy :: Proxy res)
-        }
-    ]
-
-instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint service ('Auth Token.T) (route :: Symbol) req ('Streaming res)) where
-  generateTsDeclarations ::
-       Proxy (Endpoint service auth route req ('Streaming res))
+       Proxy (Endpoint format auth service transport route req ('Streaming res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
   makeSpecTsTypes ::
-       Proxy (Endpoint service auth route req ('Streaming res)) -> [SpecTsTypes]
+       Proxy (Endpoint format auth service transport route req ('Streaming res))
+    -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
-        { directOrStreamingType = StreamingType
-        , authType = TokenAuth'
+        { hasAuth = False
+        , isStreaming = True
+        , route = proxyText' (Proxy :: Proxy route)
+        , req = toTsTypeText' (Proxy :: Proxy req)
+        , res = toTsTypeText' (Proxy :: Proxy res)
+        }
+    ]
+
+instance (KnownSymbol route, TypeScript req, TypeScript res) =>
+         Collector (Endpoint format ('Auth DummyAuth) service transport (route :: Symbol) req ('Direct res)) where
+  generateTsDeclarations ::
+       Proxy (Endpoint format auth service transport route req ('Direct res))
+    -> [TSDeclaration]
+  generateTsDeclarations _ =
+    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
+    (getTypeScriptDeclarations (Proxy :: Proxy res))
+  makeSpecTsTypes ::
+       Proxy (Endpoint format auth service transport route req ('Direct res))
+    -> [SpecTsTypes]
+  makeSpecTsTypes _ =
+    [ SpecTsTypes
+        { hasAuth = True
+        , isStreaming = False
+        , route = proxyText' (Proxy :: Proxy route)
+        , req = toTsTypeText' (Proxy :: Proxy req)
+        , res = toTsTypeText' (Proxy :: Proxy res)
+        }
+    ]
+
+instance (KnownSymbol route, TypeScript req, TypeScript res) =>
+         Collector (Endpoint format ('Auth DummyAuth) service transport (route :: Symbol) req ('Streaming res)) where
+  generateTsDeclarations ::
+       Proxy (Endpoint format auth service transport route req ('Streaming res))
+    -> [TSDeclaration]
+  generateTsDeclarations _ =
+    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
+    (getTypeScriptDeclarations (Proxy :: Proxy res))
+  makeSpecTsTypes ::
+       Proxy (Endpoint format auth service transport route req ('Streaming res))
+    -> [SpecTsTypes]
+  makeSpecTsTypes _ =
+    [ SpecTsTypes
+        { hasAuth = True
+        , isStreaming = True
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
@@ -165,9 +157,7 @@ instance (KnownSymbol s) => TypeScript (NamespacedText' (s :: Symbol)) where
 -- This is repetitive, but since the splicing happens at compile time and certain types depend on
 -- other types having instances of TypeScript, we separate out the derivation splices. For the same
 -- reason
-$(deriveTypeScript defaultOptions ''SerializationFormat)
-
-$(deriveTypeScript defaultOptions ''Headers)
+$(deriveTypeScript defaultOptions ''DeserializeException)
 
 $(deriveTypeScript defaultOptions ''RpcClientException)
 

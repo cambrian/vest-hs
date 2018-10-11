@@ -1,31 +1,44 @@
-import BridgeClient
 import Data.Aeson.Types (Object)
 import Data.Text.Lazy (toStrict)
 import qualified DummyManager
+import Service
 import System.Directory
 import System.FilePath
 import Text.EDE
-import VestPrelude
+import Typescript
+import Vest.Prelude
 
-specTsTypesToObject :: SpecTsTypes -> Object
-specTsTypesToObject SpecTsTypes { directOrStreamingType
-                                , authType
-                                , route
-                                , req
-                                , res
-                                } =
+callersToGenerate :: [Object]
+callersToGenerate =
+  [ specToNamespaceObject
+      (Proxy :: Proxy DummyManager.T, Proxy :: Proxy DummyManager.Api)
+  -- NOTE: Put any additional APIs here.
+  ]
+
+specTsTypesToObject ::
+     forall service. (Service service)
+  => Proxy service
+  -> SpecTsTypes
+  -> Object
+specTsTypesToObject _ SpecTsTypes {hasAuth, isStreaming, route, req, res} =
   fromPairs
-    [ "streaming" .=
-      case directOrStreamingType of
-        DirectType -> False
-        StreamingType -> True
-    , "auth" .=
-      case authType of
-        NoAuth' -> False
-        TokenAuth' -> True
+    [ "auth" .= hasAuth
+    , "streaming" .= isStreaming
     , "route" .= route
+    , "namespacedRoute" .= namespaced' @service route
     , "req" .= req
     , "res" .= res
+    ]
+
+specToNamespaceObject ::
+     forall service spec. (Service service, Collector spec)
+  => (Proxy service, Proxy spec)
+  -> Object
+specToNamespaceObject (proxyService, proxySpec) =
+  fromPairs
+    [ "namespace" .= serviceName @service
+    , "specs" .=
+      map (specTsTypesToObject proxyService) (makeSpecTsTypes proxySpec)
     ]
 
 data Args = Args
@@ -44,11 +57,5 @@ main = do
   let Args {templateFile} = parsedArgs
   wd <- getCurrentDirectory
   template <- eitherParseFile $ wd </> unpack templateFile
-  either (die . pack) (putText . toStrict) $ template >>= (`eitherRender` env)
-  where
-    env =
-      fromPairs
-        [ "list" .=
-          ((map specTsTypesToObject $
-            makeSpecTsTypes (Proxy :: Proxy DummyManager.Api)) :: [Object])
-        ]
+  either (die . pack) (putText . toStrict) $
+    template >>= (`eitherRender` fromPairs ["services" .= callersToGenerate])

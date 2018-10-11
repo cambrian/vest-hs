@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-noncanonical-monoid-instances #-}
+
 -- Union of two APIs. Adapted from Servant.
 module Vest.Prelude.Alternative
   ( (:<|>)(..)
