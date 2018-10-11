@@ -7,7 +7,7 @@ import Vest
 data Permission
   = A
   | B
-  deriving (Eq, Read, Show, Generic, Hashable, ToJSON, FromJSON)
+  deriving (Eq, Ord, Read, Show, Generic, Hashable, ToJSON, FromJSON)
 
 -- TODO: can this boilerplate be inferred??
 -- Probably, using GHC.Generics. Figure that out at some pt.

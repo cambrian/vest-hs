@@ -18,13 +18,12 @@ accessTokenHandler T {access, keyPair, tokenTTL} publicKey = do
           (\permissions roleName ->
              HashSet.union permissions $
              fromMaybe HashSet.empty $ HashMap.lookup roleName roles)
-          (HashSet.empty @Permission)
+          HashSet.empty
           subjectRoles
       token =
         AccessToken
           {publicKey, name, permissions, expiration = timeAdd tokenTTL time}
-      tokenText' = show' token
-  sign' (toPrivateKey keyPair) tokenText'
+  sign' (toPrivateKey keyPair) (show' token)
 
 main :: IO Void
 main = start @T (const $ return ()) (pubKeyHandler :<|> accessTokenHandler)

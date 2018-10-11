@@ -115,6 +115,17 @@ emptyRpcTest =
   context "with empty handlers and API" $
   it "doesn't complain" $ \() -> True `shouldBe` True
 
+emptyPubSubTest :: Spec
+emptyPubSubTest =
+  around
+    (\f ->
+       withT $ \t -> do
+         subscribed <- subscribe t (Proxy :: Proxy ())
+         publish () t (Proxy :: Proxy ())
+         f subscribed) $
+  context "with empty publish and subscribe" $
+  it "doesn't complain" $ \() -> True `shouldBe` True
+
 singleDirectTest ::
      forall transport. HasRpcTransport transport T
   => Spec
@@ -235,7 +246,9 @@ webSocketTestConfig =
 
 spec :: Spec
 spec = do
-  describe "Empty API" emptyRpcTest
+  describe "Empty API" $ do
+    describe "RPC" emptyRpcTest
+    describe "PubSub" emptyPubSubTest
   describe "AMQP bridge" $ do
     describe "Direct RPC" $ mapM_ identity (directTests @Amqp.T)
     describe "Streaming RPC" $ mapM_ identity (streamingTests @Amqp.T)

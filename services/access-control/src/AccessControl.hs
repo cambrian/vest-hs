@@ -49,7 +49,7 @@ instance HasRpcTransport Amqp.T T where
 
 -- TODO: move this into Args. Haven't done so yet because Time is not Data-able
 defaultTokenTTL :: Time Hour
-defaultTokenTTL = hour 24
+defaultTokenTTL = hour 1
 
 instance Service T where
   type ServiceArgs T = AccessControl
