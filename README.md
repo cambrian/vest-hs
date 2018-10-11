@@ -1,18 +1,18 @@
 # vest-hs
 
-Monorepo for all Haskell projects.
+Monorepo for all Haskell packages.
 
 ## FAQ
-- **Where do dependencies go?** Per-project dependencies go in per-project YAML files, but if you
-need to add `extra-deps` (non-LTS version of dependencies), those go in the top-level `stack.yaml`.
+- **Where do dependencies go?** Per-package dependencies go in per-package YAML files, but if you
+need to add `extra-deps` (non-LTS versions of dependencies), those go in the top-level `stack.yaml`.
 
-- **What do I name my sub-module?** Something short like `tezos`. Only add a `vest-` prefix to the
-folder and module name if there is a compilation conflict. _If you are creating a service, it must
+- **What do I name my packages?** Something short like `tezos`. Only add a `vest-` prefix to the
+folder and package name if there is a compilation conflict. _If you are creating a service, it must
 go in the services package. This is very much by design._
 
-- **Do our modules have useful version numbers?** Maybe if we open-source them in the future. For
-now, usage of our modules should not be specified with version constraints (in theory, all of our
-modules should stay in sync with one another, even if they use different versions of their own
+- **Do our packages have useful version numbers?** Maybe if we open-source them in the future. For
+now, usage of our packages should not be specified with version constraints (in theory, all of our
+packages should stay in sync with one another, even if they use different versions of their own
 dependencies).
 
 ## Updating Types
