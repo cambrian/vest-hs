@@ -7,7 +7,7 @@ import Data.Aeson
 import qualified Data.Yaml as Yaml
 import Vest
 
-import AccessControl.Permissions
+import AccessControl.Permissions as AccessControl
 
 data Subject = Subject
   { name :: Text
@@ -28,6 +28,7 @@ data T = T
   { access :: Access
   , amqp :: Amqp.T
   , keyPair :: KeyPair
+  , tokenTTL :: Time Hour
   }
 
 data AccessToken = AccessToken
@@ -46,6 +47,10 @@ type AccessTokenEndpoint
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
 
+-- TODO: move this into Args. Haven't done so yet because Time is not Data-able
+defaultTokenTTL :: Time Hour
+defaultTokenTTL = hour 24
+
 instance Service T where
   type ServiceArgs T = AccessControl
   type RpcSpec T = PubKeyEndpoint
@@ -56,4 +61,6 @@ instance Service T where
     (access :: Access) <- Yaml.decodeFileThrow accessFile
     (keyPair :: KeyPair) <- Yaml.decodeFileThrow keyFile
     print access
-    with Amqp.localConfig (\amqp -> f $ T {access, amqp, keyPair})
+    with
+      Amqp.localConfig
+      (\amqp -> f $ T {access, amqp, keyPair, tokenTTL = defaultTokenTTL})
