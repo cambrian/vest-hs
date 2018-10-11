@@ -74,7 +74,6 @@ withRpcClient ::
 withRpcClient _ f =
   withT $ \t -> do
     serve handlers t (Proxy :: Proxy (TestRpcApi transport))
-    threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
     f $ makeClient t (Proxy :: Proxy spec)
 
 increment :: Streamly.Serial Int
@@ -112,7 +111,6 @@ emptyRpcTest =
     (\f ->
        withT $ \t -> do
          serve () t (Proxy :: Proxy ())
-         threadDelay (sec 0.02) -- Wait for servers to initialize and avoid races.
          f $ makeClient t (Proxy :: Proxy ())) $
   context "with empty handlers and API" $
   it "doesn't complain" $ \() -> True `shouldBe` True

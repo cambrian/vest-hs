@@ -50,6 +50,10 @@ data Config = Config
 localConfig :: Config
 localConfig = Config {servePort = Tagged 3000, pingInterval = 30, servers = []}
 
+-- Note: The "localhost" literal does not work with wsClient.
+isLocalHost :: (Eq a, IsString a) => a -> Bool
+isLocalHost x = x == "localhost" || x == "127.0.0.1"
+
 data WebSocketClientException =
   NoServerForRoute (NamespacedText' "Route")
   deriving (Show, Exception)
@@ -95,7 +99,9 @@ instance Resource T where
                   clientRequestHandlers
                   route
                   (putMVar requestMVar))
-           async $
+           async $ do
+             when (isLocalHost uri) (threadDelay (sec 0.05))
+             -- ^ If this client is connecting to the local machine, wait for the server to start.
              WS.runClient
                (unpack $ untag uri)
                (untag port)
