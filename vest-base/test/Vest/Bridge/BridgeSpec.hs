@@ -246,10 +246,8 @@ spec = do
   describe "Empty API" $ do
     describe "RPC" emptyRpcTest
     describe "PubSub" emptyPubSubTest
-  describe "AMQP Vest.Bridge" $ do
+  describe "Bridge Framework and AMQP Transport" $ do
     describe "Direct RPC" $ mapM_ identity (directTests @Amqp.T)
     describe "Streaming RPC" $ mapM_ identity (streamingTests @Amqp.T)
     describe "Pub/Sub" $ mapM_ identity (pubSubTests @Amqp.T)
-  describe "WebSocket Vest.Bridge" $ do
-    describe "Direct RPC" $ mapM_ identity (directTests @WebSocket.T)
-    describe "Streaming RPC" $ mapM_ identity (streamingTests @WebSocket.T)
+  describe "WebSocket Transport" $ mapM_ identity (streamingTests @WebSocket.T)

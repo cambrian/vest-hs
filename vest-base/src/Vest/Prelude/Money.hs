@@ -17,14 +17,23 @@ type instance Scale "XTZ" "mutez" = '(1000000, 1)
 
 type instance Scale "XTZ" "roll" = '(1, 10000)
 
-instance VestCurrency "USD" "cent"
+type family CurrencyUnit currency where
+  CurrencyUnit "USD" = "cent"
+  CurrencyUnit "XTZ" = "mutez"
 
-instance VestCurrency "XTZ" "mutez"
+type FixedQty currency = Discrete currency (CurrencyUnit currency)
 
-type USD = Discrete "USD" "cent"
+type RationalQty currency = Dense currency
 
-type XTZ = Discrete "XTZ" "mutez"
+class ( KnownSymbol currency
+      , KnownSymbol (CurrencyUnit currency)
+      , GoodScale (Scale currency (CurrencyUnit currency))
+      ) =>
+      Currency currency
 
--- Put empty class at bottom of file because it messes up syntax highlighting.
-class (KnownSymbol currency, KnownSymbol unit, GoodScale (Scale currency unit)) =>
-      VestCurrency currency unit
+
+instance ( KnownSymbol currency
+         , KnownSymbol (CurrencyUnit currency)
+         , GoodScale (Scale currency (CurrencyUnit currency))
+         ) =>
+         Currency currency

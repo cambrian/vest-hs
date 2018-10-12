@@ -6,6 +6,8 @@ import qualified TezosDelegationCore.Db as Db
 import Vest
 import qualified Vest.Bridge.Transports.Amqp as Amqp
 
+import AccessControl (PubKeyEndpoint)
+
 data TezosDelegationCore = Args
   {
   } deriving (Eq, Show, Read, Generic, Data)
@@ -18,6 +20,13 @@ data T = T
   , dbPool :: Pool Db.Connection
   }
 
+type NotifyCycleEndpoint
+   = Endpoint TezosDelegationCore.T 'NoAuth "notifyCycle" Db.Cycle ('Direct ())
+
+type NotifyPayoutEndpoint
+   = Endpoint TezosDelegationCore.T 'NoAuth "notifyPayout" Db.Payout ('Direct ())
+
+
 instance Service T where
   type ServiceArgs T = TezosDelegationCore
   type RpcSpec T = ()
@@ -27,4 +36,5 @@ instance Service T where
     with
       Amqp.localConfig
       (\amqp ->
-         withPool dbPoolConfig Db.localConfig (\dbPool -> f $ T {amqp, dbPool}))
+         withPool dbPoolConfig Db.localConfig (\dbPool -> f $ T {amqp, dbPool}
+         getAccessControlPubKey = makeClient PubKeyEndpoint))

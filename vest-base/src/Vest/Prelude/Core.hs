@@ -37,10 +37,20 @@ import Protolude as Vest.Prelude.Core hiding
   , witness
   )
 
-import Data.Aeson as Vest.Prelude.Core (FromJSON, ToJSON)
+import Control.Monad.Fail (fail)
+import Data.Aeson as Vest.Prelude.Core
+  ( FromJSON(..)
+  , FromJSONKey(..)
+  , ToJSON(..)
+  , ToJSONKey(..)
+  )
+import Data.Aeson (withText)
+import Data.Aeson.Types (FromJSONKeyFunction(..), toJSONKeyText)
+import qualified Data.ByteString.Base64 as Base64
 import Data.Data as Vest.Prelude.Core (Data(..))
 import Data.Tagged as Vest.Prelude.Core
 import Data.Text as Vest.Prelude.Core (pack, unpack)
+import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 import qualified Foreign.StablePtr as StablePtr
 
 type Int' t = Tagged t Int
@@ -56,6 +66,23 @@ instance Hashable a => Hashable (Tagged s a)
 data BugException =
   BugException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
+-- Aeson instances copied from base64-bytestring-type.
+-- Bytestrings are serialized as Latin-1 (ascii) Texts, after base64 encoding.
+instance ToJSON ByteString where
+  toJSON = toJSON . decodeLatin1 . Base64.encode
+  toEncoding = toEncoding . decodeLatin1 . Base64.encode
+
+instance FromJSON ByteString where
+  parseJSON =
+    withText "ByteString" $ either fail pure . Base64.decode . encodeUtf8
+
+instance ToJSONKey ByteString where
+  toJSONKey = toJSONKeyText (decodeLatin1 . Base64.encode)
+
+instance FromJSONKey ByteString where
+  fromJSONKey =
+    FromJSONKeyTextParser $ either fail pure . Base64.decode . encodeUtf8
 
 -- DO NOT USE unless you really really know what you're doing.
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()

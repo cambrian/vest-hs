@@ -4,10 +4,10 @@ import qualified Data.HashSet as HashSet
 import Vest
 
 pubKeyHandler :: T -> () -> IO PublicKey
-pubKeyHandler T {keyPair} () = return $ toPublicKey keyPair
+pubKeyHandler T {publicKey} () = return publicKey
 
 accessTokenHandler :: T -> PublicKey -> IO (SignedText' "AccessToken")
-accessTokenHandler T {access, keyPair, tokenTTL} publicKey = do
+accessTokenHandler T {access, secretKey, tokenTTL} publicKey = do
   time <- now
   let Access {roles, subjects} = access
       Subject {roles = subjectRoles, name} =
@@ -23,7 +23,8 @@ accessTokenHandler T {access, keyPair, tokenTTL} publicKey = do
       token =
         AccessToken
           {publicKey, name, permissions, expiration = timeAdd tokenTTL time}
-  sign' (toPrivateKey keyPair) (show' token)
+      signedToken = sign' secretKey (show' token)
+  return signedToken
 
 main :: IO Void
 main = start @T (const $ return ()) (pubKeyHandler :<|> accessTokenHandler)

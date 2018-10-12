@@ -1,6 +1,5 @@
 import TezosDelegationCore
-import TezosDelegationCore.Api
-import TezosDispatcher.Api
+import TezosDispatcher
 import Vest
 
 main :: IO Void

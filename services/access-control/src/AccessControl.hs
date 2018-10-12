@@ -21,13 +21,14 @@ data Access = Access
 
 data AccessControl = Args
   { accessFile :: FilePath
-  , keyFile :: FilePath
+  , seedFile :: FilePath -- Seed must be exactly 32 bytes.
   } deriving (Data)
 
 data T = T
   { access :: Access
   , amqp :: Amqp.T
-  , keyPair :: KeyPair
+  , publicKey :: PublicKey
+  , secretKey :: SecretKey
   , tokenTTL :: Time Hour
   }
 
@@ -36,7 +37,7 @@ data AccessToken = AccessToken
   , name :: Text
   , permissions :: HashSet Permission
   , expiration :: Timestamp
-  } deriving (Read, Show)
+  } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 type PubKeyEndpoint
    = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
@@ -51,16 +52,23 @@ instance HasRpcTransport Amqp.T T where
 defaultTokenTTL :: Time Hour
 defaultTokenTTL = hour 1
 
+data SeedNot32BytesException =
+  SeedNot32BytesException
+  deriving (Show, Exception)
+
 instance Service T where
   type ServiceArgs T = AccessControl
   type RpcSpec T = PubKeyEndpoint
                    :<|> AccessTokenEndpoint
   type PubSubSpec T = ()
-  defaultArgs = Args {accessFile = "access.yaml", keyFile = "key.yaml"}
-  init Args {accessFile, keyFile} f = do
+  defaultArgs = Args {accessFile = "access.yaml", seedFile = "seed.yaml"}
+  init Args {accessFile, seedFile} f = do
     (access :: Access) <- Yaml.decodeFileThrow accessFile
-    (keyPair :: KeyPair) <- Yaml.decodeFileThrow keyFile
+    (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
+    (publicKey, secretKey) <-
+      fromJustUnsafe SeedNot32BytesException $ createKeypairFromSeed_ seed
     print access
     with
       Amqp.localConfig
-      (\amqp -> f $ T {access, amqp, keyPair, tokenTTL = defaultTokenTTL})
+      (\amqp ->
+         f $ T {access, amqp, publicKey, secretKey, tokenTTL = defaultTokenTTL})

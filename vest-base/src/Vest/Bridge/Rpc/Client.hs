@@ -78,12 +78,12 @@ _call pusher signer route transport timeout req = do
   (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout done
   let headers = HashMap.empty
       reqText = serialize' @fmt req
+      headersWithSignature = signRequest signer headers reqText
       handleResponse resOrExcText = do
         deserializeUnsafe' @fmt resOrExcText >>= \case
           Left exc -> throw (exc :: RpcClientException)
           Right res -> push res
         renewTimeout
-  headersWithSignature <- signRequest signer headers reqText
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
   mainThread <- myThreadId

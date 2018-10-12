@@ -98,8 +98,10 @@ _serve sender verifier handler = _consumeRequests asyncHandle
     asyncHandle headers reqText respond =
       async $
       catch
-        (do claims <-
-              verifyRequest verifier headers reqText >>= fromJustUnsafe BadAuth
+        (do time <- now
+            claims <-
+              fromJustUnsafe BadAuth $
+              verifyRequest verifier headers reqText time
             req <- catch (deserializeUnsafe' @fmt reqText) (throw . BadCall)
             x <- handler claims req
             sender

@@ -2,8 +2,8 @@ module TezosDispatcher
   ( module TezosDispatcher
   ) where
 
+import qualified Transports.Amqp as Amqp
 import Vest
-import qualified Vest.Bridge.Transports.Amqp as Amqp
 
 data TezosDispatcher = Args
   {
@@ -12,6 +12,9 @@ data TezosDispatcher = Args
 data T = T
   { amqp :: Amqp.T
   }
+
+type RewardsEndpoint
+   = Endpoint TezosDispatcher.T 'NoAuth "getRewards" () ('Direct ())
 
 instance Service T where
   type ServiceArgs T = TezosDispatcher
