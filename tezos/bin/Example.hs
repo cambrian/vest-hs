@@ -15,7 +15,7 @@ printMainHeadConstants connection = do
 
 printBlocks :: T -> IO ()
 printBlocks connection = do
-  monitorStream <- stream (request (Proxy :: Proxy MonitorBlocks)) connection
+  monitorStream <- streaming (request (Proxy :: Proxy MonitorBlocks)) connection
   Stream.mapM_ print monitorStream
 
 main :: IO ()

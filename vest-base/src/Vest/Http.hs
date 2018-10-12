@@ -93,8 +93,8 @@ resultLoop main push (Tagged close) pull = do
         Right value -> push value >> resultLoop main push (Tagged close) pull
 
 -- Only returns a stream when the first result has been received.
-stream :: ClientM (ResultStream result) -> T -> IO (Stream result)
-stream client t = do
+streaming :: ClientM (ResultStream result) -> T -> IO (Stream result)
+streaming client t = do
   (push, Tagged close, stream) <- pushStream
   receivedFirst <- newEmptyMVar
   main <- myThreadId
