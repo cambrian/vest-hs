@@ -26,6 +26,8 @@ dependencies:
 - hashtables              >= 1.2  && < 2
 - hostname                >= 1.0  && < 2
 - hspec                   >= 2.5  && < 3
+- http-client             >= 0.5  && < 1
+- http-client-tls         >= 0.3  && < 1
 - http-types              >= 0.12 && < 1
 - o-clock                 >= 1.0  && < 2
 - postgresql-simple       >= 0.5  && < 1
@@ -34,6 +36,8 @@ dependencies:
 - safe-exceptions         >= 0.1  && < 1
 - safe-money              >= 0.7  && < 1
 - safe-money-aeson        >= 0.1  && < 1
+- servant                 >= 0.14 && < 1
+- servant-client          >= 0.14 && < 1
 - singletons              >= 2.4  && < 3
 - stm                     >= 2.4  && < 3
 - stm-delay               >= 0.1  && < 1

@@ -2,48 +2,51 @@ module Tezos
   ( module Tezos
   ) where
 
--- import Network.HTTP.Client.TLS (tlsManagerSettings)
-import qualified GHC.Base
-import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Servant.API hiding (Stream)
-import Servant.Client
-import qualified Stream
-import Tezos.Types
 import Vest
+import Vest.Http
 
-data TezosException =
-  TezosException Text
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+data Block = Block
+  { hash :: Text
+  , level :: Int
+  , proto :: Int
+  , predecessor :: Text
+  , timestamp :: Text
+  , validation_pass :: Int
+  , operations_hash :: Text
+  , fitness :: [Text]
+  , context :: Text
+  , protocol_data :: Text
+  } deriving (Show, Generic, FromJSON)
 
-resultLoop ::
-     (a -> IO ())
-  -> IO' "CloseStream" ()
-  -> IO (Maybe (Either GHC.Base.String a))
-  -> IO ()
-resultLoop push (Tagged close) pull = do
-  resultMaybe <- pull
-  case resultMaybe of
-    Nothing -> close
-    Just result ->
-      case result of
-        Left error -> close >> putText (pack error)
-        Right value -> push value >> resultLoop push (Tagged close) pull
+type MonitorBlocks
+   = "monitor" :> "heads" :> "main" :> StreamGet NewlineFraming JSON (ResultStream Block)
 
-monitorBlocks :: IO (Stream Block)
-monitorBlocks = do
-  (push, Tagged close, stream) <- pushStream
-  manager' <- newManager defaultManagerSettings
-  async $ do
-    either <-
-      runClientM
-        (client (Proxy :: Proxy MonitorBlocks))
-        (mkClientEnv manager' (BaseUrl Http "127.0.0.1" 18731 ""))
-    case either of
-      Left _ -> close >> putText "request failed"
-      Right (ResultStream results) -> results $ resultLoop push (Tagged close)
-  return stream
+data Constants = Constants
+  { proof_of_work_nonce_size :: Int
+  , nonce_length :: Int
+  , max_revelations_per_block :: Int
+  , max_operation_data_length :: Int
+  , preserved_cycles :: Int
+  , blocks_per_cycle :: Int
+  , blocks_per_commitment :: Int
+  , blocks_per_roll_snapshot :: Int
+  , blocks_per_voting_period :: Int
+  , time_between_blocks :: [Text]
+  , endorsers_per_block :: Int
+  , hard_gas_limit_per_operation :: Text
+  , hard_gas_limit_per_block :: Text
+  , proof_of_work_threshold :: Text
+  , tokens_per_roll :: Text
+  , michelson_maximum_type_size :: Int
+  , seed_nonce_revelation_tip :: Text
+  , origination_burn :: Text
+  , block_security_deposit :: Text
+  , endorsement_security_deposit :: Text
+  , block_reward :: Text
+  , endorsement_reward :: Text
+  , cost_per_byte :: Text
+  , hard_storage_limit_per_operation :: Text
+  } deriving (Show, Generic, FromJSON)
 
-printBlocks :: IO ()
-printBlocks = do
-  monitorStream <- monitorBlocks
-  Stream.mapM_ print monitorStream
+type BlockConstants
+   = "chains" :> Capture "chain" Text :> "blocks" :> Capture "block" Text :> "context" :> "constants" :> Get '[ JSON] Constants
