@@ -68,7 +68,7 @@ data BugException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 -- Aeson instances copied from base64-bytestring-type.
--- Bytestrings are serialized as Latin-1 (ascii) Texts, after base64 encoding.
+-- Bytestrings are serialized as Latin-1 (ASCII) Texts, after base64 encoding.
 instance ToJSON ByteString where
   toJSON = toJSON . decodeLatin1 . Base64.encode
   toEncoding = toEncoding . decodeLatin1 . Base64.encode

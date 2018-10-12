@@ -8,6 +8,18 @@ import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
 import Vest.Prelude
 
+-- TODO: streaming endpoints should have better support for timeouts. At some point, refactor the
+-- streaming client binding to something like:
+--
+-- TimeoutPolicy -> Time Second -> req -> (Stream res -> IO a) -> IO a
+--
+-- where TimeoutPolicy = Retry | Throw
+--
+-- This also has the convenient side effect of ensuring that RpcClientExceptions occur within the
+-- body of the call.
+--
+-- Punting until we know a little more about how we use streaming RPCs.
+--
 type family ClientBindings spec where
   ClientBindings () = ()
   ClientBindings (Endpoint _ _ _ _ _ req ('Direct res)) = Time Second -> req -> IO res
@@ -15,15 +27,6 @@ type family ClientBindings spec where
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
-
-class (Auth a) =>
-      HasAuthSigner a t
-  where
-  authSigner :: t -> AuthSigner a
-
--- | Empty auth signer is always defined.
-instance HasAuthSigner () t where
-  authSigner _ = ()
 
 class Client t spec where
   makeClient :: t -> Proxy spec -> ClientBindings spec
@@ -76,17 +79,17 @@ _call ::
 _call pusher signer route transport timeout req = do
   (push, result, Tagged done) <- pusher
   (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout done
+  mainThread <- myThreadId
   let headers = HashMap.empty
       reqText = serialize' @fmt req
       headersWithSignature = signRequest signer headers reqText
       handleResponse resOrExcText = do
         deserializeUnsafe' @fmt resOrExcText >>= \case
-          Left exc -> throw (exc :: RpcClientException)
+          Left (exc :: RpcClientException) -> evilThrowTo mainThread exc
           Right res -> push res
         renewTimeout
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
-  mainThread <- myThreadId
   void . async $ do
     timeoutOrDone_ <- timeoutOrDone
     doCleanup

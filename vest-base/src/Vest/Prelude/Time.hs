@@ -20,16 +20,8 @@ instance FromJSON Timestamp
 
 newtype TimeoutException =
   TimeoutException (Time Second)
-  deriving ( Eq
-           , Ord
-           , Show
-           , Read
-           , Generic
-           , Evil.Exception
-           , Hashable
-           , FromJSON
-           , ToJSON
-           )
+  deriving (Eq, Ord, Show, Read, Generic)
+  deriving anyclass (Evil.Exception, Hashable, FromJSON, ToJSON)
 
 timeoutRenewable ::
      Time Second

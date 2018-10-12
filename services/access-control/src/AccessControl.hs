@@ -2,73 +2,64 @@ module AccessControl
   ( module AccessControl
   ) where
 
-import Data.Aeson
+import qualified AccessControl.Permission as Permission
 import qualified Data.Yaml as Yaml
 import qualified Transports.Amqp as Amqp
 import Vest
 
-import AccessControl.Permissions as AccessControl
-
 data Subject = Subject
   { name :: Text
-  , roles :: HashSet (Text' "RoleName")
-  } deriving (Read, Show, Generic, ToJSON, FromJSON)
-
-data Access = Access
-  { roles :: HashMap (Text' "RoleName") (HashSet Permission)
-  , subjects :: HashMap PublicKey Subject
+  , permissions :: HashSet Permission.T
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data AccessControl = Args
-  { accessFile :: FilePath
+  { subjectsFile :: FilePath
   , seedFile :: FilePath -- Seed must be exactly 32 bytes.
+  , tokenTTLHours :: Int
   } deriving (Data)
 
 data T = T
-  { access :: Access
+  { subjects :: HashMap PublicKey Subject
   , amqp :: Amqp.T
   , publicKey :: PublicKey
   , secretKey :: SecretKey
   , tokenTTL :: Time Hour
   }
 
-data AccessToken = AccessToken
+type Token = SignedText' "AccessToken"
+
+data Access = Access
   { publicKey :: PublicKey
   , name :: Text
-  , permissions :: HashSet Permission
+  , permissions :: HashSet Permission.T
   , expiration :: Timestamp
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
-type PubKeyEndpoint
+type PublicKeyEndpoint
    = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
 
-type AccessTokenEndpoint
-   = Endpoint "Haskell" 'NoAuth T Amqp.T "accessToken" PublicKey ('Direct (SignedText' "AccessToken"))
+type TokenEndpoint
+   = Endpoint "Haskell" 'NoAuth T Amqp.T "token" PublicKey ('Direct Token)
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
 
--- TODO: move this into Args. Haven't done so yet because Time is not Data-able
-defaultTokenTTL :: Time Hour
-defaultTokenTTL = hour 1
-
-data SeedNot32BytesException =
-  SeedNot32BytesException
-  deriving (Show, Exception)
-
 instance Service T where
   type ServiceArgs T = AccessControl
-  type RpcSpec T = PubKeyEndpoint
-                   :<|> AccessTokenEndpoint
+  type RpcSpec T = PublicKeyEndpoint
+                   :<|> TokenEndpoint
   type PubSubSpec T = ()
-  defaultArgs = Args {accessFile = "access.yaml", seedFile = "seed.yaml"}
-  init Args {accessFile, seedFile} f = do
-    (access :: Access) <- Yaml.decodeFileThrow accessFile
+  defaultArgs =
+    Args
+      { subjectsFile = "subjects.yaml"
+      , seedFile = "seed.yaml"
+      , tokenTTLHours = 1
+      }
+  init Args {subjectsFile, seedFile, tokenTTLHours} f = do
+    (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
-    (publicKey, secretKey) <-
-      fromJustUnsafe SeedNot32BytesException $ createKeypairFromSeed_ seed
-    print access
+    (publicKey, secretKey) <- seedKeyPairUnsafe seed
+    let tokenTTL = hour $ fromIntegral tokenTTLHours
     with
       Amqp.localConfig
-      (\amqp ->
-         f $ T {access, amqp, publicKey, secretKey, tokenTTL = defaultTokenTTL})
+      (\amqp -> f $ T {subjects, amqp, publicKey, secretKey, tokenTTL})

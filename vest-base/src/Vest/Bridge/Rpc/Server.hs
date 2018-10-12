@@ -35,15 +35,6 @@ data RpcServerException =
   AlreadyServing (NamespacedText' "Route")
   deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
-class (Auth a) =>
-      HasAuthVerifier a t
-  where
-  authVerifier :: t -> AuthVerifier a
-
--- | Empty auth verifier is always defined.
-instance HasAuthVerifier () t where
-  authVerifier _ = ()
-
 class (HasNamespace t) =>
       Server t spec
   where

@@ -23,6 +23,7 @@ extensions:
 - FlexibleInstances
 - FunctionalDependencies
 - GADTs
+- GeneralizedNewtypeDeriving
 - InstanceSigs
 - KindSignatures
 - LambdaCase

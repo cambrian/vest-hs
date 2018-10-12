@@ -9,7 +9,8 @@ import Vest.Prelude.Core
 
 newtype DeserializeException =
   DeserializeException (Text' "Format", Text)
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+  deriving (Eq, Ord, Show, Read, Generic)
+  deriving anyclass (Exception, Hashable, ToJSON, FromJSON)
 
 class SerializationFormat fmt where
   deserializeException :: Text -> DeserializeException

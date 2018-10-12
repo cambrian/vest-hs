@@ -1,9 +1,14 @@
 module AccessControl.Auth
-  ( module AccessControl.Auth
+  ( T
+  , Claims(..)
+  , Signer(..)
+  , Verifier(..)
+  , HasSigner(..)
+  , HasVerifier(..)
   ) where
 
 import qualified AccessControl
-import AccessControl.Permissions (IsPermission(..))
+import qualified AccessControl.Permission as Permission
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import Vest
@@ -23,25 +28,24 @@ data Claims = Claims
 
 data Signer = Signer
   { secretKey :: SecretKey
-  , accessToken :: SignedText' "AccessToken"
+  , accessToken :: AccessControl.Token
   }
 
+-- | The wrapped PublicKey should be the AccessControl service's publicKey
 newtype Verifier permission =
   Verifier PublicKey
 
-instance (IsPermission permission) =>
-         RequestVerifier (Verifier permission) where
-  type VerifierClaims (Verifier permission) = Claims
+instance (Permission.Is p) => RequestVerifier (Verifier p) where
+  type VerifierClaims (Verifier p) = Claims
   verifyRequest (Verifier accessControlPubKey) headers reqText time = do
     clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
     accessToken <-
-      HashMap.lookup accessTokenHeader headers >>=
-      read @(SignedText' "AccessToken")
-    AccessControl.AccessToken {publicKey, name, permissions, expiration} <-
-      verify' accessControlPubKey accessToken >>=
-      read' @AccessControl.AccessToken
+      HashMap.lookup accessTokenHeader headers >>= read @AccessControl.Token
+    AccessControl.Access {publicKey, name, permissions, expiration} <-
+      verify' accessControlPubKey accessToken >>= read' @AccessControl.Access
     _ <- verify' publicKey (clientSig, reqText)
-    if HashSet.member (runtimeRep @permission) permissions && time < expiration
+    if HashSet.member (Permission.runtimeRep @p) permissions &&
+       time < expiration
       then Just $ Claims {publicKey, name}
       else Nothing
 
@@ -51,6 +55,20 @@ instance RequestSigner Signer where
      in HashMap.insert signatureHeader (show sig) $
         HashMap.insert accessTokenHeader (show accessToken) headers
 
-instance (IsPermission permission) => Auth (T permission) where
-  type AuthSigner (T permission) = Signer
-  type AuthVerifier (T permission) = Verifier permission
+instance (Permission.Is p) => Auth (T p) where
+  type AuthSigner (T p) = Signer
+  type AuthVerifier (T p) = Verifier p
+
+-- | Convenience classes
+class HasSigner t where
+  secretKey :: t -> SecretKey
+  accessToken :: t -> AccessControl.Token
+
+class HasVerifier t where
+  accessControlPublicKey :: t -> PublicKey
+
+instance (Permission.Is p, HasSigner t) => HasAuthSigner (T p) t where
+  authSigner = Signer <$> secretKey <*> accessToken
+
+instance (Permission.Is p, HasVerifier t) => HasAuthVerifier (T p) t where
+  authVerifier = Verifier . accessControlPublicKey
