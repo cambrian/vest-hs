@@ -57,21 +57,21 @@ schemeFromType HttpType = Http
 schemeFromType HttpsType = Https
 
 call :: ClientM res -> T -> IO (Either ServantError res)
-call client T { schemeType
-              , host = Tagged host
-              , port = Tagged port
-              , path = Tagged path
-              , manager
-              } =
+call requester T { schemeType
+                 , host = Tagged host
+                 , port = Tagged port
+                 , path = Tagged path
+                 , manager
+                 } =
   runClientM
-    client
+    requester
     (mkClientEnv
        manager
        (BaseUrl (schemeFromType schemeType) (unpack host) port (unpack path)))
 
 direct :: ClientM result -> T -> IO result
-direct client t = do
-  errorOrResult <- call client t
+direct requester t = do
+  errorOrResult <- call requester t
   case errorOrResult of
     Left error -> throw error
     Right result -> return result
@@ -94,7 +94,7 @@ resultLoop main push (Tagged close) pull = do
 
 -- Only returns a stream when the first result has been received.
 streaming :: ClientM (ResultStream result) -> T -> IO (Stream result)
-streaming client t = do
+streaming requester t = do
   (push, Tagged close, stream) <- pushStream
   receivedFirst <- newEmptyMVar
   main <- myThreadId
@@ -103,7 +103,7 @@ streaming client t = do
           push x
           tryPutMVar receivedFirst ()
   async $ do
-    errorOrResult <- call client t
+    errorOrResult <- call requester t
     case errorOrResult of
       Left error -> close >> evilThrowTo main error
       Right (ResultStream results) ->
