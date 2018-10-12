@@ -15,7 +15,6 @@ data TezosException =
   TezosException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
--- TODO: Un-nest this to make it more composable.
 resultLoop ::
      (a -> IO ())
   -> IO' "CloseStream" ()
