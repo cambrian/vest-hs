@@ -10,6 +10,7 @@ extra-deps:
 - aeson-1.4.1.0
 - beam-postgres-0.3.2.2
 - ede-0.2.9
+- req-1.2.1
 - safe-money-0.7
 - safe-money-aeson-0.1
 - streamly-0.5.1
