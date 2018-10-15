@@ -2,6 +2,8 @@ module Vest.Bridge.Rpc.Prelude
   ( module Vest.Bridge.Rpc.Prelude
   ) where
 
+import qualified Control.Exception as Evil
+import Time.Units (KnownUnitName)
 import Vest.Prelude
 
 -- | This implementation uses callbacks instread of streaming interfaces because Streamly streams
@@ -22,19 +24,34 @@ class RpcTransport t where
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
 
+-- defaultTimeoutSeconds :: Nat
+-- -- ^ timeout value.
+-- defaultTimeoutSeconds = 5
 -- | Reimplementation of Maybe, but is self-documenting.
 data AuthOrNoAuth a
   = NoAuth
   | Auth a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
--- | Streaming endpoints should return cumulative results (missing an intermediate result is ok).
+-- | Streaming endpoints should return cumulative results.
+-- (Missing an intermediate result should be ok.)
 data DirectOrStreaming a
   = Direct a
   | Streaming a
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-data Endpoint serializationFormat (auth :: AuthOrNoAuth *) service transport (route :: k) req (res :: DirectOrStreaming *)
+-- | Base RPC endpoint type.
+-- Streaming endpoints will send a heartbeat immediately once the request is validated, and again
+-- at every (timeoutsPerHeartbeat * timeout) interval if the next result has not been produced yet.
+-- The client binding for a streaming endpoint will throw a HeartbeatLostException if it misses
+-- 2 heartbeats.
+data Endpoint_ (timeoutSeconds :: Nat) serializationFormat (auth :: AuthOrNoAuth *) service transport (route :: k) req (res :: DirectOrStreaming *)
+
+type DefaultTimeoutSeconds = 5
+
+type Endpoint = Endpoint_ DefaultTimeoutSeconds "Haskell"
+
+timeoutsPerHeartbeat :: Ratio Natural
+timeoutsPerHeartbeat = 2
 
 class (RpcTransport transport) =>
       HasRpcTransport transport a
@@ -43,8 +60,9 @@ class (RpcTransport transport) =>
 
 type Headers = HashMap (Text' "Header") Text
 
-data ResultItem a
-  = Result a
+data StreamingResponse a
+  = Heartbeat
+  | Result a
   | EndOfResults
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
@@ -52,3 +70,13 @@ data RpcClientException
   = BadAuth
   | BadCall DeserializeException
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
+
+newtype HeartbeatLostException unit =
+  HeartbeatLostException (TimeoutException unit)
+  deriving (Eq, Ord)
+
+deriving instance
+         (KnownUnitName unit) => Show (HeartbeatLostException unit)
+
+instance (Typeable unit, KnownUnitName unit) =>
+         Evil.Exception (HeartbeatLostException unit)

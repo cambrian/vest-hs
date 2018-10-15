@@ -41,10 +41,10 @@ instance AccessControl.Auth.HasVerifier T where
   accessControlPublicKey = accessControlPublicKey
 
 type PermittedEndpoint
-   = Endpoint "Haskell" ('Auth (AccessControl.Auth.T 'Permission.A)) T Amqp.T "permittedEndpoint" () ('Direct ())
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.A)) T Amqp.T "permittedEndpoint" () ('Direct ())
 
 type NotPermittedEndpoint
-   = Endpoint "Haskell" ('Auth (AccessControl.Auth.T 'Permission.B)) T Amqp.T "notPermittedEndpoint" () ('Direct ())
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.B)) T Amqp.T "notPermittedEndpoint" () ('Direct ())
 
 handler :: T -> AccessControl.Auth.Claims -> () -> IO ()
 handler _ _ _ = return ()
@@ -76,7 +76,7 @@ run t = do
   serve (handler :<|> handler) t (Proxy :: Proxy (RpcSpec T))
   let callPermitted :<|> _callNotPermitted =
         makeClient t (Proxy :: Proxy (RpcSpec T))
-  callPermitted (sec 0.1) ()
+  callPermitted ()
   putText "yay"
   -- callNotPermitted (sec 0.1) ()
 

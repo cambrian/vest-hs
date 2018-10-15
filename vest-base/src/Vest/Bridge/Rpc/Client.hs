@@ -8,22 +8,19 @@ import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
 import Vest.Prelude
 
--- TODO: streaming endpoints should have better support for timeouts. At some point, refactor the
--- streaming client binding to something like:
---
--- TimeoutPolicy -> Time Second -> req -> (Stream res -> IO a) -> IO a
---
--- where TimeoutPolicy = Retry | Throw
---
--- This also has the convenient side effect of ensuring that RpcClientExceptions occur within the
--- body of the call.
---
--- Punting until we know a little more about how we use streaming RPCs.
---
+type StreamCallback res a = (Stream res -> IO a) -> IO a
+
+-- The structure of a streaming RPC call might seem more complicated than expected.
+-- The reason for this is that the result stream may throw a HeartbeatLostException to the calling
+-- thread at any time, so we limit them to within the body of the call by requiring the stream to be
+-- consumed within a callback.
+-- If you want to consume multiple streaming RPCs concurrently, you should nest the callbacks.
+-- This is admittedly ugly but it handles exceptions correctly.
+-- TODO: implement as monad transformer?
 type family ClientBindings spec where
   ClientBindings () = ()
-  ClientBindings (Endpoint _ _ _ _ _ req ('Direct res)) = Time Second -> req -> IO res
-  ClientBindings (Endpoint _ _ _ _ _ req ('Streaming res)) = Time Second -> req -> IO (Stream res)
+  ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Direct res)) = req -> IO res
+  ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Streaming res)) = req -> (Stream res -> IO ()) -> IO ()
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -46,132 +43,160 @@ instance (Client t a, Client t b) =>
   makeClient t _ =
     makeClient t (Proxy :: Proxy a) :<|> makeClient t (Proxy :: Proxy b)
 
-directPusher :: IO (res -> IO (), IO res, IO' "Done" ())
-directPusher = do
-  resultVar <- newEmptyMVar
-  let push = putMVar resultVar
-      result = readMVar resultVar
-      done = void result
-  return (push, result, Tagged done)
+packRequest ::
+     forall fmt signer req. (Serializable fmt req, RequestSigner signer)
+  => signer
+  -> req
+  -> (Headers, Text' "Request")
+packRequest signer req =
+  let reqText = serialize' @fmt req
+      headers = signRequest signer HashMap.empty reqText
+   in (headers, reqText)
 
-streamingPusher :: IO (ResultItem res -> IO (), IO (Stream res), IO' "Done" ())
-streamingPusher = do
-  (push_, Tagged close, results) <- pushStream
-  let push (Result res) = push_ res
-      push EndOfResults = close
-      done = Stream.mapM_ return results
-  return (push, return results, Tagged done)
-
-_call ::
-     forall fmt req res signer transport x.
+callDirect ::
+     forall fmt signer transport req res.
      ( Serializable fmt req
      , Deserializable fmt (Either RpcClientException res)
      , RequestSigner signer
      , RpcTransport transport
      )
-  => IO (res -> IO (), IO x, IO' "Done" ())
+  => Time Second
   -> signer
   -> NamespacedText' "Route"
   -> transport
-  -> Time Second
   -> req
-  -> IO x
-_call pusher signer route transport timeout req = do
-  (push, result, Tagged done) <- pusher
-  (Tagged renewTimeout, timeoutOrDone) <- timeoutRenewable timeout done
+  -> IO res
+callDirect timeout_ signer route transport req = do
+  resultVar <- newEmptyMVar
   mainThread <- myThreadId
-  let headers = HashMap.empty
-      reqText = serialize' @fmt req
-      headersWithSignature = signRequest signer headers reqText
-      handleResponse resOrExcText = do
+  let (headersWithSignature, reqText) = packRequest @fmt signer req
+      handleResponse resOrExcText =
         deserializeUnsafe' @fmt resOrExcText >>= \case
           Left (exc :: RpcClientException) -> evilThrowTo mainThread exc
-          Right res -> push res
-        renewTimeout
+          Right res -> putMVar resultVar res
+  Tagged doCleanup <-
+    _issueRequest handleResponse route transport headersWithSignature reqText
+  result <- timeout timeout_ $ readMVar resultVar
+  doCleanup
+  throwIfTimeout result
+
+callStreaming ::
+     forall fmt signer transport req res a.
+     ( Serializable fmt req
+     , Deserializable fmt (Either RpcClientException (StreamingResponse res))
+     , RequestSigner signer
+     , RpcTransport transport
+     )
+  => Time Second
+  -> signer
+  -> NamespacedText' "Route"
+  -> transport
+  -> req
+  -> (Stream res -> IO a)
+  -> IO a
+callStreaming timeout signer route transport req f = do
+  (push, Tagged close, results) <- pushStream
+  (renewTimeout, timeoutOrDone) <-
+    timeoutRenewable timeout $ Stream.mapM_ return results
+  mainThread <- myThreadId
+  let (headersWithSignature, reqText) = packRequest @fmt signer req
+      handleResponse resOrExcText =
+        deserializeUnsafe' @fmt resOrExcText >>= \case
+          Left (exc :: RpcClientException) -> evilThrowTo mainThread exc
+          Right response -> do
+            renewTimeout (2 *:* timeoutsPerHeartbeat *:* timeout)
+            case response of
+              Heartbeat -> return ()
+              Result res -> push res
+              EndOfResults -> close
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
   void . async $ do
     timeoutOrDone_ <- timeoutOrDone
     doCleanup
     case timeoutOrDone_ of
-      Left exn -> evilThrowTo mainThread exn -- TODO: Is this bad?
+      Left exn -> evilThrowTo mainThread exn
       _ -> return ()
-  result
+  f results
 
-instance ( Serializable fmt req
+instance ( KnownNat timeout
+         , Serializable fmt req
          , Deserializable fmt (Either RpcClientException res)
          , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
          ) =>
-         Client t (Endpoint fmt 'NoAuth server transport route req ('Direct res)) where
+         Client t (Endpoint_ timeout fmt 'NoAuth server transport route req ('Direct res)) where
   makeClient ::
        t
-    -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Direct res))
-    -> (Time Second -> req -> IO res)
+    -> Proxy (Endpoint_ timeout fmt 'NoAuth server transport route req ('Direct res))
+    -> (req -> IO res)
   makeClient t _ =
-    _call
+    callDirect
       @fmt
-      directPusher
+      (natSeconds @timeout)
       (authSigner @() t)
       (namespaced' @server $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
-instance ( Serializable fmt req
-         , Deserializable fmt (Either RpcClientException (ResultItem res))
+instance ( KnownNat timeout
+         , Serializable fmt req
+         , Deserializable fmt (Either RpcClientException (StreamingResponse res))
          , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
          ) =>
-         Client t (Endpoint fmt 'NoAuth server transport route req ('Streaming res)) where
+         Client t (Endpoint_ timeout fmt 'NoAuth server transport route req ('Streaming res)) where
   makeClient ::
        t
-    -> Proxy (Endpoint fmt 'NoAuth server transport route req ('Streaming res))
-    -> (Time Second -> req -> IO (Stream res))
+    -> Proxy (Endpoint_ timeout fmt 'NoAuth server transport route req ('Streaming res))
+    -> (req -> (Stream res -> IO ()) -> IO ())
   makeClient t _ =
-    _call
+    callStreaming
       @fmt
-      streamingPusher
+      (natSeconds @timeout)
       (authSigner @() t)
       (namespaced' @server $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
-instance ( Serializable fmt req
+instance ( KnownNat timeout
+         , Serializable fmt req
          , Deserializable fmt (Either RpcClientException res)
          , HasNamespace server
          , HasAuthSigner auth t
          , HasRpcTransport transport t
          , KnownSymbol route
          ) =>
-         Client t (Endpoint fmt ('Auth auth) server transport route req ('Direct res)) where
+         Client t (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Direct res)) where
   makeClient ::
        t
-    -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Direct res))
-    -> (Time Second -> req -> IO res)
+    -> Proxy (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Direct res))
+    -> (req -> IO res)
   makeClient t _ =
-    _call
+    callDirect
       @fmt
-      directPusher
+      (natSeconds @timeout)
       (authSigner @auth t)
       (namespaced' @server $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
-instance ( Serializable fmt req
-         , Deserializable fmt (Either RpcClientException (ResultItem res))
+instance ( KnownNat timeout
+         , Serializable fmt req
+         , Deserializable fmt (Either RpcClientException (StreamingResponse res))
          , HasNamespace server
          , HasAuthSigner auth t
          , HasRpcTransport transport t
          , KnownSymbol route
          ) =>
-         Client t (Endpoint fmt ('Auth auth) server transport route req ('Streaming res)) where
+         Client t (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Streaming res)) where
   makeClient ::
        t
-    -> Proxy (Endpoint fmt ('Auth auth) server transport route req ('Streaming res))
-    -> (Time Second -> req -> IO (Stream res))
+    -> Proxy (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Streaming res))
+    -> (req -> (Stream res -> IO ()) -> IO ())
   makeClient t _ =
-    _call
+    callStreaming
       @fmt
-      streamingPusher
+      (natSeconds @timeout)
       (authSigner @auth t)
       (namespaced' @server $ proxyText' (Proxy :: Proxy route))
       (rpcTransport @transport t)

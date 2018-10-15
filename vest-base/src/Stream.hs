@@ -16,3 +16,5 @@ import Streamly.Prelude as Stream
 -- import qualified Streamly.Prelude as Streamly
 -- map :: (a -> b) -> Streamly.Serial a -> Streamly.Serial b
 -- map = Streamly.map
+--
+-- For documentation, see Streamly.Prelude on Hackage

@@ -2,7 +2,6 @@ module Vest.Bridge.BridgeSpec
   ( spec
   ) where
 
-import qualified Data.List
 import qualified Stream
 import Test.Hspec
 import qualified Transports.Amqp as Amqp
@@ -11,6 +10,8 @@ import Vest.Bridge
 import Vest.Bridge.Rpc.Prelude ()
 import Vest.Prelude
 
+-- TODO: refactor to tasty-golden tests
+-- TODO: add test for HeartbeatLostExceptions
 -- For some reason this gets an overlapping HasNamespace T instance if it imports Vest.Service at all
 data T = T
   { amqp :: Amqp.T
@@ -30,22 +31,26 @@ instance HasPubSubTransport Amqp.T T where
   pubSubTransport = amqp
 
 type EchoIntsDirectEndpoint transport
-   = Endpoint "Haskell" 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
+   = Endpoint 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
 
 type EchoTextsDirectEndpoint transport
-   = Endpoint "Haskell" 'NoAuth T transport "echoTextDirect" [Text] ('Direct [Text])
+   = Endpoint 'NoAuth T transport "echoTextDirect" [Text] ('Direct [Text])
 
 type EchoIntsStreamingEndpoint transport
-   = Endpoint "Haskell" 'NoAuth T transport "echoIntsStreaming" [Int] ('Streaming Int)
+   = Endpoint 'NoAuth T transport "echoIntsStreaming" [Int] ('Streaming Int)
 
 type EchoTextsStreamingEndpoint transport
-   = Endpoint "Haskell" 'NoAuth T transport "echoTextsStreaming" [Text] ('Streaming Text)
+   = Endpoint 'NoAuth T transport "echoTextsStreaming" [Text] ('Streaming Text)
+
+type TimeoutEndpoint transport
+   = Endpoint_ 0 "Haskell" 'NoAuth T transport "timeout" () ('Direct ())
 
 type TestRpcApi transport
    = EchoIntsDirectEndpoint transport
      :<|> EchoTextsDirectEndpoint transport
      :<|> EchoIntsStreamingEndpoint transport
      :<|> EchoTextsStreamingEndpoint transport
+     :<|> TimeoutEndpoint transport
 
 withT :: (T -> IO a) -> IO a
 withT f =
@@ -53,14 +58,16 @@ withT f =
     with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
 
 echoDirect :: T -> a -> IO a
-echoDirect _ x = threadDelay (sec 0.01) >> return x
+echoDirect _ = return
 
 echoStreaming :: T -> [a] -> IO (Stream a)
 echoStreaming _ xs =
   return $ Stream.fromList xs & Stream.mapM (<$ threadDelay (sec 0.01))
 
 handlers :: Handlers (TestRpcApi Amqp.T)
-handlers = echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming
+handlers =
+  echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming :<|>
+  (\_ () -> threadDelay (sec 0.01))
 
 withRpcClient ::
      forall transport spec. (Server T (TestRpcApi transport), Client T spec)
@@ -130,12 +137,10 @@ singleDirectTest =
     (withRpcClient
        @transport
        (Proxy :: Proxy (EchoIntsDirectEndpoint transport))) $
-  context "with a single direct RPC" $ do
-    it "makes a single call" $ \call -> do
-      result <- call (sec 1) [1, 2, 3]
-      result `shouldBe` [1, 2, 3]
-    it "times out for a single call" $ \call ->
-      call (sec 0) [1, 2, 3] `shouldThrow` (== TimeoutException (sec 0))
+  context "with a single direct RPC" $
+  it "makes a single call" $ \call -> do
+    result <- call [1, 2, 3]
+    result `shouldBe` [1, 2, 3]
 
 singleStreamingTest ::
      forall transport. HasRpcTransport transport T
@@ -147,18 +152,20 @@ singleStreamingTest =
        (Proxy :: Proxy (EchoIntsStreamingEndpoint transport))) $
   context "with a single streaming RPC" $ do
     it "receives the last result for a single call" $ \call -> do
-      results <- call (sec 1) [1, 2, 3]
-      (Stream.toList results >>- elem 3) `shouldReturn` True
+      done <- newEmptyMVar
+      call [1, 2, 3] $ \results -> do
+        (Stream.toList results >>- elem 3) >>= (`unless` (throwString "failed"))
+        putMVar done ()
+      () <- readMVar done
+      True `shouldBe` True
     it "sees the last item for every fanout" $ \call -> do
-      results <- call (sec 1) [1, 2, 3]
-      (Stream.toList results >>- elem 3) `shouldReturn` True
-      (Stream.toList results >>- elem 3) `shouldReturn` True
-      -- Note: The timeout is not identified properly if the results are not forced.
-    it "times out for a single call" $ \call ->
-      (do results <- call (sec 0) [1, 2, 3]
-          resultList <- Stream.toList results
-          print resultList) `shouldThrow`
-      (== TimeoutException (sec 0))
+      done <- newEmptyMVar
+      call [1, 2, 3] $ \results -> do
+        (Stream.toList results >>- elem 3) >>= (`unless` (throwString "failed"))
+        (Stream.toList results >>- elem 3) >>= (`unless` (throwString "failed"))
+        putMVar done ()
+      () <- readMVar done
+      True `shouldBe` True
 
 multipleDirectTest ::
      forall transport. HasRpcTransport transport T
@@ -168,13 +175,16 @@ multipleDirectTest =
     (withRpcClient
        @transport
        (Proxy :: Proxy (EchoIntsDirectEndpoint transport
-                        :<|> EchoTextsDirectEndpoint transport))) $
-  context "when running multiple direct RPCs" $
-  it "makes one call to each" $ \(echoInts :<|> echoTexts) -> do
-    resultInts <- echoInts (sec 1) [1, 2, 3]
-    resultTexts <- echoTexts (sec 1) ["a", "b", "c"]
-    resultInts `shouldBe` [1, 2, 3]
-    resultTexts `shouldBe` ["a", "b", "c"]
+                        :<|> EchoTextsDirectEndpoint transport
+                        :<|> TimeoutEndpoint transport))) $
+  context "when running multiple direct RPCs" $ do
+    it "makes one call to each" $ \(echoInts :<|> echoTexts :<|> _) -> do
+      resultInts <- echoInts [1, 2, 3]
+      resultTexts <- echoTexts ["a", "b", "c"]
+      resultInts `shouldBe` [1, 2, 3]
+      resultTexts `shouldBe` ["a", "b", "c"]
+    it "times out for a single call" $ \(_ :<|> _ :<|> call) ->
+      call () `shouldThrow` (== TimeoutException (sec 0))
 
 multipleStreamingTest ::
      forall transport. HasRpcTransport transport T
@@ -187,17 +197,26 @@ multipleStreamingTest =
                         :<|> EchoTextsStreamingEndpoint transport))) $
   context "when running multiple streaming RPCs" $ do
     it "sees the last item for each call" $ \(echoInts :<|> echoTexts) -> do
-      resultsInt <- echoInts (sec 1) [1, 2, 3]
-      resultsText <- echoTexts (sec 1) ["a", "b", "c"]
-      (Stream.toList resultsInt >>- elem 3) `shouldReturn` True
-      (Stream.toList resultsText >>- elem "c") `shouldReturn` True
+      done <- newEmptyMVar
+      echoInts [1, 2, 3] $ \ints ->
+        echoTexts ["a", "b", "c"] $ \texts -> do
+          (Stream.toList ints >>- elem 3) >>= (`unless` (throwString "failed"))
+          (Stream.toList texts >>- elem "c") >>=
+            (`unless` (throwString "failed"))
+          putMVar done ()
+      () <- readMVar done
+      True `shouldBe` True
     it "handles concurrent calls" $ \(echoInts :<|> _) -> do
-      results1 <- echoInts (sec 1) $ replicate 3 1
-      results2 <- echoInts (sec 1) $ replicate 3 2
-      resultList1 <- Stream.toList results1
-      resultList2 <- Stream.toList results2
-      resultList1 `shouldSatisfy` Data.List.all (== 1)
-      resultList2 `shouldSatisfy` Data.List.all (== 2)
+      done <- newEmptyMVar
+      echoInts (replicate 3 1) $ \r1 ->
+        echoInts (replicate 3 2) $ \r2 -> do
+          (Stream.toList r1 >>- all (== 1)) >>=
+            (`unless` (throwString "failed"))
+          (Stream.toList r2 >>- all (== 2)) >>=
+            (`unless` (throwString "failed"))
+          putMVar done ()
+      () <- readMVar done
+      True `shouldBe` True
 
 pubSubTest' ::
      forall transport. HasPubSubTransport transport T

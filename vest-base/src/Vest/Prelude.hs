@@ -3,7 +3,7 @@ module Vest.Prelude
   ) where
 
 import Vest.Prelude.Blockchain as Reexports
-import Vest.Prelude.Core as Reexports hiding (threadDelay)
+import Vest.Prelude.Core as Reexports
 import Vest.Prelude.Crypto as Reexports
 import Vest.Prelude.Money as Reexports
 import Vest.Prelude.Namespace as Reexports

@@ -14,6 +14,7 @@ import Data.HashMap.Strict as Vest.Prelude.Core (HashMap)
 import Data.HashSet as Vest.Prelude.Core (HashSet)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
 import Data.Proxy as Vest.Prelude.Core
+import Numeric.Natural as Vest.Prelude.Core
 import Protolude as Vest.Prelude.Core hiding
   ( bracket
   , bracketOnError
@@ -27,6 +28,7 @@ import Protolude as Vest.Prelude.Core hiding
   , mask
   , mask_
   , onException
+  , threadDelay
   , throwIO
   , throwTo
   , try
@@ -34,7 +36,6 @@ import Protolude as Vest.Prelude.Core hiding
   , tryJust
   , uninterruptibleMask
   , uninterruptibleMask_
-  , witness
   )
 
 import Control.Monad.Fail (fail)
@@ -48,7 +49,7 @@ import Data.Aeson (withText)
 import Data.Aeson.Types (FromJSONKeyFunction(..), toJSONKeyText)
 import qualified Data.ByteString.Base64 as Base64
 import Data.Data as Vest.Prelude.Core (Data(..))
-import Data.Tagged as Vest.Prelude.Core
+import Data.Tagged as Vest.Prelude.Core hiding (witness)
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 import qualified Foreign.StablePtr as StablePtr

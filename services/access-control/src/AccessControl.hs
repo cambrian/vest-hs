@@ -36,10 +36,9 @@ data Access = Access
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 type PublicKeyEndpoint
-   = Endpoint "Haskell" 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
+   = Endpoint 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
 
-type TokenEndpoint
-   = Endpoint "Haskell" 'NoAuth T Amqp.T "token" PublicKey ('Direct Token)
+type TokenEndpoint = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct Token)
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp

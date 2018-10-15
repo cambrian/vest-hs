@@ -9,13 +9,13 @@ import Vest.Prelude
 
 type family Routes spec where
   Routes () = '[]
-  Routes (Endpoint _ _ _ _ (route :: Symbol) _ _) = '[ route]
+  Routes (Endpoint_ _ _ _ _ _ (route :: Symbol) _ _) = '[ route]
   Routes (a
           :<|> b) = Routes a :++ Routes b
 
 type family NubRoutes spec where
   NubRoutes () = '[]
-  NubRoutes (Endpoint _ _ _ _ (route :: Symbol) _ _) = '[ route]
+  NubRoutes (Endpoint_ _ _ _ _ _ (route :: Symbol) _ _) = '[ route]
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
@@ -23,10 +23,10 @@ type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 type family Handlers spec where
   Handlers () = ()
-  Handlers (Endpoint _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
-  Handlers (Endpoint _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream res)
-  Handlers (Endpoint _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream res)
+  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
+  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream res)
+  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
+  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -61,30 +61,34 @@ instance ( HasUniqueRoutes (a
     serve aHandlers t (Proxy :: Proxy a)
     serve bHandlers t (Proxy :: Proxy b)
 
-directSender :: (res -> IO ()) -> res -> IO ()
-directSender send = send
+directSender :: (res -> IO ()) -> IO res -> IO ()
+directSender send = (>>= send)
 
-streamingSender :: (ResultItem res -> IO ()) -> Stream res -> IO ()
-streamingSender send resStream = do
-  Stream.mapM_ (send . Result) resStream
+streamingSender ::
+     Time Second -> (StreamingResponse res -> IO ()) -> IO (Stream res) -> IO ()
+streamingSender timeout send xs = do
+  (Tagged postponeHeartbeat, Tagged cancelHeartbeats) <-
+    intervalRenewable (timeoutsPerHeartbeat *:* timeout) (send Heartbeat)
+  xs >>= Stream.mapM_ (\x -> postponeHeartbeat >> send (Result x))
+  cancelHeartbeats
   send EndOfResults
 
-_serve ::
+serve_ ::
      forall fmt req res verifier transport x.
      ( Deserializable fmt req
      , Serializable fmt (Either RpcClientException res)
      , RequestVerifier verifier
      , RpcTransport transport
      )
-  => ((res -> IO ()) -> x -> IO ())
+  => ((res -> IO ()) -> IO x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
-     -- res itself may be ResultItem a in the case of a streaming sender
+     -- res itself may be StreamingResponse a in the case of a streaming sender
   -> verifier
   -> (VerifierClaims verifier -> req -> IO x)
   -> NamespacedText' "Route"
   -> transport
   -> IO ()
-_serve sender verifier handler = _consumeRequests asyncHandle
+serve_ sender verifier handler = _consumeRequests asyncHandle
   where
     asyncHandle headers reqText respond =
       async $
@@ -94,11 +98,10 @@ _serve sender verifier handler = _consumeRequests asyncHandle
               fromJustUnsafe BadAuth $
               verifyRequest verifier headers reqText time
             req <- catch (deserializeUnsafe' @fmt reqText) (throw . BadCall)
-            x <- handler claims req
             sender
               (respond .
                serialize' @fmt @(Either RpcClientException res) . Right)
-              x)
+              (handler claims req))
         (respond . serialize' @fmt @(Either RpcClientException res) . Left)
 
 instance ( HasNamespace t
@@ -107,14 +110,14 @@ instance ( HasNamespace t
          , Serializable fmt (Either RpcClientException res)
          , KnownSymbol route
          ) =>
-         Server t (Endpoint fmt 'NoAuth t transport route req ('Direct res)) where
+         Server t (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res)) where
   serve ::
        (t -> req -> IO res)
     -> t
-    -> Proxy (Endpoint fmt 'NoAuth t transport route req ('Direct res))
+    -> Proxy (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
-    _serve
+    serve_
       @fmt
       directSender
       ()
@@ -124,20 +127,21 @@ instance ( HasNamespace t
 
 instance ( HasNamespace t
          , HasRpcTransport transport t
+         , KnownNat timeout
          , Deserializable fmt req
-         , Serializable fmt (Either RpcClientException (ResultItem res))
+         , Serializable fmt (Either RpcClientException (StreamingResponse res))
          , KnownSymbol route
          ) =>
-         Server t (Endpoint fmt 'NoAuth t transport route req ('Streaming res)) where
+         Server t (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res)) where
   serve ::
        (t -> req -> IO (Stream res))
     -> t
-    -> Proxy (Endpoint fmt 'NoAuth t transport route req ('Streaming res))
+    -> Proxy (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res))
     -> IO ()
   serve handler t _ =
-    _serve
+    serve_
       @fmt
-      streamingSender
+      (streamingSender $ natSeconds @timeout)
       ()
       (const $ handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))
@@ -150,14 +154,14 @@ instance ( HasNamespace t
          , Serializable fmt (Either RpcClientException res)
          , KnownSymbol route
          ) =>
-         Server t (Endpoint fmt ('Auth auth) t transport route req ('Direct res)) where
+         Server t (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res)) where
   serve ::
        (t -> AuthClaims auth -> req -> IO res)
     -> t
-    -> Proxy (Endpoint fmt ('Auth auth) t transport route req ('Direct res))
+    -> Proxy (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
-    _serve
+    serve_
       @fmt
       directSender
       (authVerifier @auth t)
@@ -168,20 +172,21 @@ instance ( HasNamespace t
 instance ( HasNamespace t
          , HasAuthVerifier auth t
          , HasRpcTransport transport t
+         , KnownNat timeout
          , Deserializable fmt req
-         , Serializable fmt (Either RpcClientException (ResultItem res))
+         , Serializable fmt (Either RpcClientException (StreamingResponse res))
          , KnownSymbol route
          ) =>
-         Server t (Endpoint fmt ('Auth auth) t transport route req ('Streaming res)) where
+         Server t (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res)) where
   serve ::
        (t -> AuthClaims auth -> req -> IO (Stream res))
     -> t
-    -> Proxy (Endpoint fmt ('Auth auth) t transport route req ('Streaming res))
+    -> Proxy (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res))
     -> IO ()
   serve handler t _ =
-    _serve
+    serve_
       @fmt
-      streamingSender
+      (streamingSender $ natSeconds @timeout)
       (authVerifier @auth t)
       (handler t)
       (namespaced' @t $ proxyText' (Proxy :: Proxy route))

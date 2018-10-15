@@ -14,7 +14,7 @@ data T = T
   }
 
 type RewardsEndpoint
-   = Endpoint TezosDispatcher.T 'NoAuth "getRewards" () ('Direct ())
+   = Endpoint 'NoAuth TezosDispatcher.T "getRewards" () ('Direct ())
 
 instance Service T where
   type ServiceArgs T = TezosDispatcher
