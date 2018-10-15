@@ -24,9 +24,6 @@ class RpcTransport t where
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
 
--- defaultTimeoutSeconds :: Nat
--- -- ^ timeout value.
--- defaultTimeoutSeconds = 5
 -- | Reimplementation of Maybe, but is self-documenting.
 data AuthOrNoAuth a
   = NoAuth

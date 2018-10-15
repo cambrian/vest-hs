@@ -67,7 +67,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         { hasAuth = False
         , isStreaming = False
         , timeoutMillis = toTotalMillis $ natSeconds @timeout
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
@@ -89,7 +89,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         { hasAuth = False
         , isStreaming = True
         , timeoutMillis = toTotalMillis $ natSeconds @timeout
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
@@ -111,7 +111,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         { hasAuth = True
         , isStreaming = False
         , timeoutMillis = toTotalMillis $ natSeconds @timeout
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
@@ -133,7 +133,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         { hasAuth = True
         , isStreaming = True
         , timeoutMillis = toTotalMillis $ natSeconds @timeout
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
