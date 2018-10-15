@@ -25,7 +25,8 @@ toTsTypeText' = Tagged . pack . getTypeScriptType
 toTotalMillis :: Time Second -> Int
 toTotalMillis (Time 0) = 1
 toTotalMillis timeout =
-  toNum @Millisecond @Int (timeoutsPerHeartbeat *:* timeout)
+  2 * toNum @Millisecond @Int (timeoutsPerHeartbeat *:* timeout)
+  -- Timeout after 2 heartbeats.
 
 -- Used to iterate over the nested API structure, run a (possibly monadic) function on the proxied
 -- types of each endpoint, and optionally collect the results in a list.
