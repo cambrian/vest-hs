@@ -5,7 +5,24 @@ module Tezos
 import Vest
 import Vest.Http
 
-data Block = Block
+mainChain :: Text
+mainChain = "main"
+
+headBlock :: Text
+headBlock = "head"
+
+type Direct result = Get '[ JSON] result
+
+type Streaming result = StreamGet NewlineFraming JSON (ResultStream result)
+
+type WithChain spec = "chains" :> Capture "chain" Text :> spec
+
+type WithChainBlock spec = WithChain ("blocks" :> Capture "block" Text :> spec)
+
+type WithChainBlockContract spec
+   = WithChainBlock ("context" :> "contracts" :> Capture "contract" Text :> spec)
+
+data NotifyBlock = NotifyBlock
   { hash :: Text
   , level :: Int
   , proto :: Int
@@ -18,8 +35,7 @@ data Block = Block
   , protocol_data :: Text
   } deriving (Show, Generic, FromJSON)
 
-type MonitorBlocks
-   = "monitor" :> "heads" :> "main" :> StreamGet NewlineFraming JSON (ResultStream Block)
+type MonitorBlocks = "monitor" :> "heads" :> "main" :> Streaming NotifyBlock
 
 data Constants = Constants
   { proof_of_work_nonce_size :: Int
@@ -48,5 +64,9 @@ data Constants = Constants
   , hard_storage_limit_per_operation :: Text
   } deriving (Show, Generic, FromJSON)
 
-type BlockConstants
-   = "chains" :> Capture "chain" Text :> "blocks" :> Capture "block" Text :> "context" :> "constants" :> Get '[ JSON] Constants
+type GetConstants
+   = WithChainBlock ("context" :> "constants" :> Direct Constants)
+
+type ListContracts = WithChainBlock ("context" :> "contracts" :> Direct [Text])
+
+type GetContractManager = WithChainBlockContract ("manager" :> Direct Text)
