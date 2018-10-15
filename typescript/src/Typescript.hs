@@ -57,7 +57,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = False
         , isStreaming = False
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
@@ -78,7 +78,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = False
         , isStreaming = True
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
@@ -99,7 +99,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = True
         , isStreaming = False
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
@@ -120,7 +120,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = True
         , isStreaming = True
-        , route = proxyText' (Proxy :: Proxy route)
+        , route = symbolText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }

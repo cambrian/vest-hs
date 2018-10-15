@@ -71,5 +71,5 @@ instance ( HasNamespace t
   publish stream t _ =
     _publish
       (\send -> Stream.mapM_ (send . serialize' @f) stream)
-      (namespaced' @t $ proxyText' (Proxy :: Proxy name))
+      (namespaced' @t $ symbolText' (Proxy :: Proxy name))
       (pubSubTransport @transport t)

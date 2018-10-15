@@ -10,7 +10,7 @@ import Vest.Prelude
 
 type StreamCallback res a = (Stream res -> IO a) -> IO a
 
--- The structure of a streaming RPC call might seem more complicated than expected.
+-- The structure of streaming RPC calls might seem more complicated than expected.
 -- The reason for this is that the result stream may throw a HeartbeatLostException to the calling
 -- thread at any time, so we limit them to within the body of the call by requiring the stream to be
 -- consumed within a callback.
@@ -100,11 +100,11 @@ callStreaming timeout_ signer route transport req f = do
     timeoutRenewable
       (2 *:* timeoutsPerHeartbeat *:* timeout_)
       (Stream.mapM_ return results)
-  receivedFirstResponse <- newEmptyMVar
+  gotFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
   let (headersWithSignature, reqText) = packRequest @fmt signer req
       handleResponse resOrExcText = do
-        _ <- tryPutMVar receivedFirstResponse ()
+        _ <- tryPutMVar gotFirstResponse ()
         deserializeUnsafe' @fmt resOrExcText >>= \case
           Left (exc :: RpcClientException) -> evilThrowTo mainThread exc
           Right response -> do
@@ -115,7 +115,7 @@ callStreaming timeout_ signer route transport req f = do
               EndOfResults -> close
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
-  timeout timeout_ (takeMVar receivedFirstResponse) >>= \case
+  timeout timeout_ (takeMVar gotFirstResponse) >>= \case
     Left exn -> throw exn
     Right () ->
       void . async $ do
@@ -144,7 +144,7 @@ instance ( KnownNat timeout
       @fmt
       (natSeconds @timeout)
       (authSigner @() t)
-      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( KnownNat timeout
@@ -164,7 +164,7 @@ instance ( KnownNat timeout
       @fmt
       (natSeconds @timeout)
       (authSigner @() t)
-      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( KnownNat timeout
@@ -185,7 +185,7 @@ instance ( KnownNat timeout
       @fmt
       (natSeconds @timeout)
       (authSigner @auth t)
-      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( KnownNat timeout
@@ -206,5 +206,5 @@ instance ( KnownNat timeout
       @fmt
       (natSeconds @timeout)
       (authSigner @auth t)
-      (namespaced' @server $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)

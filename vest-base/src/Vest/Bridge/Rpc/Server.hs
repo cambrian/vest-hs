@@ -122,7 +122,7 @@ instance ( HasNamespace t
       directSender
       ()
       (const $ handler t)
-      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( HasNamespace t
@@ -144,7 +144,7 @@ instance ( HasNamespace t
       (streamingSender $ natSeconds @timeout)
       ()
       (const $ handler t)
-      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( HasNamespace t
@@ -166,7 +166,7 @@ instance ( HasNamespace t
       directSender
       (authVerifier @auth t)
       (handler t)
-      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)
 
 instance ( HasNamespace t
@@ -189,5 +189,5 @@ instance ( HasNamespace t
       (streamingSender $ natSeconds @timeout)
       (authVerifier @auth t)
       (handler t)
-      (namespaced' @t $ proxyText' (Proxy :: Proxy route))
+      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
       (rpcTransport @transport t)

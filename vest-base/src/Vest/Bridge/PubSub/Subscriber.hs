@@ -53,7 +53,7 @@ instance ( HasNamespace t
     Tagged unsubscribe_ <-
       _subscribe
         push
-        (namespaced' @t $ proxyText' (Proxy :: Proxy name))
+        (namespaced' @t $ symbolText' (Proxy :: Proxy name))
         (pubSubTransport @transport t)
     let unsubscribe = Tagged $ close >> unsubscribe_
     return (unsubscribe, stream)
