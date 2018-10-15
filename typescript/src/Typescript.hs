@@ -43,15 +43,15 @@ instance (Collector a, Collector b) =>
     makeSpecTsTypes (Proxy :: Proxy a) ++ makeSpecTsTypes (Proxy :: Proxy b)
 
 instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint format 'NoAuth service transport (route :: Symbol) req ('Direct res)) where
+         Collector (Endpoint_ timeout format 'NoAuth service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
-       Proxy (Endpoint format auth service transport route req ('Direct res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
   makeSpecTsTypes ::
-       Proxy (Endpoint format auth service transport route req ('Direct res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
@@ -64,15 +64,15 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     ]
 
 instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint format 'NoAuth service transport (route :: Symbol) req ('Streaming res)) where
+         Collector (Endpoint_ timeout format 'NoAuth service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
-       Proxy (Endpoint format auth service transport route req ('Streaming res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
   makeSpecTsTypes ::
-       Proxy (Endpoint format auth service transport route req ('Streaming res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
@@ -85,15 +85,15 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     ]
 
 instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint format ('Auth DummyAuth) service transport (route :: Symbol) req ('Direct res)) where
+         Collector (Endpoint_ timeout format ('Auth DummyAuth) service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
-       Proxy (Endpoint format auth service transport route req ('Direct res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
   makeSpecTsTypes ::
-       Proxy (Endpoint format auth service transport route req ('Direct res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
@@ -106,15 +106,15 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     ]
 
 instance (KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint format ('Auth DummyAuth) service transport (route :: Symbol) req ('Streaming res)) where
+         Collector (Endpoint_ timeout format ('Auth DummyAuth) service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
-       Proxy (Endpoint format auth service transport route req ('Streaming res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
     (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
     (getTypeScriptDeclarations (Proxy :: Proxy res))
   makeSpecTsTypes ::
-       Proxy (Endpoint format auth service transport route req ('Streaming res))
+       Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [SpecTsTypes]
   makeSpecTsTypes _ =
     [ SpecTsTypes
@@ -154,7 +154,7 @@ $(deriveTypeScript defaultOptions ''DeserializeException)
 
 $(deriveTypeScript defaultOptions ''RpcClientException)
 
-$(deriveTypeScript defaultOptions ''ResultItem)
+$(deriveTypeScript defaultOptions ''StreamingResponse)
 
 $(deriveTypeScript defaultOptions ''WebSocket.RequestMessage)
 

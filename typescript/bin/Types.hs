@@ -62,7 +62,7 @@ main = do
         , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
         , getTypeScriptDeclarations
             (Proxy :: Proxy (Either RpcClientException Text))
-        , getTypeScriptDeclarations (Proxy :: Proxy ResultItem)
+        , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)
         , concat typesToGenerate
