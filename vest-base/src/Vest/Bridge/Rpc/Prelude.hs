@@ -42,8 +42,9 @@ data DirectOrStreaming a
 -- | Base RPC endpoint type.
 -- Streaming endpoints will send a heartbeat immediately once the request is validated, and again
 -- at every (timeoutsPerHeartbeat * timeout) interval if the next result has not been produced yet.
--- The client binding for a streaming endpoint will throw a HeartbeatLostException if it misses
--- 2 heartbeats.
+-- The client binding for a streaming endpoint should block until the first heartbeat is received,
+-- and throw a TimeoutException if it does not arrive within the timeout period.
+-- It should also throw a HeartbeatLostException if it misses 2 consecutive heartbeats.
 data Endpoint_ (timeoutSeconds :: Nat) serializationFormat (auth :: AuthOrNoAuth *) service transport (route :: k) req (res :: DirectOrStreaming *)
 
 type DefaultTimeoutSeconds = 5
@@ -72,7 +73,7 @@ data RpcClientException
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
 
 newtype HeartbeatLostException unit =
-  HeartbeatLostException (TimeoutException unit)
+  HeartbeatLostException (Time unit)
   deriving (Eq, Ord)
 
 deriving instance

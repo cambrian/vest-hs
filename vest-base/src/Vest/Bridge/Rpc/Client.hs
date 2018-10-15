@@ -94,29 +94,37 @@ callStreaming ::
   -> req
   -> (Stream res -> IO a)
   -> IO a
-callStreaming timeout signer route transport req f = do
+callStreaming timeout_ signer route transport req f = do
   (push, Tagged close, results) <- pushStream
-  (renewTimeout, timeoutOrDone) <-
-    timeoutRenewable timeout $ Stream.mapM_ return results
+  (renewHeartbeatTimer, heartbeatLostOrDone) <-
+    timeoutRenewable
+      (2 *:* timeoutsPerHeartbeat *:* timeout_)
+      (Stream.mapM_ return results)
+  receivedFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
   let (headersWithSignature, reqText) = packRequest @fmt signer req
-      handleResponse resOrExcText =
+      handleResponse resOrExcText = do
+        _ <- tryPutMVar receivedFirstResponse ()
         deserializeUnsafe' @fmt resOrExcText >>= \case
           Left (exc :: RpcClientException) -> evilThrowTo mainThread exc
           Right response -> do
-            renewTimeout (2 *:* timeoutsPerHeartbeat *:* timeout)
+            renewHeartbeatTimer (2 *:* timeoutsPerHeartbeat *:* timeout_)
             case response of
               Heartbeat -> return ()
               Result res -> push res
               EndOfResults -> close
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
-  void . async $ do
-    timeoutOrDone_ <- timeoutOrDone
-    doCleanup
-    case timeoutOrDone_ of
-      Left exn -> evilThrowTo mainThread exn
-      _ -> return ()
+  timeout timeout_ (takeMVar receivedFirstResponse) >>= \case
+    Left exn -> throw exn
+    Right () ->
+      void . async $ do
+        heartbeatLostOrDone_ <- heartbeatLostOrDone
+        doCleanup
+        case heartbeatLostOrDone_ of
+          Left (TimeoutException time) ->
+            evilThrowTo mainThread $ HeartbeatLostException time
+          _ -> return ()
   f results
 
 instance ( KnownNat timeout
