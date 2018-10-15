@@ -1,4 +1,5 @@
 -- Pointless endpoints for WebSocket testing.
+-- TODO: Test a single skipped heartbeat.
 module DummyManager
   ( module DummyManager
   ) where
@@ -47,8 +48,14 @@ $(deriveTypeScript defaultOptions ''AddIntsRequest)
 type AddIntsEndpoint
    = Endpoint_ 5 "JSON" 'NoAuth T WebSocket.T "addInts" AddIntsRequest ('Direct Int)
 
+type AddIntsBadEndpoint
+   = Endpoint_ 0 "JSON" 'NoAuth T WebSocket.T "addIntsBad" AddIntsRequest ('Direct Int)
+
 type EchoThriceEndpoint
    = Endpoint_ 5 "JSON" 'NoAuth T WebSocket.T "echoThrice" Int ('Streaming Int)
+
+type EchoThriceBadEndpoint
+   = Endpoint_ 0 "JSON" 'NoAuth T WebSocket.T "echoThriceBad" Int ('Streaming Int)
 
 data ConcatTextAuthRequest = ConcatTextAuthRequest
   { a :: Text
@@ -71,7 +78,9 @@ type EchoThriceAuthEndpoint
 
 type Api
    = AddIntsEndpoint
+     :<|> AddIntsBadEndpoint
      :<|> EchoThriceEndpoint
+     :<|> EchoThriceBadEndpoint
      :<|> ConcatTextAuthEndpoint
      :<|> EchoThriceAuthEndpoint
 

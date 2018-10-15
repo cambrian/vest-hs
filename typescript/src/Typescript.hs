@@ -4,6 +4,7 @@ module Typescript
 
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
+import Data.List (nub)
 import DummyManager (DummyAuth)
 import qualified Transports.WebSocket as WebSocket
 import Vest
@@ -11,6 +12,7 @@ import Vest
 data SpecTsTypes = SpecTsTypes
   { hasAuth :: Bool
   , isStreaming :: Bool
+  , timeoutMillis :: Int
   , route :: Text' "route"
   , req :: Text' "tsReqType"
   , res :: Text' "tsResType"
@@ -18,6 +20,12 @@ data SpecTsTypes = SpecTsTypes
 
 toTsTypeText' :: (TypeScript a) => Proxy a -> Text' t
 toTsTypeText' = Tagged . pack . getTypeScriptType
+
+-- JS has unexpected semantics for a timeout value of zero, so we clamp timeouts to a millisecond.
+toTotalMillis :: Time Second -> Int
+toTotalMillis (Time 0) = 1
+toTotalMillis timeout =
+  toNum @Millisecond @Int (timeoutsPerHeartbeat *:* timeout)
 
 -- Used to iterate over the nested API structure, run a (possibly monadic) function on the proxied
 -- types of each endpoint, and optionally collect the results in a list.
@@ -33,8 +41,9 @@ instance (Collector a, Collector b) =>
               :<|> b)
     -> [TSDeclaration]
   generateTsDeclarations _ =
-    generateTsDeclarations (Proxy :: Proxy a) ++
-    generateTsDeclarations (Proxy :: Proxy b)
+    nub
+      (generateTsDeclarations (Proxy :: Proxy a) ++
+       generateTsDeclarations (Proxy :: Proxy b))
   makeSpecTsTypes ::
        Proxy (a
               :<|> b)
@@ -42,7 +51,7 @@ instance (Collector a, Collector b) =>
   makeSpecTsTypes _ =
     makeSpecTsTypes (Proxy :: Proxy a) ++ makeSpecTsTypes (Proxy :: Proxy b)
 
-instance (KnownSymbol route, TypeScript req, TypeScript res) =>
+instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
          Collector (Endpoint_ timeout format 'NoAuth service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
@@ -57,13 +66,14 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = False
         , isStreaming = False
+        , timeoutMillis = toTotalMillis $ natSeconds @timeout
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
     ]
 
-instance (KnownSymbol route, TypeScript req, TypeScript res) =>
+instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
          Collector (Endpoint_ timeout format 'NoAuth service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
@@ -78,13 +88,14 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = False
         , isStreaming = True
+        , timeoutMillis = toTotalMillis $ natSeconds @timeout
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
     ]
 
-instance (KnownSymbol route, TypeScript req, TypeScript res) =>
+instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
          Collector (Endpoint_ timeout format ('Auth DummyAuth) service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
@@ -99,13 +110,14 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = True
         , isStreaming = False
+        , timeoutMillis = toTotalMillis $ natSeconds @timeout
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
     ]
 
-instance (KnownSymbol route, TypeScript req, TypeScript res) =>
+instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
          Collector (Endpoint_ timeout format ('Auth DummyAuth) service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
@@ -120,6 +132,7 @@ instance (KnownSymbol route, TypeScript req, TypeScript res) =>
     [ SpecTsTypes
         { hasAuth = True
         , isStreaming = True
+        , timeoutMillis = toTotalMillis $ natSeconds @timeout
         , route = proxyText' (Proxy :: Proxy route)
         , req = toTsTypeText' (Proxy :: Proxy req)
         , res = toTsTypeText' (Proxy :: Proxy res)

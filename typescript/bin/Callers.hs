@@ -19,10 +19,17 @@ specTsTypesToObject ::
   => Proxy service
   -> SpecTsTypes
   -> Object
-specTsTypesToObject _ SpecTsTypes {hasAuth, isStreaming, route, req, res} =
+specTsTypesToObject _ SpecTsTypes { hasAuth
+                                  , isStreaming
+                                  , timeoutMillis
+                                  , route
+                                  , req
+                                  , res
+                                  } =
   fromPairs
     [ "auth" .= hasAuth
     , "streaming" .= isStreaming
+    , "timeoutMillis" .= timeoutMillis
     , "route" .= route
     , "namespacedRoute" .= namespaced' @service route
     , "req" .= req
