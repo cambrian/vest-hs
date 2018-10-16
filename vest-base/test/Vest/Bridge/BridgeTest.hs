@@ -153,7 +153,7 @@ multipleDirectTest =
                      :<|> EchoTextsDirectEndpoint transport)) $ \(echoInts :<|> echoTexts) -> do
     resultInts <- echoInts [1, 2, 3]
     resultTexts <- echoTexts ["a", "b", "c"]
-    return $ show resultInts <> show resultTexts
+    return $ show (resultInts, resultTexts)
 
 timeoutTest ::
      forall transport. HasRpcTransport transport T
@@ -173,10 +173,12 @@ singleStreamingTest =
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport)) $ \call -> do
+    result <- newEmptyMVar
     call [1, 2, 3] $ \results -> do
-      (Stream.toList results >>- elem 3) >>= (`unless` (throwString "1"))
-      (Stream.toList results >>- elem 3) >>= (`unless` (throwString "2"))
-    return ""
+      last1 <- Stream.toList results >>- last
+      last2 <- Stream.toList results >>- last
+      putMVar result (show (last1, last2))
+    takeMVar result
 
 multipleStreamingTest ::
      forall transport. HasRpcTransport transport T
@@ -189,13 +191,15 @@ multipleStreamingTest =
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport
                      :<|> EchoTextsStreamingEndpoint transport)) $ \(echoInts :<|> echoTexts) -> do
-    echoInts (replicate 5 4) $ \i1 ->
-      echoInts (replicate 5 5) $ \i2 ->
-        echoTexts (replicate 5 "a") $ \t -> do
-          (Stream.toList i1 >>- all (== 4)) >>= (`unless` (throwString "1"))
-          (Stream.toList i2 >>- all (== 5)) >>= (`unless` (throwString "2"))
-          (Stream.toList t >>- all (== "a")) >>= (`unless` (throwString "3"))
-    return ""
+    result <- newEmptyMVar
+    echoInts (replicate 3 4) $ \resultInts1 ->
+      echoInts (replicate 3 5) $ \resultInts2 ->
+        echoTexts (replicate 3 "a") $ \resultTexts -> do
+          lastInt1 <- Stream.toList resultInts1 >>- last
+          lastInt2 <- Stream.toList resultInts2 >>- last
+          lastText <- Stream.toList resultTexts >>- last
+          putMVar result (show (lastInt1, lastInt2, lastText))
+    takeMVar result
 
 -- pubSubTest' ::
 --      forall transport. HasPubSubTransport transport T
@@ -218,7 +222,7 @@ directTests =
     ]
 
 streamingTests ::
-     forall transport. HasRpcTransport transport T --
+     forall transport. HasRpcTransport transport T
   => TestTree
 streamingTests =
   testGroup

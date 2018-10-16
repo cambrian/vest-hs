@@ -105,3 +105,6 @@ blockForever = do
                                              -- is blocked forever by creating a stable reference
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
+
+last :: [a] -> Maybe a
+last = lastMay
