@@ -3,7 +3,7 @@ import Data.Aeson.Types ()
 import qualified DummyManager
 import System.Random
 import Text.Replace
-import qualified Transports.WebSocket as WebSocket
+import qualified Transport.WebSocket as WebSocket
 import Typescript
 import Vest
 

@@ -5,7 +5,7 @@ module DummyManager
 
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
-import qualified Transports.WebSocket as WebSocket
+import qualified Transport.WebSocket as WebSocket
 import Vest
 
 data DummyAuth =

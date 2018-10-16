@@ -53,8 +53,8 @@ timeoutRenewable ::
   -> IO a
   -> IO (Time unit -> IO (), IO (Either (TimeoutException unit) a))
 timeoutRenewable t action = do
-  let micros = toNum @Microsecond t
-  delay <- newDelay micros
+  let micros = toNum @Microsecond
+  delay <- newDelay $ micros t
   resultMVar <- newEmptyMVar
   void . async $ do
     atomically $ waitDelay delay
@@ -63,7 +63,7 @@ timeoutRenewable t action = do
     result <- action
     cancelDelay delay
     putMVar resultMVar (Just result)
-  let renew newTimeout = updateDelay delay (toNum @Microsecond newTimeout)
+  let renew newTimeout = updateDelay delay $ micros newTimeout
   let result =
         readMVar resultMVar >>- \case
           Nothing -> Left $ TimeoutException t
@@ -82,25 +82,24 @@ intervalRenewable ::
   => Time unit
   -> IO ()
   -> IO (IO' "RenewInterval" (), IO' "Cancel" ())
--- ^ Executes immediately, and also at intervals
+-- ^ Begins by waiting; does not execute immediately
 intervalRenewable interval action = do
-  time <- now
-  nextHeartbeat <- newTVarIO time
+  nextBeat <- newTVarIO (Timestamp 0)
+  let renew = do
+        time <- now
+        atomically $ writeTVar nextBeat (timeAdd interval time)
+  renew
   intervalThread <-
     async . forever $ do
       time <- now
-      nextHeartbeatTime <- readTVarIO nextHeartbeat
-      if time > nextHeartbeatTime
+      nextBeatTime <- readTVarIO nextBeat
+      if time > nextBeatTime
         then do
           void $ async action
-          atomically $
-            writeTVar nextHeartbeat (timeAdd interval nextHeartbeatTime)
+          atomically $ writeTVar nextBeat (timeAdd interval nextBeatTime)
           threadDelay interval
-        else threadDelay (snd $ timeDiff @Second time nextHeartbeatTime)
-  let renew = do
-        time <- now
-        atomically $ writeTVar nextHeartbeat (timeAdd interval time)
-  return (Tagged renew, Tagged $ cancel intervalThread)
+        else threadDelay (snd $ timeDiff @Second time nextBeatTime)
+  return (Tagged renew, Tagged $ uninterruptibleCancel intervalThread)
 
 -- UTCTime <--> Timestamp
 -- TODO: keep nanos

@@ -1,4 +1,4 @@
-module Transports.Amqp
+module Transport.Amqp
   ( T(..)
   , Config(..)
   , localConfig
@@ -146,13 +146,15 @@ instance RpcTransport T where
                                    , responseQueue
                                    , reqText
                                    } = do
-          let respond resText =
+          let respond resText = do
+                putText $
+                  "sending to " <> untag requestId <> ": " <> untag resText
                 void $
-                AMQP.publishMsg
-                  publishChan
-                  "" -- Default exchange just sends message to queue specified by routing key.
-                  (untag responseQueue) -- Exchange routing key.
-                  (toAmqpMsg . show $ ResponseMessage {requestId, resText})
+                  AMQP.publishMsg
+                    publishChan
+                    "" -- Default exchange just sends message to queue specified by routing key.
+                    (untag responseQueue) -- Exchange routing key.
+                    (toAmqpMsg . show $ ResponseMessage {requestId, resText})
           asyncHandler headers reqText respond
     consumerTag <-
       AMQP.consumeMsgs

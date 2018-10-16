@@ -1,4 +1,4 @@
-module Transports.WebSocket
+module Transport.WebSocket
   ( T(..)
   , Config(..)
   , ServerInfo(..)

@@ -26,6 +26,16 @@ class (RequestSigner (AuthSigner a), RequestVerifier (AuthVerifier a)) =>
 
 type AuthClaims a = VerifierClaims (AuthVerifier a)
 
+class (Auth a) =>
+      HasAuthSigner a t
+  where
+  authSigner :: t -> AuthSigner a
+
+class (Auth a) =>
+      HasAuthVerifier a t
+  where
+  authVerifier :: t -> AuthVerifier a
+
 -- Empty auth instance. This is not intended to be used externally; you should prefer
 -- auth 'Nothing instead of 'Auth ().
 -- TODO: replace () with data EmptyAuth?
@@ -40,20 +50,8 @@ instance Auth () where
   type AuthSigner () = ()
   type AuthVerifier () = ()
 
-class (Auth a) =>
-      HasAuthSigner a t
-  where
-  authSigner :: t -> AuthSigner a
-
--- | Empty auth signer is always defined.
 instance HasAuthSigner () t where
   authSigner _ = ()
 
-class (Auth a) =>
-      HasAuthVerifier a t
-  where
-  authVerifier :: t -> AuthVerifier a
-
--- | Empty auth verifier is always defined.
 instance HasAuthVerifier () t where
   authVerifier _ = ()

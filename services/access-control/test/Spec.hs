@@ -4,7 +4,7 @@ import qualified AccessControl.Handlers
 import qualified AccessControl.Permission as Permission
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
-import qualified Transports.Amqp as Amqp
+import qualified Transport.Amqp as Amqp
 import Vest
 
 testAccessControlSeed :: ByteString

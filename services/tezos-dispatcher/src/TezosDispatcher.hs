@@ -2,7 +2,7 @@ module TezosDispatcher
   ( module TezosDispatcher
   ) where
 
-import qualified Transports.Amqp as Amqp
+import qualified Transport.Amqp as Amqp
 import Vest
 
 data TezosDispatcher = Args

@@ -4,7 +4,7 @@ module AccessControl
 
 import qualified AccessControl.Permission as Permission
 import qualified Data.Yaml as Yaml
-import qualified Transports.Amqp as Amqp
+import qualified Transport.Amqp as Amqp
 import Vest
 
 data Subject = Subject
