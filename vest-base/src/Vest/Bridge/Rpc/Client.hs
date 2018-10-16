@@ -109,6 +109,7 @@ callStreaming timeout_ signer route transport req f = do
           Left (exc :: RpcClientException) -> do
             close
             evilThrowTo mainThread exc
+            -- does this cause doCleanup to get skipped?
           Right response ->
             case response of
               Heartbeat -> return ()
@@ -123,7 +124,7 @@ callStreaming timeout_ signer route transport req f = do
       throw exn
     Right () ->
       void . async $ do
-        heartbeatLostOrDone_ <- heartbeatLostOrDone --
+        heartbeatLostOrDone_ <- heartbeatLostOrDone
         close
         doCleanup
         case heartbeatLostOrDone_ of

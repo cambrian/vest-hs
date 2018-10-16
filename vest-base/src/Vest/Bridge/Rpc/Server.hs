@@ -66,13 +66,12 @@ directSender send = (>>= send)
 
 streamingSender ::
      Time Second -> (StreamingResponse res -> IO ()) -> IO (Stream res) -> IO ()
-streamingSender _timeout send xs = do
+streamingSender timeout send xs = do
   send Heartbeat
-  -- (Tagged _postponeHeartbeat, Tagged cancelHeartbeats) <-
-  --   intervalRenewable (timeoutsPerHeartbeat *:* timeout) (send Heartbeat)
-  -- xs >>= Stream.mapM_ (\x -> postponeHeartbeat >> send (Result x))
-  -- cancelHeartbeats
-  xs >>= Stream.mapM_ (send . Result)
+  (Tagged postponeHeartbeat, Tagged cancelHeartbeats) <-
+    intervalRenewable (timeoutsPerHeartbeat *:* timeout) (send Heartbeat)
+  xs >>= Stream.mapM_ (\x -> postponeHeartbeat >> send (Result x))
+  cancelHeartbeats
   send EndOfResults
 
 serve_ ::

@@ -213,7 +213,6 @@ directTests ::
      forall transport. HasRpcTransport transport T
   => TestTree
 directTests =
-  ignoreTest $
   testGroup
     "Direct RPC"
     [ singleDirectTest @transport

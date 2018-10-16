@@ -113,7 +113,7 @@ instance Resource T where
   cleanup :: T -> IO ()
     -- Closes AMQP consumers, closes connection, and deletes response queue.
     -- Unsubscribes from any subscribed topics.
-  cleanup T { conn
+  cleanup T { conn = _
             , responseQueue
             , responseConsumerChan
             , responseConsumerTag
@@ -126,7 +126,12 @@ instance Resource T where
     HashTable.mapM_ (cancel . snd) publisherThreads
     HashTable.mapM_ (uncurry unsubscribe) subscribers
     _ <- AMQP.deleteQueue responseConsumerChan (untag responseQueue)
-    AMQP.closeConnection conn -- Also closes chans.
+    -- AMQP.closeConnection is not thread safe, so we choose to leak the connection instead.
+    -- AMQP.closeConnection conn -- Also closes chans.
+    -- We have to manually close the AMQP channels now
+    AMQP.closeChannel responseConsumerChan
+    HashTable.mapM_ (AMQP.closeChannel . fst . snd) consumedRoutes
+    HashTable.mapM_ (AMQP.closeChannel . fst . snd) subscribers
 
 instance RpcTransport T where
   _consumeRequests ::
@@ -147,15 +152,13 @@ instance RpcTransport T where
                                    , responseQueue
                                    , reqText
                                    } = do
-          let respond resText = do
-                putText $
-                  "sending to " <> untag requestId <> ": " <> untag resText
+          let respond resText =
                 void $
-                  AMQP.publishMsg
-                    publishChan
-                    "" -- Default exchange just sends message to queue specified by routing key.
-                    (untag responseQueue) -- Exchange routing key.
-                    (toAmqpMsg . show $ ResponseMessage {requestId, resText})
+                AMQP.publishMsg
+                  publishChan
+                  "" -- Default exchange just sends message to queue specified by routing key.
+                  (untag responseQueue) -- Exchange routing key.
+                  (toAmqpMsg . show $ ResponseMessage {requestId, resText})
           asyncHandler headers reqText respond
     consumerTag <-
       AMQP.consumeMsgs
