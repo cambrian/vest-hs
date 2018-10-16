@@ -1,5 +1,5 @@
 import qualified Stream
-import Tezos
+import Tezos.Node
 import Vest
 import Vest.Http
 

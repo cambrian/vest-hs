@@ -84,7 +84,7 @@ serve_ ::
      )
   => ((res -> IO ()) -> IO x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
-     -- res itself may be StreamingResponse a in the case of a streaming sender
+     -- res itself may be StreamingResponse a in the case of a streaming sender.
   -> verifier
   -> (VerifierClaims verifier -> req -> IO x)
   -> NamespacedText' "Route"

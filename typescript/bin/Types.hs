@@ -32,6 +32,7 @@ replaceRules =
       "export type Text<T extends string> = Tagged<T, string>"
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
+  , Replace "IHeartbeat<T>" "IHeartbeat"
   , Replace "Text_<\"Header\">" "string"
   , Replace "Text_" "Text"
   , Replace "\"" "\'"

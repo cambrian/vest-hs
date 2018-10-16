@@ -16,7 +16,7 @@ type StreamCallback res a = (Stream res -> IO a) -> IO a
 -- consumed within a callback.
 -- If you want to consume multiple streaming RPCs concurrently, you should nest the callbacks.
 -- This is admittedly ugly but it handles exceptions correctly.
--- TODO: implement as monad transformer?
+-- TODO: Implement as monad transformer?
 type family ClientBindings spec where
   ClientBindings () = ()
   ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Direct res)) = req -> IO res

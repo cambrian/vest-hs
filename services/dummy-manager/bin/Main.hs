@@ -26,7 +26,9 @@ echoThriceAuth ::
 echoThriceAuth _ _ = return . Streamly.fromList . replicate 3
 
 handlers :: Handlers Api
-handlers = addInts :<|> echoThrice :<|> concatTextAuth :<|> echoThriceAuth
+handlers =
+  addInts :<|> addInts :<|> echoThrice :<|> echoThrice :<|> concatTextAuth :<|>
+  echoThriceAuth
 
 main :: IO Void
 main = start @T (const . return $ ()) handlers
