@@ -48,7 +48,8 @@ data T = T
   { conn :: AMQP.Connection
   , publishChan :: AMQP.Channel
   , responseQueue :: Text' "ResponseQueue"
-  , responseConsumer :: (AMQP.Channel, AMQP.ConsumerTag)
+  , responseConsumerChan :: AMQP.Channel
+  , responseConsumerTag :: AMQP.ConsumerTag
   , consumedRoutes :: HashTable (NamespacedText' "Route") ( AMQP.Channel
                                                           , AMQP.ConsumerTag)
   , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
@@ -71,14 +72,12 @@ toAmqpMsg :: Text -> AMQP.Message
 toAmqpMsg x =
   AMQP.newMsg {AMQP.msgBody = ByteString.Lazy.UTF8.fromString . unpack $ x}
 
-cancelConsumer :: (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
-cancelConsumer (chan, tag) = AMQP.cancelConsumer chan tag
-
 instance Resource T where
   type ResourceConfig T = Config
   make :: Config -> IO T
     -- Connects to RabbitMQ, begins listening on RPC queue.
-  make Config {hostname, virtualHost, username, password} = do
+  make Config {hostname, virtualHost, username, password} --
+   = do
     conn <- AMQP.openConnection (unpack hostname) virtualHost username password
     publishChan <- AMQP.openChannel conn
     responseConsumerChan <- AMQP.openChannel conn
@@ -104,7 +103,8 @@ instance Resource T where
         { conn
         , publishChan
         , responseQueue = Tagged queueName
-        , responseConsumer = (responseConsumerChan, responseConsumerTag)
+        , responseConsumerChan
+        , responseConsumerTag
         , consumedRoutes
         , responseHandlers
         , publisherThreads
@@ -115,16 +115,17 @@ instance Resource T where
     -- Unsubscribes from any subscribed topics.
   cleanup T { conn
             , responseQueue
-            , responseConsumer
+            , responseConsumerChan
+            , responseConsumerTag
             , consumedRoutes
             , publisherThreads
             , subscribers
             } = do
-    cancelConsumer responseConsumer
-    HashTable.mapM_ (cancelConsumer . snd) consumedRoutes
+    AMQP.cancelConsumer responseConsumerChan responseConsumerTag
+    HashTable.mapM_ (uncurry AMQP.cancelConsumer . snd) consumedRoutes
     HashTable.mapM_ (cancel . snd) publisherThreads
     HashTable.mapM_ (uncurry unsubscribe) subscribers
-    _ <- AMQP.deleteQueue (fst responseConsumer) (untag responseQueue)
+    _ <- AMQP.deleteQueue responseConsumerChan (untag responseQueue)
     AMQP.closeConnection conn -- Also closes chans.
 
 instance RpcTransport T where
