@@ -1,6 +1,1 @@
-module Tezos.TzScan
-  ( module Tezos.TzScan
-  ) where
-
-import Vest
-import Vest.Http
+module Tezos.TzScan where
