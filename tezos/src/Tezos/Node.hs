@@ -1,5 +1,5 @@
-module Tezos
-  ( module Tezos
+module Tezos.Node
+  ( module Tezos.Node
   ) where
 
 import Vest
