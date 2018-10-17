@@ -3,6 +3,7 @@ module Vest.Prelude.Money
   ) where
 
 import Money
+import Money.Aeson ()
 import Vest.Prelude.Core
 
 -- use:
@@ -23,7 +24,11 @@ type family CurrencyUnit currency where
 
 type FixedQty currency = Discrete currency (CurrencyUnit currency)
 
+type FixedQty' tag currency = Tagged tag (FixedQty currency)
+
 type RationalQty currency = Dense currency
+
+type RationalQty' tag currency = Tagged tag (RationalQty currency)
 
 class ( KnownSymbol currency
       , KnownSymbol (CurrencyUnit currency)

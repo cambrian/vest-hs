@@ -58,6 +58,12 @@ read = deserialize @"Haskell"
 read' :: (Read a) => Text' t -> Maybe a
 read' = deserialize' @"Haskell"
 
+readUnsafe :: (Read a) => Text -> IO a
+readUnsafe = deserializeUnsafe @"Haskell"
+
+readUnsafe' :: (Read a) => Text' t -> IO a
+readUnsafe' = deserializeUnsafe' @"Haskell"
+
 show' :: (Show a) => a -> Text' t
 show' = serialize' @"Haskell"
 -- show is defined in protolude
