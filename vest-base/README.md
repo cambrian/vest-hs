@@ -12,4 +12,6 @@ import qualified Db
 import qualified Stream
 ```
 
+The Test module is an exception and should be imported unqualified.
+
 (built on top of Protolude).

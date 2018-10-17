@@ -8,9 +8,7 @@ import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.AMQP as AMQP
 import qualified Network.HostName
-import Vest.Bridge.PubSub
-import Vest.Bridge.Rpc
-import Vest.Prelude
+import Vest
 
 type HashTable k v = HashTable.BasicHashTable k v
 
@@ -237,3 +235,9 @@ instance PubSubTransport T where
           HashTable.delete subscribers subscriberId
           unsubscribe subscriberId (consumerChan, consumerTag)
     return $ Tagged unsubscribe_
+
+instance HasRpcTransport T T where
+  rpcTransport = identity
+
+instance HasPubSubTransport T T where
+  pubSubTransport = identity

@@ -7,15 +7,13 @@ module Transport.WebSocket
   , localConfig
   ) where
 
-import qualified Control.Exception as Exception
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
-import Vest.Bridge.Rpc
-import Vest.Prelude
+import Vest
 
 type HashTable k v = HashTable.BasicHashTable k v
 
@@ -134,7 +132,7 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
     clientId
     (WS.sendTextData conn . serialize @"JSON")
   WS.forkPingThread conn pingInterval
-  Exception.finally
+  finally
     (serveClient serverRequestHandlers clientId conn)
     (HashTable.delete serverResponseHandlers clientId)
 

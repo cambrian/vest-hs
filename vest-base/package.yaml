@@ -26,7 +26,6 @@ dependencies:
 - hashable                >= 1.2
 - hashtables              >= 1.2
 - hostname                >= 1.0
-- hspec                   >= 2.5
 - http-client             >= 0.5
 - http-client-tls         >= 0.3
 - http-types              >= 0.12

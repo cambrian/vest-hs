@@ -17,7 +17,6 @@ class Resource a where
   type ResourceConfig a
   make :: ResourceConfig a -> IO a
   cleanup :: a -> IO ()
-  -- ^ Minimal required definition.
   with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config = bracket (make config) cleanup
   -- ^ TODO: Retry on exception.

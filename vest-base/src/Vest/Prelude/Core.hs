@@ -65,6 +65,11 @@ type Text' t = Tagged t Text
 
 type IO' t a = Tagged t (IO a)
 
+type Async' t a = Tagged t (Async a)
+
+async' :: IO a -> IO (Async' t a)
+async' x = Tagged <$> async x
+
 instance Hashable a => Hashable (Tagged s a)
 
 data BugException =

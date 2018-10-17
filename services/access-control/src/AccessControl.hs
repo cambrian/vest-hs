@@ -35,9 +35,9 @@ data Access = Access
   , expiration :: Timestamp
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
-type PublicKeyEndpoint
-   = Endpoint 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
-
+-- Is this insecure? For example if an attacker spins up a fake access control server
+-- type PublicKeyEndpoint
+--    = Endpoint 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
 type TokenEndpoint = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct Token)
 
 instance HasRpcTransport Amqp.T T where
@@ -45,8 +45,7 @@ instance HasRpcTransport Amqp.T T where
 
 instance Service T where
   type ServiceArgs T = AccessControl
-  type RpcSpec T = PublicKeyEndpoint
-                   :<|> TokenEndpoint
+  type RpcSpec T = TokenEndpoint
   type PubSubSpec T = ()
   defaultArgs =
     Args

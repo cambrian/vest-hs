@@ -7,9 +7,6 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import Vest
 
-pubKey :: T -> () -> IO PublicKey
-pubKey T {publicKey} () = return publicKey
-
 accessToken :: T -> PublicKey -> IO Token
 accessToken T {subjects, secretKey, tokenTTL} publicKey = do
   time <- now
@@ -23,4 +20,4 @@ accessToken T {subjects, secretKey, tokenTTL} publicKey = do
   return token
 
 t :: Handlers (RpcSpec T)
-t = pubKey :<|> accessToken
+t = accessToken

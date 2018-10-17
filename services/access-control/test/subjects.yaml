@@ -1,0 +1,4 @@
+- - unPublicKey: e8MHlRjtEdoDNghb9pYpIP+H+zxNYwqbWMthU2dPXdY=
+  - name: AccessControl.TestClient
+    permissions:
+    - A

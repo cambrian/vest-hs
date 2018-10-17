@@ -2,83 +2,128 @@ import qualified AccessControl
 import qualified AccessControl.Auth
 import qualified AccessControl.Handlers
 import qualified AccessControl.Permission as Permission
+import qualified AccessControl.TestClient
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
+import qualified Data.Yaml as Yaml
+import Test
 import qualified Transport.Amqp as Amqp
 import Vest
 
-testAccessControlSeed :: ByteString
-testAccessControlSeed = "01234567890123456789012345678901"
+seedFile :: FilePath
+seedFile = "access-control/test/access-control-seed.yaml"
 
-testServiceSeed :: ByteString
-testServiceSeed = "0123456789012345678901234567890 "
+pubKeyFile :: FilePath
+pubKeyFile = "access-control/test/access-control-public-key.yaml"
 
-makeAccessControl ::
-     Amqp.T -> HashMap PublicKey AccessControl.Subject -> IO AccessControl.T
--- ^ amqp not used, but is necessary to create AccessControl.T
-makeAccessControl amqp subjects = do
-  (publicKey, secretKey) <- seedKeyPairUnsafe testAccessControlSeed
-  return $
-    AccessControl.T {subjects, amqp, publicKey, secretKey, tokenTTL = hour 1}
+subjectsFile :: FilePath
+subjectsFile = "access-control/test/subjects.yaml"
 
-data T = T
+data TestServer = TestServer
   { amqp :: Amqp.T
-  , publicKey :: PublicKey
-  , secretKey :: SecretKey
   , accessControlPublicKey :: PublicKey
-  , accessToken :: AccessControl.Token
   }
 
-instance HasRpcTransport Amqp.T T where
+instance HasRpcTransport Amqp.T TestServer where
   rpcTransport = amqp
 
 -- There has to be a way to automatically derive this... right?
-instance AccessControl.Auth.HasSigner T where
-  secretKey = secretKey
-  accessToken = accessToken
-
-instance AccessControl.Auth.HasVerifier T where
+instance AccessControl.Auth.HasVerifier TestServer where
   accessControlPublicKey = accessControlPublicKey
 
 type PermittedEndpoint
-   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.A)) T Amqp.T "permittedEndpoint" () ('Direct ())
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.A)) TestServer Amqp.T "permittedEndpoint" () ('Direct ())
 
-type NotPermittedEndpoint
-   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.B)) T Amqp.T "notPermittedEndpoint" () ('Direct ())
+type ForbiddenEndpoint
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.B)) TestServer Amqp.T "forbiddenEndpoint" () ('Direct ())
 
-handler :: T -> AccessControl.Auth.Claims -> () -> IO ()
+instance Service TestServer where
+  type ServiceArgs TestServer = ()
+  type RpcSpec TestServer = PermittedEndpoint
+                            :<|> ForbiddenEndpoint
+  type PubSubSpec TestServer = ()
+  defaultArgs = ()
+  init () f = do
+    accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
+    with Amqp.localConfig $ \amqp ->
+      f $ TestServer {amqp, accessControlPublicKey}
+
+generatePublicKey :: TestTree
+-- ^ somewhat hacky way to generate the public-key.yaml file
+generatePublicKey =
+  testCase "Generate Access Control Public Key" pubKeyFile $ do
+    (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
+    (publicKey, _) <- seedKeyPairUnsafe seed
+    return $ Yaml.encode publicKey
+
+generateSubjects :: TestTree
+-- ^ somewhat hacky way to generate the public-key.yaml file
+generateSubjects =
+  testCase "Generate Access Control Subjects" subjectsFile $ do
+    (publicKey, _) <- seedKeyPairUnsafe AccessControl.TestClient.seed
+    let subjects =
+          HashMap.fromList
+            [ ( publicKey
+              , AccessControl.Subject
+                  { AccessControl.name =
+                      untag $ namespace @AccessControl.TestClient.T
+                  , AccessControl.permissions = HashSet.fromList [Permission.A]
+                  })
+            ]
+    return $ Yaml.encode subjects
+
+testPermitted :: IO AccessControl.TestClient.T -> TestTree
+testPermitted t =
+  testCase "Permitted" "access-control/test/permitted.gold" $ do
+    t <- t
+    let call = makeClient t (Proxy :: Proxy PermittedEndpoint)
+    call () >>- show
+
+testForbidden :: IO AccessControl.TestClient.T -> TestTree
+testForbidden t =
+  expectFail $
+  testCase "Forbidden" "access-control/test/forbidden.gold" $ do
+    t <- t
+    let call = makeClient t (Proxy :: Proxy ForbiddenEndpoint)
+    call () >>- show
+
+accessControlServiceConfig :: ServiceResourceConfig AccessControl.T
+accessControlServiceConfig =
+  ServiceResourceConfig
+    { serviceResourceArgs =
+        AccessControl.Args
+          { AccessControl.subjectsFile = subjectsFile
+          , AccessControl.seedFile = seedFile
+          , AccessControl.tokenTTLHours = 1
+          }
+    , serviceResourceStreams = const $ return ()
+    , serviceResourceHandlers = AccessControl.Handlers.t
+    }
+
+handler :: TestServer -> AccessControl.Auth.Claims -> () -> IO ()
 handler _ _ _ = return ()
 
-instance Service T where
-  type ServiceArgs T = ()
-  type RpcSpec T = PermittedEndpoint
-                   :<|> NotPermittedEndpoint
-  type PubSubSpec T = ()
-  defaultArgs = ()
-  init _args f = do
-    (accessControlPublicKey, _) <- seedKeyPairUnsafe testAccessControlSeed
-    (publicKey, secretKey) <- seedKeyPairUnsafe testServiceSeed
-    let subject =
-          ( publicKey
-          , AccessControl.Subject
-              {name = "test", permissions = HashSet.fromList [Permission.A]})
-        subjects = HashMap.fromList [subject]
-    with
-      Amqp.localConfig
-      (\amqp -> do
-         let _ :<|> getAccessToken = AccessControl.Handlers.t
-         accessControl <- makeAccessControl amqp subjects
-         accessToken <- getAccessToken accessControl publicKey
-         f $ T {amqp, publicKey, secretKey, accessControlPublicKey, accessToken})
+testServerConfig :: ServiceResourceConfig TestServer
+testServerConfig =
+  ServiceResourceConfig
+    { serviceResourceArgs = ()
+    , serviceResourceStreams = const $ return ()
+    , serviceResourceHandlers = handler :<|> handler
+    }
 
-run :: T -> IO ()
-run t = do
-  serve (handler :<|> handler) t (Proxy :: Proxy (RpcSpec T))
-  let callPermitted :<|> _callNotPermitted =
-        makeClient t (Proxy :: Proxy (RpcSpec T))
-  callPermitted ()
-  putText "yay"
-  -- callNotPermitted (sec 0.1) ()
+generateDataFiles :: TestTree
+generateDataFiles =
+  testGroup "Generate data files" [generatePublicKey, generateSubjects]
+
+tests :: TestTree
+tests =
+  testWithResource @(ServiceResource AccessControl.T) accessControlServiceConfig $
+  const $
+  testWithResource @(ServiceResource TestServer) testServerConfig $
+  const $
+  testWithResource
+    AccessControl.TestClient.Config {amqpConfig = Amqp.localConfig} $ \testClient ->
+    testGroup "Tests" [testPermitted testClient, testForbidden testClient]
 
 main :: IO ()
-main = init () run
+main = defaultMain $ testGroup "All" [generateDataFiles, tests]

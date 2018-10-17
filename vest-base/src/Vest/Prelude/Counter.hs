@@ -1,4 +1,6 @@
--- Provides a global counter, similar to the global random generator
+-- Provides a global counter, similar to the global random generator.
+-- For testing, mostly.
+-- TODO: consider removing from Vest.Prelude
 module Vest.Prelude.Counter
   ( setGlobalCounter
   , nextCount

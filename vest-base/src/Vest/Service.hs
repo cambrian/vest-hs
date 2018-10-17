@@ -23,23 +23,24 @@ class ( Data (ServiceArgs a)
   -- ^ rename?
   serviceName :: Text' "ServiceName"
   serviceName = moduleName' @a
-  start :: (a -> IO (Streams (PubSubSpec a))) -> Handlers (RpcSpec a) -> IO Void
-  start makeStreams handlers = startAndRun @a makeStreams handlers return
-  startAndRun ::
-       (a -> IO (Streams (PubSubSpec a)))
+  run ::
+       ServiceArgs a
+    -> (a -> IO (Streams (PubSubSpec a)))
     -> Handlers (RpcSpec a)
     -> (a -> IO b)
     -> IO Void
-  -- ^ This function allows you to start a service and run an arbitrary function in addition to
-  -- serving and publishing according to spec.
-  startAndRun makeStreams handlers f = do
-    args_ <- cmdArgs $ defaultArgs @a
-    init args_ $ \a -> do
+  -- ^ This function runs a service with the provided streams, handlers, and body function
+  run args makeStreams handlers f =
+    init args $ \a -> do
       serve handlers a (Proxy :: Proxy (RpcSpec a))
       streams <- makeStreams a
       publish streams a (Proxy :: Proxy (PubSubSpec a))
       f a
       blockForever
+  start :: (a -> IO (Streams (PubSubSpec a))) -> Handlers (RpcSpec a) -> IO Void
+  start makeStreams handlers = do
+    args_ <- cmdArgs $ defaultArgs @a
+    run @a args_ makeStreams handlers return
 
 instance Service a => HasNamespace a where
   namespace = retag $ serviceName @a
