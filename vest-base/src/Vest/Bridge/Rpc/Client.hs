@@ -56,7 +56,7 @@ packRequest signer req =
 callDirect ::
      forall fmt signer transport req res.
      ( Serializable fmt req
-     , Deserializable fmt (Either RpcClientException res)
+     , Deserializable fmt (RpcResponse res)
      , RequestSigner signer
      , RpcTransport transport
      )
@@ -72,8 +72,9 @@ callDirect timeout_ signer route transport req = do
   let (headersWithSignature, reqText) = packRequest @fmt signer req
       handleResponse resOrExcText =
         deserializeUnsafe' @fmt resOrExcText >>= \case
-          Left (exc :: RpcClientException) -> evilThrowTo mainThread exc
-          Right res -> putMVar resultVar res
+          RpcResponseClientException e -> evilThrowTo mainThread e
+          RpcResponseServerException e -> evilThrowTo mainThread e
+          RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
   result <- timeout timeout_ $ readMVar resultVar
@@ -83,7 +84,7 @@ callDirect timeout_ signer route transport req = do
 callStreaming ::
      forall fmt signer transport req res a.
      ( Serializable fmt req
-     , Deserializable fmt (Either RpcClientException (StreamingResponse res))
+     , Deserializable fmt (RpcResponse (StreamingResponse res))
      , RequestSigner signer
      , RpcTransport transport
      )
@@ -106,11 +107,10 @@ callStreaming timeout_ signer route transport req f = do
         _ <- tryPutMVar gotFirstResponse ()
         renewHeartbeatTimer twoHeartbeats
         deserializeUnsafe' @fmt resOrExcText >>= \case
-          Left (exc :: RpcClientException) -> do
-            close
-            evilThrowTo mainThread exc
+          RpcResponseClientException e -> close >> evilThrowTo mainThread e
+          RpcResponseServerException e -> close >> evilThrowTo mainThread e
             -- does this cause doCleanup to get skipped?
-          Right response ->
+          RpcResponse response ->
             case response of
               Heartbeat -> return ()
               Result res -> push res
@@ -135,7 +135,7 @@ callStreaming timeout_ signer route transport req f = do
 
 instance ( KnownNat timeout
          , Serializable fmt req
-         , Deserializable fmt (Either RpcClientException res)
+         , Deserializable fmt (RpcResponse res)
          , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
@@ -155,7 +155,7 @@ instance ( KnownNat timeout
 
 instance ( KnownNat timeout
          , Serializable fmt req
-         , Deserializable fmt (Either RpcClientException (StreamingResponse res))
+         , Deserializable fmt (RpcResponse (StreamingResponse res))
          , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
@@ -175,7 +175,7 @@ instance ( KnownNat timeout
 
 instance ( KnownNat timeout
          , Serializable fmt req
-         , Deserializable fmt (Either RpcClientException res)
+         , Deserializable fmt (RpcResponse res)
          , HasNamespace server
          , HasAuthSigner auth t
          , HasRpcTransport transport t
@@ -196,7 +196,7 @@ instance ( KnownNat timeout
 
 instance ( KnownNat timeout
          , Serializable fmt req
-         , Deserializable fmt (Either RpcClientException (StreamingResponse res))
+         , Deserializable fmt (RpcResponse (StreamingResponse res))
          , HasNamespace server
          , HasAuthSigner auth t
          , HasRpcTransport transport t

@@ -61,16 +61,27 @@ class (RpcTransport transport) =>
 
 type Headers = HashMap (Text' "Header") Text
 
+data RpcResponse a
+  = RpcResponseClientException ClientException
+  | RpcResponseServerException ServerException
+  | RpcResponse a
+  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
 data StreamingResponse a
   = Heartbeat
   | Result a
   | EndOfResults
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-data RpcClientException
+data ClientException
   = BadAuth
   | BadCall DeserializeException
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
+
+newtype ServerException =
+  ServerException Text
+  deriving (Eq, Ord, Show, Read, Generic)
+  deriving anyclass (Hashable, ToJSON, FromJSON, Exception)
 
 newtype HeartbeatLostException unit =
   HeartbeatLostException (Time unit)

@@ -166,7 +166,11 @@ instance (KnownSymbol s) => TypeScript (NamespacedText' (s :: Symbol)) where
 -- reason
 $(deriveTypeScript defaultOptions ''DeserializeException)
 
-$(deriveTypeScript defaultOptions ''RpcClientException)
+$(deriveTypeScript defaultOptions ''ClientException)
+
+$(deriveTypeScript defaultOptions ''ServerException)
+
+$(deriveTypeScript defaultOptions ''RpcResponse)
 
 $(deriveTypeScript defaultOptions ''StreamingResponse)
 

@@ -9,6 +9,7 @@ import qualified Transport.WebSocket as WebSocket
 import Vest
 
 -- TODO: add test for HeartbeatLostExceptions
+-- TODO: add test for server exception
 data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T

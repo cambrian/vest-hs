@@ -60,9 +60,9 @@ main = do
        (pack . formatTSDeclarations . concat $
         [ getTypeScriptDeclarations (Proxy :: Proxy Text_)
         , getTypeScriptDeclarations (Proxy :: Proxy DeserializeException)
-        , getTypeScriptDeclarations (Proxy :: Proxy RpcClientException)
-        , getTypeScriptDeclarations
-            (Proxy :: Proxy (Either RpcClientException Text))
+        , getTypeScriptDeclarations (Proxy :: Proxy ClientException)
+        , getTypeScriptDeclarations (Proxy :: Proxy ServerException)
+        , getTypeScriptDeclarations (Proxy :: Proxy (RpcResponse Text))
         , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)

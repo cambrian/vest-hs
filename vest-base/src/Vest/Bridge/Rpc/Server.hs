@@ -77,7 +77,7 @@ streamingSender timeout send xs = do
 serve_ ::
      forall fmt req res verifier transport x.
      ( Deserializable fmt req
-     , Serializable fmt (Either RpcClientException res)
+     , Serializable fmt (RpcResponse res)
      , RequestVerifier verifier
      , RpcTransport transport
      )
@@ -93,22 +93,26 @@ serve_ sender verifier handler = _consumeRequests asyncHandle
   where
     asyncHandle headers reqText respond =
       async $
-      catch
+      catches
         (do time <- now
             claims <-
               fromJustUnsafe BadAuth $
               verifyRequest verifier headers reqText time
             req <- catch (deserializeUnsafe' @fmt reqText) (throw . BadCall)
-            sender
-              (respond .
-               serialize' @fmt @(Either RpcClientException res) . Right)
-              (handler claims req))
-        (respond . serialize' @fmt @(Either RpcClientException res) . Left)
+            sender (sendToClient . RpcResponse) (handler claims req))
+        [ Handler $ \(x :: ClientException) ->
+            sendToClient $ RpcResponseClientException x
+        , Handler $ \(x :: SomeException) -> do
+            sendToClient $ RpcResponseServerException $ ServerException $ show x
+            throw x
+        ]
+      where
+        sendToClient = respond . serialize' @fmt @(RpcResponse res)
 
 instance ( HasNamespace t
          , HasRpcTransport transport t
          , Deserializable fmt req
-         , Serializable fmt (Either RpcClientException res)
+         , Serializable fmt (RpcResponse res)
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res)) where
@@ -130,7 +134,7 @@ instance ( HasNamespace t
          , HasRpcTransport transport t
          , KnownNat timeout
          , Deserializable fmt req
-         , Serializable fmt (Either RpcClientException (StreamingResponse res))
+         , Serializable fmt (RpcResponse (StreamingResponse res))
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res)) where
@@ -152,7 +156,7 @@ instance ( HasNamespace t
          , HasAuthVerifier auth t
          , HasRpcTransport transport t
          , Deserializable fmt req
-         , Serializable fmt (Either RpcClientException res)
+         , Serializable fmt (RpcResponse res)
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res)) where
@@ -175,7 +179,7 @@ instance ( HasNamespace t
          , HasRpcTransport transport t
          , KnownNat timeout
          , Deserializable fmt req
-         , Serializable fmt (Either RpcClientException (StreamingResponse res))
+         , Serializable fmt (RpcResponse (StreamingResponse res))
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res)) where
