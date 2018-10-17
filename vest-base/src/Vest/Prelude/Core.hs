@@ -4,8 +4,8 @@ module Vest.Prelude.Core
   ) where
 
 import Control.Concurrent.Async as Vest.Prelude.Core
-import Control.Concurrent.MVar as Vest.Prelude.Core
 import Control.Concurrent.STM.Delay as Vest.Prelude.Core
+import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
 import Control.Concurrent.STM.TVar as Vest.Prelude.Core
 import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Vest.Prelude.Core
@@ -38,7 +38,9 @@ import Protolude as Vest.Prelude.Core hiding
   , uninterruptibleMask_
   )
 
-import Control.Monad.Fail (fail)
+-- import qualified Control.Monad.Fail
+import Control.Monad.Fail as Vest.Prelude.Core
+import Control.Monad.State as Vest.Prelude.Core hiding (fail)
 import Data.Aeson as Vest.Prelude.Core
   ( FromJSON(..)
   , FromJSONKey(..)
@@ -53,6 +55,7 @@ import Data.Tagged as Vest.Prelude.Core hiding (witness)
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 import qualified Foreign.StablePtr as StablePtr
+import System.Random as Vest.Prelude.Core
 
 type Int' t = Tagged t Int
 

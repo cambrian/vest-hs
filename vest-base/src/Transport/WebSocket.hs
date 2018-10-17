@@ -38,13 +38,12 @@ data ServerInfo = ServerInfo
   { uri :: Text' "Uri"
   , port :: Int' "Port"
   , path :: Text' "Path"
-  , routes :: [NamespacedText' "Route"] -- ^ Not type safe.
   }
 
 data Config = Config
   { servePort :: Int' "Port"
   , pingInterval :: Int
-  , servers :: [ServerInfo]
+  , servers :: [(Namespace, ServerInfo)]
   }
 
 localConfig :: Config
@@ -55,7 +54,7 @@ isLocalHost :: (Eq a, IsString a) => a -> Bool
 isLocalHost x = x == "localhost" || x == "127.0.0.1"
 
 data WebSocketClientException =
-  NoServerForRoute (NamespacedText' "Route")
+  NoServerForNamespace Namespace
   deriving (Show, Exception)
 
 data T = T
@@ -63,7 +62,7 @@ data T = T
   -- ^ For a server, requests need to be aggregated by route.
   , serverResponseHandlers :: HashTable (Text' "ClientId") (ResponseMessage -> IO ())
   -- ^ For a server, stores each client's response queue.
-  , clientRequestHandlers :: HashTable (NamespacedText' "Route") (RequestMessage -> IO ())
+  , clientRequestHandlers :: HashTable Namespace (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
   , serverThread :: Async ()
   , clientThreads :: [Async ()]
@@ -88,25 +87,17 @@ instance Resource T where
         (wsServe serverRequestHandlers serverResponseHandlers pingInterval)
         noHttpApp
     clientThreads <-
-      forM
-        servers
-        (\ServerInfo {uri, port, path, routes} -> do
-           requestMVar <- newEmptyMVar
-           forM_
-             routes
-             (\route ->
-                HashTable.insert
-                  clientRequestHandlers
-                  route
-                  (putMVar requestMVar))
-           async $ do
-             when (isLocalHost uri) (threadDelay (sec 0.05))
+      forM servers $ \(namespace, ServerInfo {uri, port, path}) -> do
+        requestMVar <- newEmptyMVar
+        HashTable.insert clientRequestHandlers namespace (putMVar requestMVar)
+        async $ do
+          when (isLocalHost uri) (threadDelay (sec 0.05))
              -- ^ If this client is connecting to the local machine, wait for the server to start.
-             WS.runClient
-               (unpack $ untag uri)
-               (untag port)
-               (unpack $ untag path)
-               (wsClientApp clientResponseHandlers requestMVar))
+          WS.runClient
+            (unpack $ untag uri)
+            (untag port)
+            (unpack $ untag path)
+            (wsClientApp clientResponseHandlers requestMVar)
     return
       T
         { serverRequestHandlers
@@ -208,10 +199,11 @@ instance RpcTransport T where
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
   _issueRequest respond route T {clientRequestHandlers, clientResponseHandlers} headers reqText = do
+    let namespace = getNamespace route
     id <- newUUID
     makeRequest <-
-      HashTable.lookup clientRequestHandlers route >>=
-      fromJustUnsafe (NoServerForRoute route)
+      HashTable.lookup clientRequestHandlers namespace >>=
+      fromJustUnsafe (NoServerForNamespace namespace)
     HashTable.insert clientResponseHandlers id respond
     makeRequest $ RequestMessage {id, headers, route, reqText}
     return $ Tagged $ HashTable.delete clientResponseHandlers id

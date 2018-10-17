@@ -21,9 +21,6 @@ class ( Data (ServiceArgs a)
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ rename?
-  --
-  -- End of minimal required definition.
-  --
   serviceName :: Text' "ServiceName"
   serviceName = moduleName' @a
   start :: (a -> IO (Streams (PubSubSpec a))) -> Handlers (RpcSpec a) -> IO Void

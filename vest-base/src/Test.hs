@@ -15,4 +15,4 @@ diffCmd :: FilePath -> FilePath -> [GHC.Base.String]
 diffCmd ref new = ["diff", "-u", ref, new]
 
 testCase :: String -> FilePath -> IO LazyByteString.ByteString -> TestTree
-testCase testName = goldenVsStringDiff testName diffCmd
+testCase name = goldenVsStringDiff name diffCmd

@@ -49,26 +49,26 @@ type TestRpcApi transport
      :<|> EchoTextsStreamingEndpoint transport
      :<|> TimeoutEndpoint transport
 
-webSocketTestConfig :: WebSocket.Config
-webSocketTestConfig =
-  WebSocket.localConfig
-    { WebSocket.servers =
-        [ WebSocket.ServerInfo
-            { uri = Tagged "127.0.0.1"
-            , port = Tagged 3000
-            , path = Tagged "/"
-            , routes =
-                map
-                  (namespaced' @T)
-                  (symbolTexts'
-                     (Proxy :: Proxy (Routes (TestRpcApi WebSocket.T))))
-            }
-        ]
-    }
+makeWebSocketConfig :: IO WebSocket.Config
+makeWebSocketConfig = do
+  portNum <- nextCount >>- (+ 13000) . fromIntegral
+  return $
+    WebSocket.localConfig
+      { WebSocket.servers =
+          [ ( namespace @T
+            , WebSocket.ServerInfo
+                { uri = Tagged "127.0.0.1"
+                , port = Tagged portNum
+                , path = Tagged "/"
+                })
+          ]
+      , WebSocket.servePort = Tagged portNum
+      }
 
 withT :: (T -> IO a) -> IO a
-withT f =
-  with webSocketTestConfig $ \webSocket ->
+withT f = do
+  webSocketConfig <- makeWebSocketConfig
+  with webSocketConfig $ \webSocket ->
     with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
 
 echoDirect :: T -> a -> IO a
@@ -93,42 +93,45 @@ withRpcClient _ f =
     serve handlers t (Proxy :: Proxy (TestRpcApi transport))
     f $ makeClient t (Proxy :: Proxy spec)
 
--- increment :: Stream Int
--- increment =
---   let f s = do
---         threadDelay (sec 0.01)
---         return $
---           if s < 5
---             then Just (s, s + 1 :: Int)
---             else Nothing
---    in Stream.unfoldrM f 0
--- type IncrementTopic transport = Topic "Haskell" T transport "increment" Int
--- type TestPubSubApi transport = IncrementTopic transport
--- streams :: Streams (TestPubSubApi Amqp.T)
--- streams = increment
--- withSubscribed ::
---      forall transport spec a.
---      (Publisher T (TestPubSubApi transport), Subscriber T spec)
---   => Proxy spec
---   -> (SubscriberBindings spec -> IO a)
---   -> IO a
--- withSubscribed _ f =
---   withT $ \t -> do
---     subscribed <- subscribe t (Proxy :: Proxy spec)
---     publish streams t (Proxy :: Proxy (TestPubSubApi transport))
---     f subscribed
+increment :: Stream Int
+increment =
+  let f s = do
+        threadDelay (sec 0.01)
+        return $
+          if s < 5
+            then Just (s, s + 1 :: Int)
+            else Nothing
+   in Stream.unfoldrM f 0
+
+type IncrementTopic transport = Topic "Haskell" T transport "increment" Int
+
+type TestPubSubApi transport = IncrementTopic transport
+
+streams :: Streams (TestPubSubApi Amqp.T)
+streams = increment
+
+withSubscribed ::
+     forall transport spec a.
+     (Publisher T (TestPubSubApi transport), Subscriber T spec)
+  => Proxy spec
+  -> (SubscriberBindings spec -> IO a)
+  -> IO a
+withSubscribed _ f =
+  withT $ \t -> do
+    subscribed <- subscribe t (Proxy :: Proxy spec)
+    publish streams t (Proxy :: Proxy (TestPubSubApi transport))
+    f subscribed
+
 emptyRpcTest :: TestTree
 emptyRpcTest =
-  testCase "Empty RPC" "test/Vest/Bridge/empty-rpc.gold" $
-  withT $ \t -> do
+  testCase "RPC" "test/Vest/Bridge/empty-rpc.gold" $ withT $ \t -> do
     serve () t (Proxy :: Proxy ())
     () <- return $ makeClient t (Proxy :: Proxy ())
     return ""
 
 emptyPubSubTest :: TestTree
 emptyPubSubTest =
-  testCase "Empty PubSub" "test/Vest/Bridge/empty-pubsub.gold" $
-  withT $ \t -> do
+  testCase "PubSub" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
     () <- subscribe t (Proxy :: Proxy ())
     publish () t (Proxy :: Proxy ())
     return ""
@@ -137,7 +140,7 @@ singleDirectTest ::
      forall transport. HasRpcTransport transport T
   => TestTree
 singleDirectTest =
-  testCase "Direct RPC single" "test/Vest/Bridge/direct-rpc-single.gold" $
+  testCase "Single" "test/Vest/Bridge/direct-rpc-single.gold" $
   withRpcClient @transport (Proxy :: Proxy (EchoIntsDirectEndpoint transport)) $ \call -> do
     result <- call [1, 2, 3]
     return $ show result
@@ -146,7 +149,7 @@ multipleDirectTest ::
      forall transport. HasRpcTransport transport T
   => TestTree
 multipleDirectTest =
-  testCase "Direct RPC multiple" "test/Vest/Bridge/direct-rpc-multiple.gold" $
+  testCase "Multiple" "test/Vest/Bridge/direct-rpc-multiple.gold" $
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsDirectEndpoint transport
@@ -159,8 +162,7 @@ timeoutTest ::
      forall transport. HasRpcTransport transport T
   => TestTree
 timeoutTest =
-  expectFail $
-  testCase "Timeout" "test/Vest/Bridge/timeout.gold" $
+  expectFail $ testCase "Timeout" "test/Vest/Bridge/timeout.gold" $
   withRpcClient @transport (Proxy :: Proxy (TimeoutEndpoint transport)) $ \call -> do
     call ()
     return ""
@@ -169,7 +171,7 @@ singleStreamingTest ::
      forall transport. HasRpcTransport transport T
   => TestTree
 singleStreamingTest =
-  testCase "Streaming RPC single" "test/Vest/Bridge/streaming-rpc-single.gold" $
+  testCase "Single" "test/Vest/Bridge/streaming-rpc-single.gold" $
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport)) $ \call -> do
@@ -184,9 +186,7 @@ multipleStreamingTest ::
      forall transport. HasRpcTransport transport T
   => TestTree
 multipleStreamingTest =
-  testCase
-    "Streaming RPC multiple"
-    "test/Vest/Bridge/streaming-rpc-multiple.gold" $
+  testCase "Multiple" "test/Vest/Bridge/streaming-rpc-multiple.gold" $
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport
@@ -201,14 +201,15 @@ multipleStreamingTest =
           putMVar result (show (lastInt1, lastInt2, lastText))
     takeMVar result
 
--- pubSubTest' ::
---      forall transport. HasPubSubTransport transport T
---   => Spec
--- pubSubTest' =
---   around (withSubscribed @transport (Proxy :: Proxy (IncrementTopic transport))) $
---   context "when publishing an incrementing stream" $
---   it "functions correctly on the subscribing end" $ \(_id, results) ->
---     Stream.toList (Stream.take 5 results) `shouldReturn` [0, 1, 2, 3, 4]
+simplePubSubTest ::
+     forall transport. HasPubSubTransport transport T
+  => TestTree
+simplePubSubTest =
+  testCase "Simple" "test/Vest/Bridge/pubsub-simple.gold" $
+  withSubscribed @transport (Proxy :: Proxy (IncrementTopic transport)) $ \(_id, results) -> do
+    results <- Stream.toList $ Stream.take 5 results
+    return $ show results
+
 directTests ::
      forall transport. HasRpcTransport transport T
   => TestTree
@@ -228,10 +229,11 @@ streamingTests =
     "Streaming RPC"
     [singleStreamingTest @transport, multipleStreamingTest @transport]
 
--- pubSubTests ::
---      forall transport. HasPubSubTransport transport T
---   => [Spec]
--- pubSubTests = [pubSubTest' @transport]
+pubSubTests ::
+     forall transport. HasPubSubTransport transport T
+  => TestTree
+pubSubTests = testGroup "PubSub" [simplePubSubTest @transport]
+
 test_bridge :: TestTree
 test_bridge =
   testGroup
@@ -239,13 +241,8 @@ test_bridge =
     [ testGroup "Empty API" [emptyRpcTest, emptyPubSubTest]
     , testGroup
         "Full Bridge API over AMQP Transport"
-        [directTests @Amqp.T, streamingTests @Amqp.T]
+        [directTests @Amqp.T, streamingTests @Amqp.T, pubSubTests @Amqp.T]
+    , testGroup
+        "WebSocket Transport"
+        [directTests @WebSocket.T, streamingTests @WebSocket.T]
     ]
-  -- describe "Empty API" $ do
-  --   describe "RPC" emptyRpcTest
-  --   describe "PubSub" emptyPubSubTest
-  -- describe "Bridge Framework and AMQP Transport" $ do
-  --   describe "Direct RPC" $ mapM_ identity (directTests @Amqp.T)
-  --   describe "Streaming RPC" $ mapM_ identity (streamingTests @Amqp.T)
-  --   describe "Pub/Sub" $ mapM_ identity (pubSubTests @Amqp.T)
-  -- describe "WebSocket Transport" $ mapM_ identity (streamingTests @WebSocket.T)

@@ -31,8 +31,10 @@ dependencies:
 - http-client-tls         >= 0.3
 - http-types              >= 0.12
 - o-clock                 >= 1.0
+- mtl                     >= 2.2
 - postgresql-simple       >= 0.5
 - protolude               >= 0.2
+- random                  >= 1.1
 - resource-pool           >= 0.2
 - safe-exceptions         >= 0.1
 - safe-money              >= 0.7
