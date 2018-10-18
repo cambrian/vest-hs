@@ -205,3 +205,6 @@ instance RpcTransport T where
     HashTable.insert clientResponseHandlers id respond
     makeRequest $ RequestMessage {id, headers, route, reqText}
     return $ Tagged $ HashTable.delete clientResponseHandlers id
+
+instance HasRpcTransport T T where
+  rpcTransport = identity
