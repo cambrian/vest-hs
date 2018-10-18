@@ -87,28 +87,28 @@ testForbidden t =
     let call = makeClient t (Proxy :: Proxy ForbiddenEndpoint)
     call () >>- show
 
-accessControlServiceConfig :: ServiceResourceConfig AccessControl.T
+accessControlServiceConfig :: TestServiceConfig AccessControl.T
 accessControlServiceConfig =
-  ServiceResourceConfig
-    { serviceResourceArgs =
+  TestServiceConfig
+    { testServiceArgs =
         AccessControl.Args
           { AccessControl.subjectsFile = subjectsFile
           , AccessControl.seedFile = seedFile
           , AccessControl.tokenTTLHours = 1
           }
-    , serviceResourceStreams = const $ return ()
-    , serviceResourceHandlers = AccessControl.Handlers.t
+    , testServiceStreams = const $ return ()
+    , testServiceHandlers = AccessControl.Handlers.t
     }
 
 handler :: TestServer -> AccessControl.Auth.Claims -> () -> IO ()
 handler _ _ _ = return ()
 
-testServerConfig :: ServiceResourceConfig TestServer
+testServerConfig :: TestServiceConfig TestServer
 testServerConfig =
-  ServiceResourceConfig
-    { serviceResourceArgs = ()
-    , serviceResourceStreams = const $ return ()
-    , serviceResourceHandlers = handler :<|> handler
+  TestServiceConfig
+    { testServiceArgs = ()
+    , testServiceStreams = const $ return ()
+    , testServiceHandlers = handler :<|> handler
     }
 
 generateDataFiles :: TestTree
@@ -117,9 +117,9 @@ generateDataFiles =
 
 tests :: TestTree
 tests =
-  testWithResource @(ServiceResource AccessControl.T) accessControlServiceConfig $
+  testWithService @AccessControl.T accessControlServiceConfig $
   const $
-  testWithResource @(ServiceResource TestServer) testServerConfig $
+  testWithService @TestServer testServerConfig $
   const $
   testWithResource
     AccessControl.TestClient.Config {amqpConfig = Amqp.localConfig} $ \testClient ->

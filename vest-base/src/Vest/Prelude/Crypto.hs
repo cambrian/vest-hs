@@ -33,6 +33,7 @@ type SignedText' t = (Signature, Text' t)
 
 seedKeyPairUnsafe :: ByteString -> IO (PublicKey, SecretKey)
 -- ^ Throws if seed bytestring is not exactly 32 bytes.
+-- TODO: Consider truncating seed if larger than 32 bytes, only throwing if smaller
 seedKeyPairUnsafe =
   fromJustUnsafe SeedNot32BytesException . createKeypairFromSeed_
 

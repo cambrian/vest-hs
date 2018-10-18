@@ -47,4 +47,4 @@
   - -XUndecidableInstances
 
 - fixity: infixl 1 >>-
-- fixity: infixr 8 :<|>
+- fixity: infixr 3 :<|>

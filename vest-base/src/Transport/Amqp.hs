@@ -141,7 +141,7 @@ instance RpcTransport T where
   _consumeRequests asyncHandler route T {conn, publishChan, consumedRoutes} = do
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
-      Just _ -> throw $ AlreadyServing route
+      Just _ -> throw $ AlreadyServingException route
     let Tagged queueName = route
     consumerChan <- AMQP.openChannel conn
     _ <- AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}

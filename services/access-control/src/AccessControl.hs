@@ -14,7 +14,7 @@ data Subject = Subject
 
 data AccessControl = Args
   { subjectsFile :: FilePath
-  , seedFile :: FilePath -- Seed must be exactly 32 bytes.
+  , seedFile :: FilePath -- Seed must be exactly 32 bytes, encoded in base64.
   , tokenTTLHours :: Int
   } deriving (Data)
 
@@ -36,8 +36,6 @@ data Access = Access
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 -- Is this insecure? For example if an attacker spins up a fake access control server
--- type PublicKeyEndpoint
---    = Endpoint 'NoAuth T Amqp.T "publicKey" () ('Direct PublicKey)
 type TokenEndpoint = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct Token)
 
 instance HasRpcTransport Amqp.T T where
