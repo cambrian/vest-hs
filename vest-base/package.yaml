@@ -25,6 +25,7 @@ dependencies:
 - ed25519                 >= 0.0
 - hashable                >= 1.2
 - hashtables              >= 1.2
+- hedis                   >= 0.10
 - hostname                >= 1.0
 - http-client             >= 0.5
 - http-client-tls         >= 0.3
