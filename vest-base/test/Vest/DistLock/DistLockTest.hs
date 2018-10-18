@@ -18,7 +18,7 @@ simpleConcurrentTest =
        result <- newTMVarIO ""
        threadA <-
          async $ do
-           threadDelay (ms 100)
+           threadDelay (ms 10)
            with @Lock.T (Lock.defaultLock connection key) $
              const $
              atomically $ do
@@ -28,7 +28,7 @@ simpleConcurrentTest =
          async $
          with @Lock.T (Lock.defaultLock connection key) $
          const $ do
-           threadDelay (ms 200)
+           threadDelay (ms 20)
            atomically $ do
              current <- readTMVar result
              swapTMVar result (current ++ "B")
