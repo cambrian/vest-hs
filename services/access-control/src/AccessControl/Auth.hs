@@ -3,11 +3,9 @@ module AccessControl.Auth
   , Claims(..)
   , Signer(..)
   , Verifier(..)
-  , HasSigner(..)
-  , HasVerifier(..)
   ) where
 
-import qualified AccessControl
+import qualified AccessControl.Internal as AccessControl
 import qualified AccessControl.Permission as Permission
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
@@ -16,8 +14,8 @@ import Vest
 signatureHeader :: Text' "Header"
 signatureHeader = Tagged "Signature"
 
-accessTokenHeader :: Text' "Header"
-accessTokenHeader = Tagged "AccessToken"
+tokenHeader :: Text' "Header"
+tokenHeader = Tagged "AccessControlSignedToken"
 
 data T permission
 
@@ -28,47 +26,39 @@ data Claims = Claims
 
 data Signer = Signer
   { secretKey :: SecretKey
-  , accessToken :: AccessControl.Token
+  , signedTokenVar :: TVar AccessControl.SignedToken
   }
 
--- | The wrapped PublicKey should be the AccessControl service's publicKey
-newtype Verifier permission =
-  Verifier PublicKey
+data Verifier permission = Verifier
+  { accessControlPublicKey :: PublicKey
+  , accessTokenVersionVar :: TVar (UUID' "AccessTokenVersion")
+  }
 
 instance (Permission.Is p) => RequestVerifier (Verifier p) where
   type VerifierClaims (Verifier p) = Claims
-  verifyRequest (Verifier accessControlPubKey) headers reqText time = do
-    clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
-    accessToken <-
-      HashMap.lookup accessTokenHeader headers >>= read @AccessControl.Token
-    AccessControl.Access {publicKey, name, permissions, expiration} <-
-      verify' accessControlPubKey accessToken >>= read' @AccessControl.Access
-    _ <- verify' publicKey (clientSig, reqText)
-    if HashSet.member (Permission.runtimeRep @p) permissions &&
-       time < expiration
-      then Just $ Claims {publicKey, name}
-      else Nothing
+  verifyRequest Verifier {accessControlPublicKey, accessTokenVersionVar} headers reqText = do
+    currentTokenVersion <- readTVarIO accessTokenVersionVar
+    return . eitherFromMaybe AuthException $ do
+      clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
+      signedToken <-
+        HashMap.lookup tokenHeader headers >>= read @AccessControl.SignedToken
+      AccessControl.Token {publicKey, name, permissions, version} <-
+        verify' accessControlPublicKey signedToken >>=
+        read' @AccessControl.Token
+      _ <- verify' publicKey (clientSig, reqText)
+      if HashSet.member (Permission.runtimeRep @p) permissions &&
+         version == currentTokenVersion
+        then Just $ Claims {publicKey, name}
+        else Nothing
 
 instance RequestSigner Signer where
-  signRequest Signer {secretKey, accessToken} headers reqText =
+  signRequest Signer {secretKey, signedTokenVar} headers reqText = do
+    signedToken <- readTVarIO signedTokenVar
     let (sig, _) = sign' secretKey reqText
-     in HashMap.insert signatureHeader (show sig) $
-        HashMap.insert accessTokenHeader (show accessToken) headers
+    return $
+      HashMap.insert signatureHeader (show sig) $
+      HashMap.insert tokenHeader (show signedToken) headers
 
 instance (Permission.Is p) => Auth (T p) where
   type AuthSigner (T p) = Signer
   type AuthVerifier (T p) = Verifier p
-
--- | Convenience classes
-class HasSigner t where
-  secretKey :: t -> SecretKey
-  accessToken :: t -> AccessControl.Token
-
-class HasVerifier t where
-  accessControlPublicKey :: t -> PublicKey
-
-instance (Permission.Is p, HasSigner t) => HasAuthSigner (T p) t where
-  authSigner = Signer <$> secretKey <*> accessToken
-
-instance (Permission.Is p, HasVerifier t) => HasAuthVerifier (T p) t where
-  authVerifier = Verifier . accessControlPublicKey

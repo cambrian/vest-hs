@@ -8,7 +8,7 @@ import Vest.Prelude
 -- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Topic _ _ _ _ a) = (IO' "Unsubscribe" (), Stream a)
+  SubscriberBindings (Topic_ _ _ _ _ a) = (IO' "Unsubscribe" (), Stream a)
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -37,15 +37,15 @@ instance (Subscriber t a, Subscriber t b) =>
     bStreams <- subscribe t (Proxy :: Proxy b)
     return $ aStreams :<|> bStreams
 
-instance ( HasNamespace t
+instance ( HasNamespace service
          , HasPubSubTransport transport t
          , Deserializable fmt a
          , KnownSymbol name
          ) =>
-         Subscriber t (Topic fmt t transport name a) where
+         Subscriber t (Topic_ fmt service transport name a) where
   subscribe ::
        t
-    -> Proxy (Topic fmt t transport name a)
+    -> Proxy (Topic_ fmt service transport name a)
     -> IO (IO' "Unsubscribe" (), Stream a)
   subscribe t _ = do
     (push_, Tagged close, stream) <- pushStream
@@ -53,7 +53,7 @@ instance ( HasNamespace t
     Tagged unsubscribe_ <-
       _subscribe
         push
-        (namespaced' @t $ symbolText' (Proxy :: Proxy name))
+        (namespaced' @service $ symbolText' (Proxy :: Proxy name))
         (pubSubTransport @transport t)
     let unsubscribe = Tagged $ close >> unsubscribe_
     return (unsubscribe, stream)

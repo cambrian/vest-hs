@@ -1,6 +1,5 @@
-import AccessControl (T)
-import qualified AccessControl.Handlers
+import AccessControl (T, handlers, makeStreams)
 import Vest
 
 main :: IO Void
-main = start @T (const $ return ()) AccessControl.Handlers.t
+main = start @T makeStreams handlers

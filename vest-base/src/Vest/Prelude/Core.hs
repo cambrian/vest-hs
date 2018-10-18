@@ -101,6 +101,14 @@ fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a
 fromJustUnsafe e Nothing = throw e
 fromJustUnsafe _ (Just a) = return a
 
+eitherFromMaybe :: l -> Maybe r -> Either l r
+eitherFromMaybe l Nothing = Left l
+eitherFromMaybe _ (Just r) = Right r
+
+fromRightOrThrowLeft :: (Exception e) => Either e a -> IO a
+fromRightOrThrowLeft (Left e) = throw e
+fromRightOrThrowLeft (Right a) = return a
+
 -- Infix map, like (>>=) but pure.
 infixl 1 >>-
 

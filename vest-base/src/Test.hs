@@ -27,7 +27,7 @@ type TestService a = (Async' "ServiceThread" Void, a)
 
 data TestServiceConfig a = TestServiceConfig
   { testServiceArgs :: ServiceArgs a
-  , testServiceStreams :: a -> IO (Streams (PubSubSpec a))
+  , testServiceStreams :: a -> IO (Streams (PublishSpec a))
   , testServiceHandlers :: Handlers (RpcSpec a)
   }
 

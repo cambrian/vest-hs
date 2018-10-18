@@ -7,14 +7,14 @@ import Vest
 
 -- Use: import qualified AccessControl.Permission as Permission
 data T
-  = A
+  = InvalidateAuthTokens
   | B
   deriving (Eq, Ord, Read, Show, Generic, Hashable, ToJSON, FromJSON)
 
 -- TODO: can this boilerplate be inferred??
 -- Probably, using GHC.Generics. Figure that out at some pt.
-instance Is 'A where
-  runtimeRep = A
+instance Is 'InvalidateAuthTokens where
+  runtimeRep = InvalidateAuthTokens
 
 instance Is 'B where
   runtimeRep = B

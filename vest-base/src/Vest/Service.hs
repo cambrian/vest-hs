@@ -11,12 +11,12 @@ import Vest.Prelude
 class ( Data (ServiceArgs a)
       , Typeable a
       , Server a (RpcSpec a)
-      , Publisher a (PubSubSpec a)
+      , Publisher a (PublishSpec a)
       ) =>
       Service a
   where
   type ServiceArgs a -- Can't be data because cmdArgs has to get the type name.
-  type PubSubSpec a
+  type PublishSpec a
   type RpcSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
@@ -25,7 +25,7 @@ class ( Data (ServiceArgs a)
   serviceName = moduleName' @a
   run ::
        ServiceArgs a
-    -> (a -> IO (Streams (PubSubSpec a)))
+    -> (a -> IO (Streams (PublishSpec a)))
     -> Handlers (RpcSpec a)
     -> (a -> IO b)
     -> IO Void
@@ -34,10 +34,11 @@ class ( Data (ServiceArgs a)
     init args $ \a -> do
       serve handlers a (Proxy :: Proxy (RpcSpec a))
       streams <- makeStreams a
-      publish streams a (Proxy :: Proxy (PubSubSpec a))
+      publish streams a (Proxy :: Proxy (PublishSpec a))
       f a
       blockForever
-  start :: (a -> IO (Streams (PubSubSpec a))) -> Handlers (RpcSpec a) -> IO Void
+  start ::
+       (a -> IO (Streams (PublishSpec a))) -> Handlers (RpcSpec a) -> IO Void
   start makeStreams handlers = do
     args_ <- cmdArgs $ defaultArgs @a
     run @a args_ makeStreams handlers return

@@ -45,6 +45,7 @@
   - -XTypeFamilyDependencies
   - -XTypeOperators
   - -XUndecidableInstances
+#  - -fno-warn-name-shadowing
 
 - fixity: infixl 1 >>-
 - fixity: infixr 3 :<|>

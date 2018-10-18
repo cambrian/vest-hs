@@ -21,14 +21,14 @@ type HashTable k v = HashTable.BasicHashTable k v
 -- client/server and not via a messaging service. That said, we provide a WebSocket transport so
 -- that components can serve public WebSocket endpoints to e.g. browsers.
 data RequestMessage = RequestMessage
-  { id :: Text' "RequestId"
+  { id :: UUID' "Request"
   , headers :: Headers
   , route :: NamespacedText' "Route"
   , reqText :: Text' "Request"
   } deriving (Generic, FromJSON, ToJSON)
 
 data ResponseMessage = ResponseMessage
-  { requestId :: Text' "RequestId"
+  { requestId :: UUID' "Request"
   , resText :: Text' "Response"
   } deriving (Generic, FromJSON, ToJSON)
 
@@ -56,12 +56,12 @@ data WebSocketClientException =
   deriving (Show, Exception)
 
 data T = T
-  { serverRequestHandlers :: HashTable (NamespacedText' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
+  { serverRequestHandlers :: HashTable (NamespacedText' "Route") (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -- ^ For a server, requests need to be aggregated by route.
-  , serverResponseHandlers :: HashTable (Text' "ClientId") (ResponseMessage -> IO ())
+  , serverResponseHandlers :: HashTable (UUID' "Client") (ResponseMessage -> IO ())
   -- ^ For a server, stores each client's response queue.
   , clientRequestHandlers :: HashTable Namespace (RequestMessage -> IO ())
-  , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
+  , clientResponseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
   , serverThread :: Async' "ServerThread" ()
   , clientThreads :: [Async' "ClientThread" ()]
   -- ^ Should clean themselves up when canceled
@@ -120,13 +120,13 @@ noHttpApp _ respond =
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
-     HashTable (NamespacedText' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
-  -> HashTable (Text' "ClientId") (ResponseMessage -> IO ())
+     HashTable (NamespacedText' "Route") (UUID' "Client" -> RequestMessage -> IO (Async ()))
+  -> HashTable (UUID' "Client") (ResponseMessage -> IO ())
   -> Int
   -> WS.ServerApp
 wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = do
   conn <- WS.acceptRequest pendingConn
-  clientId <- newUUID
+  clientId <- nextUUID'
   HashTable.insert
     serverResponseHandlers
     clientId
@@ -137,8 +137,8 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
     (HashTable.delete serverResponseHandlers clientId)
 
 serveClient ::
-     HashTable (NamespacedText' "Route") (Text' "ClientId" -> RequestMessage -> IO (Async ()))
-  -> Text' "ClientId"
+     HashTable (NamespacedText' "Route") (UUID' "Client" -> RequestMessage -> IO (Async ()))
+  -> UUID' "Client"
   -> WS.Connection
   -> IO ()
 -- ^ If the message fails to parse or the route is not served, swallows the request.
@@ -153,7 +153,7 @@ serveClient serverRequestHandlers clientId conn =
          forM_ maybeHandler (\h -> h clientId reqMsg))
 
 wsClientApp ::
-     HashTable (Text' "RequestId") (Text' "Response" -> IO ())
+     HashTable (UUID' "Request") (Text' "Response" -> IO ())
   -> MVar RequestMessage
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn =
@@ -198,7 +198,7 @@ instance RpcTransport T where
     -> IO (IO' "Cleanup" ())
   _issueRequest respond route T {clientRequestHandlers, clientResponseHandlers} headers reqText = do
     let namespace = getNamespace route
-    id <- newUUID
+    id <- nextUUID'
     makeRequest <-
       HashTable.lookup clientRequestHandlers namespace >>=
       fromJustUnsafe (NoServerForNamespace namespace)

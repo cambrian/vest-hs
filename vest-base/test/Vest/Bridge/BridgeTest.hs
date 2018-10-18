@@ -104,7 +104,7 @@ increment =
             else Nothing
    in Stream.unfoldrM f 0
 
-type IncrementTopic transport = Topic "Haskell" T transport "increment" Int
+type IncrementTopic transport = Topic T transport "increment" Int
 
 type TestPubSubApi transport = IncrementTopic transport
 

@@ -2,60 +2,73 @@ module AccessControl
   ( module AccessControl
   ) where
 
+import qualified AccessControl.Auth as Auth
+import AccessControl.Internal as AccessControl
 import qualified AccessControl.Permission as Permission
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
 import qualified Transport.Amqp as Amqp
 import Vest
 
-data Subject = Subject
-  { name :: Text
-  , permissions :: HashSet Permission.T
-  } deriving (Read, Show, Generic, ToJSON, FromJSON)
-
 data AccessControl = Args
   { subjectsFile :: FilePath
   , seedFile :: FilePath -- Seed must be exactly 32 bytes, encoded in base64.
-  , tokenTTLHours :: Int
   } deriving (Data)
 
-data T = T
-  { subjects :: HashMap PublicKey Subject
-  , amqp :: Amqp.T
-  , publicKey :: PublicKey
-  , secretKey :: SecretKey
-  , tokenTTL :: Time Hour
-  }
+type TokenEndpoint
+   = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct SignedToken)
 
-type Token = SignedText' "AccessToken"
+type InvalidateAllExistingTokensEndpoint
+   = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
 
-data Access = Access
-  { publicKey :: PublicKey
-  , name :: Text
-  , permissions :: HashSet Permission.T
-  , expiration :: Timestamp
-  } deriving (Read, Show, Generic, ToJSON, FromJSON)
+type TokenVersionTopic
+   = Topic T Amqp.T "currentTokenVersion" (UUID' "AccessTokenVersion")
 
--- Is this insecure? For example if an attacker spins up a fake access control server
-type TokenEndpoint = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct Token)
+accessToken :: T -> PublicKey -> IO SignedToken
+accessToken T {subjects, secretKey, tokenVersionVar} publicKey = do
+  version <- readTVarIO tokenVersionVar
+  let Subject {name, permissions} =
+        fromMaybe Subject {name = "unknown", permissions = HashSet.empty} $
+        HashMap.lookup publicKey subjects
+      token = Token {publicKey, name, permissions, version}
+      signedToken = sign' secretKey (show' token)
+  return signedToken
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+handlers :: Handlers (RpcSpec T)
+handlers = accessToken :<|> (\T {bumpTokenVersion} _ () -> bumpTokenVersion)
+
+makeStreams :: T -> IO (Streams (PublishSpec T))
+makeStreams = return . tokenVersions
+
+instance Permission.Is p => HasAuthVerifier (Auth.T p) T where
+  authVerifier T {publicKey, tokenVersionVar} =
+    Auth.Verifier publicKey tokenVersionVar
 
 instance Service T where
   type ServiceArgs T = AccessControl
   type RpcSpec T = TokenEndpoint
-  type PubSubSpec T = ()
-  defaultArgs =
-    Args
-      { subjectsFile = "subjects.yaml"
-      , seedFile = "seed.yaml"
-      , tokenTTLHours = 1
-      }
-  init Args {subjectsFile, seedFile, tokenTTLHours} f = do
+                   :<|> InvalidateAllExistingTokensEndpoint
+  type PublishSpec T = TokenVersionTopic
+  defaultArgs = Args {subjectsFile = "subjects.yaml", seedFile = "seed.yaml"}
+  init Args {subjectsFile, seedFile} f = do
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     (publicKey, secretKey) <- seedKeyPairUnsafe seed
-    let tokenTTL = hour $ fromIntegral tokenTTLHours
+    (pushTokenVersion, _close, tokenVersions) <- pushStream -- do we need to close tokenVersions?
+    let bumpTokenVersion = nextUUID' >>= pushTokenVersion
+    bumpTokenVersion
+    tokenVersionVar <- tvarFromStreamUnsafe tokenVersions
     with
       Amqp.localConfig
-      (\amqp -> f $ T {subjects, amqp, publicKey, secretKey, tokenTTL})
+      (\amqp ->
+         f $
+         T
+           { subjects
+           , amqp
+           , publicKey
+           , secretKey
+           , tokenVersionVar
+           , tokenVersions
+           , bumpTokenVersion
+           })

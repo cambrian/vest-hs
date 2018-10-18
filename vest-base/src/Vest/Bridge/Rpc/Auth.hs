@@ -1,6 +1,7 @@
 module Vest.Bridge.Rpc.Auth
   ( Auth(..)
   , AuthClaims
+  , AuthException(..)
   , RequestVerifier(..)
   , RequestSigner(..)
   , HasAuthSigner(..)
@@ -10,13 +11,26 @@ module Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude (Headers)
 import Vest.Prelude
 
+data AuthException =
+  AuthException
+  deriving (Eq, Read, Show, Generic, Exception, ToJSON, FromJSON)
+
 class RequestSigner a where
-  signRequest :: a -> Headers -> Text' "Request" -> Headers
+  signRequest :: a -> Headers -> Text' "Request" -> IO Headers
+  -- Signing is an IO operation because a signer may want to encapsulate logic for renewing expired
+  -- credentials, for example. However, you should avoid slow operations because it is called
+  -- per-request.
 
 class RequestVerifier a where
   type VerifierClaims a
   verifyRequest ::
-       a -> Headers -> Text' "Request" -> Timestamp -> Maybe (VerifierClaims a)
+       a
+    -> Headers
+    -> Text' "Request"
+    -> IO (Either AuthException (VerifierClaims a))
+  -- ^ Verification is an IO operation because it might want to read the current time, or a list of
+  -- banned public keys, etc. However, you should avoid slow operations because it is called
+  -- per-request.
 
 class (RequestSigner (AuthSigner a), RequestVerifier (AuthVerifier a)) =>
       Auth a
@@ -40,11 +54,11 @@ class (Auth a) =>
 -- auth 'Nothing instead of 'Auth ().
 -- TODO: replace () with data EmptyAuth?
 instance RequestSigner () where
-  signRequest () headers _ = headers
+  signRequest () headers _ = return headers
 
 instance RequestVerifier () where
   type VerifierClaims () = ()
-  verifyRequest () _ _ _ = Just ()
+  verifyRequest () _ _ = return $ Right ()
 
 instance Auth () where
   type AuthSigner () = ()

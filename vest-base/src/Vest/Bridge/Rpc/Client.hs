@@ -27,6 +27,16 @@ type family ClientBindings spec where
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
 
+newtype ClientException =
+  ClientException Text
+  deriving (Eq, Show)
+  deriving anyclass (Exception)
+
+newtype ServerException =
+  ServerException Text
+  deriving (Eq, Show)
+  deriving anyclass (Exception)
+
 class Client t spec where
   makeClient :: t -> Proxy spec -> ClientBindings spec
 
@@ -49,11 +59,11 @@ packRequest ::
      forall fmt signer req. (Serializable fmt req, RequestSigner signer)
   => signer
   -> req
-  -> (Headers, Text' "Request")
-packRequest signer req =
+  -> IO (Headers, Text' "Request")
+packRequest signer req = do
   let reqText = serialize' @fmt req
-      headers = signRequest signer HashMap.empty reqText
-   in (headers, reqText)
+  headers <- signRequest signer HashMap.empty reqText
+  return (headers, reqText)
 
 callDirect ::
      forall fmt signer transport req res.
@@ -71,11 +81,13 @@ callDirect ::
 callDirect timeout_ signer route transport req = do
   resultVar <- newEmptyMVar
   mainThread <- myThreadId
-  let (headersWithSignature, reqText) = packRequest @fmt signer req
-      handleResponse resOrExcText =
+  (headersWithSignature, reqText) <- packRequest @fmt signer req
+  let handleResponse resOrExcText =
         deserializeUnsafe' @fmt resOrExcText >>= \case
-          RpcResponseClientException e -> evilThrowTo mainThread e
-          RpcResponseServerException e -> evilThrowTo mainThread e
+          RpcResponseClientException eText ->
+            evilThrowTo mainThread $ ClientException eText
+          RpcResponseServerException eText ->
+            evilThrowTo mainThread $ ServerException eText
           RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
     _issueRequest handleResponse route transport headersWithSignature reqText
@@ -104,13 +116,15 @@ callStreaming timeout_ signer route transport req f = do
     timeoutRenewable twoHeartbeats (Stream.mapM_ return results)
   gotFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
-  let (headersWithSignature, reqText) = packRequest @fmt signer req
-      handleResponse resOrExcText = do
+  (headersWithSignature, reqText) <- packRequest @fmt signer req
+  let handleResponse resOrExcText = do
         _ <- tryPutMVar gotFirstResponse ()
         renewHeartbeatTimer twoHeartbeats
         deserializeUnsafe' @fmt resOrExcText >>= \case
-          RpcResponseClientException e -> close >> evilThrowTo mainThread e
-          RpcResponseServerException e -> close >> evilThrowTo mainThread e
+          RpcResponseClientException eText ->
+            evilThrowTo mainThread $ ClientException eText
+          RpcResponseServerException eText ->
+            evilThrowTo mainThread $ ServerException eText
             -- does this cause doCleanup to get skipped?
           RpcResponse response ->
             case response of

@@ -6,7 +6,7 @@ import qualified Control.Exception as Evil
 import Time.Units (KnownUnitName)
 import Vest.Prelude
 
--- | This implementation uses callbacks instread of streaming interfaces because Streamly streams
+-- | We use callbacks instread of streaming interfaces because Streamly streams
 -- don't have persistence and TB[M]Queues are ugly.
 class RpcTransport t where
   _consumeRequests ::
@@ -24,29 +24,32 @@ class RpcTransport t where
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
 
--- | Reimplementation of Maybe, but is self-documenting.
+-- | A descriptive reimplementation of Maybe.
 data AuthOrNoAuth a
   = NoAuth
   | Auth a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
--- | Streaming endpoints should return cumulative results.
--- (Missing an intermediate result should be ok.)
 data DirectOrStreaming a
   = Direct a
   | Streaming a
 
 -- | Base RPC endpoint type.
+--
+-- Streaming endpoints should return cumulative results.
+-- In other words, missing an intermediate result should be ok.
+--
 -- Streaming endpoints send heartbeats, in addition to results. A heartbeat is sent immediately
 -- once a request is validated, and again every so often so that the client knows the server is
 -- still responding. The heartbeat interval is currently set from the timeout interval (2 timeouts).
 -- A result should be interpreted as an implicit heartbeat.
+--
 -- The client binding for a streaming endpoint should block until the first heartbeat is received
 -- and throw a TimeoutException if nothing is received within the timeout period.
 -- It should throw a HeartbeatLostException if it receives nothing for 2 heartbeat intervals.
 --
--- We considered setting the heartbeat interval independently from the timeout interval, but found
--- it cluttery
+-- We considered setting the heartbeat interval independently from the timeout interval, but
+-- ultimately found it cluttery.
 data Endpoint_ (timeoutSeconds :: Nat) serializationFormat (auth :: AuthOrNoAuth *) service transport (route :: k) req (res :: DirectOrStreaming *)
 
 type DefaultTimeoutSeconds = 5
@@ -64,8 +67,8 @@ class (RpcTransport transport) =>
 type Headers = HashMap (Text' "Header") Text
 
 data RpcResponse a
-  = RpcResponseClientException ClientException
-  | RpcResponseServerException ServerException
+  = RpcResponseClientException Text
+  | RpcResponseServerException Text
   | RpcResponse a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
@@ -74,16 +77,6 @@ data StreamingResponse a
   | Result a
   | EndOfResults
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
-
-data ClientException
-  = BadAuth
-  | BadCall DeserializeException
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON, Exception)
-
-newtype ServerException =
-  ServerException Text
-  deriving (Eq, Ord, Show, Read, Generic)
-  deriving anyclass (Hashable, ToJSON, FromJSON, Exception)
 
 newtype HeartbeatLostException unit =
   HeartbeatLostException (Time unit)

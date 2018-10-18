@@ -8,13 +8,13 @@ import Vest.Prelude
 
 type family Topics spec where
   Topics () = '[]
-  Topics (Topic _ _ _ (name :: Symbol) _) = '[ name]
+  Topics (Topic_ _ _ _ (name :: Symbol) _) = '[ name]
   Topics (a
           :<|> b) = Topics a :++ Topics b
 
 type family NubTopics spec where
   NubTopics () = '[]
-  NubTopics (Topic _ _ _ (name :: Symbol) _) = '[ name]
+  NubTopics (Topic_ _ _ _ (name :: Symbol) _) = '[ name]
   NubTopics (a
              :<|> b) = Nub (NubTopics a :++ NubTopics b)
 
@@ -26,13 +26,13 @@ data PubSubPublisherException =
 
 type family Streams spec where
   Streams () = ()
-  Streams (Topic _ _ _ _ a) = Stream a
+  Streams (Topic_ _ _ _ _ a) = Stream a
   Streams (a
            :<|> b) = (Streams a
                       :<|> Streams b)
   -- Would be better to declare like this, but type-level lists cannot be used as argument types:
   -- Streams '[] = '[]
-  -- Streams (Topic _ _ _ _ a ': topics) = ('[ Streamly.Serial a] :++ Streams topics)
+  -- Streams (Topic_ _ _ _ _ a ': topics) = ('[ Streamly.Serial a] :++ Streams topics)
   -- Watch here: https://www.reddit.com/r/haskell/comments/9n0qan/typefamily_monoid/.
 
 class (HasNamespace t) =>
@@ -66,8 +66,8 @@ instance ( HasNamespace t
          , Serializable f a
          , KnownSymbol name
          ) =>
-         Publisher t (Topic f t transport name a) where
-  publish :: Stream a -> t -> Proxy (Topic f t transport name a) -> IO ()
+         Publisher t (Topic_ f t transport name a) where
+  publish :: Stream a -> t -> Proxy (Topic_ f t transport name a) -> IO ()
   publish stream t _ =
     _publish
       (\send -> Stream.mapM_ (send . serialize' @f) stream)

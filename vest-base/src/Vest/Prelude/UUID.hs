@@ -1,11 +1,14 @@
 module Vest.Prelude.UUID
-  ( module Vest.Prelude.UUID
+  ( module Reexports
+  , UUID'
+  , nextUUID'
   ) where
 
-import qualified Data.UUID as UUID
-import qualified Data.UUID.V4 as UUID
+import Data.UUID as Reexports (UUID)
+import qualified Data.UUID.V4 as UUID.V4
 import Vest.Prelude.Core
 
--- TODO: would it be better to work with the UUID type directly??
-newUUID :: IO (Text' t)
-newUUID = UUID.nextRandom >>- (Tagged . UUID.toText)
+type UUID' t = Tagged t UUID
+
+nextUUID' :: IO (UUID' t)
+nextUUID' = UUID.V4.nextRandom >>- Tagged

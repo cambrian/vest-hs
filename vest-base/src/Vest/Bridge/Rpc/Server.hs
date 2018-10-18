@@ -98,16 +98,16 @@ serve_ sender verifier handler = _consumeRequests asyncHandle
     asyncHandle headers reqText respond =
       async $
       catches
-        (do time <- now
-            claims <-
-              fromJustUnsafe BadAuth $
-              verifyRequest verifier headers reqText time
-            req <- catch (deserializeUnsafe' @fmt reqText) (throw . BadCall)
+        (do claims <-
+              verifyRequest verifier headers reqText >>= fromRightOrThrowLeft
+            req <- deserializeUnsafe' @fmt reqText
             sender (sendToClient . RpcResponse) (handler claims req))
-        [ Handler $ \(x :: ClientException) ->
-            sendToClient $ RpcResponseClientException x
+        [ Handler $ \(x :: AuthException) ->
+            sendToClient $ RpcResponseClientException $ show x
+        , Handler $ \(x :: DeserializeException) ->
+            sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: SomeException) -> do
-            sendToClient $ RpcResponseServerException $ ServerException $ show x
+            sendToClient $ RpcResponseServerException $ show x
             throw x
         ]
       where

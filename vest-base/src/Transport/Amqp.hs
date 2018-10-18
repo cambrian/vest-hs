@@ -13,14 +13,14 @@ import Vest
 type HashTable k v = HashTable.BasicHashTable k v
 
 data RequestMessage = RequestMessage
-  { id :: Text' "RequestId"
+  { id :: UUID' "Request"
   , responseQueue :: Text' "ResponseQueue"
   , headers :: Headers
   , reqText :: Text' "Request"
   } deriving (Show, Read)
 
 data ResponseMessage = ResponseMessage
-  { requestId :: Text' "RequestId"
+  { requestId :: UUID' "Request"
     -- Other metadata.
   , resText :: Text' "Response"
   } deriving (Show, Read)
@@ -50,7 +50,7 @@ data T = T
   , responseConsumerTag :: AMQP.ConsumerTag
   , consumedRoutes :: HashTable (NamespacedText' "Route") ( AMQP.Channel
                                                           , AMQP.ConsumerTag)
-  , responseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
+  , responseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
   , publisherThreads :: HashTable (NamespacedText' "TopicName") (Async ())
   , subscribers :: HashTable (Text' "SubscriberId") ( AMQP.Channel
                                                     , AMQP.ConsumerTag)
@@ -59,9 +59,9 @@ data T = T
 
 newQueueName :: IO Text
 newQueueName = do
-  (Tagged id) <- newUUID
+  (Tagged id) <- nextUUID'
   myHostName <- Network.HostName.getHostName >>- pack
-  return $ myHostName <> "." <> id
+  return $ myHostName <> "." <> show id
 
 fromAmqpMsg :: AMQP.Message -> Text
 fromAmqpMsg = pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
@@ -175,7 +175,7 @@ instance RpcTransport T where
     -> Text' "Request"
     -> IO (IO' "Cleanup" ())
   _issueRequest respond route T {publishChan, responseQueue, responseHandlers} headers reqText = do
-    id <- newUUID
+    id <- nextUUID'
     HashTable.insert responseHandlers id respond
     AMQP.publishMsg
       publishChan
