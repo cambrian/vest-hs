@@ -62,8 +62,8 @@ data T = T
   -- ^ For a server, stores each client's response queue.
   , clientRequestHandlers :: HashTable Namespace (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (Text' "RequestId") (Text' "Response" -> IO ())
-  , serverThread :: Async ()
-  , clientThreads :: [Async ()]
+  , serverThread :: Async' "ServerThread" ()
+  , clientThreads :: [Async' "ClientThread" ()]
   -- ^ Should clean themselves up when canceled
   }
 
@@ -78,7 +78,7 @@ instance Resource T where
     clientResponseHandlers <- HashTable.new
     -- Warp.run blocks forever, so we put it in its own thread.
     serverThread <-
-      async $
+      async' $
       Warp.run (untag servePort) $
       WS.websocketsOr
         WS.defaultConnectionOptions
@@ -88,7 +88,7 @@ instance Resource T where
       forM servers $ \(namespace, ServerInfo {uri, port, path}) -> do
         requestMVar <- newEmptyMVar
         HashTable.insert clientRequestHandlers namespace (putMVar requestMVar)
-        async $ do
+        async' $ do
           when (isLocalHost uri) (threadDelay (sec 0.05))
              -- ^ If this client is connecting to the local machine, wait for the server to start.
           WS.runClient
@@ -107,8 +107,8 @@ instance Resource T where
         }
   cleanup :: T -> IO ()
   cleanup T {serverThread, clientThreads} = do
-    cancel serverThread
-    mapM_ cancel clientThreads
+    cancel $ untag serverThread
+    mapM_ (cancel . untag) clientThreads
 
 noHttpApp :: Wai.Application
 noHttpApp _ respond =
