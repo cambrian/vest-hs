@@ -6,7 +6,9 @@ module Transport.Amqp
 
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
+import qualified Data.Map as Map
 import qualified Network.AMQP as AMQP
+import qualified Network.AMQP.Types as AMQP.Types
 import qualified Network.HostName
 import Vest
 
@@ -188,7 +190,13 @@ declarePubSubExchange :: AMQP.Channel -> Text -> IO ()
 declarePubSubExchange chan exchangeName =
   AMQP.declareExchange
     chan
-    AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
+    AMQP.newExchange
+      { AMQP.exchangeName
+      , AMQP.exchangeType = "x-recent-history"
+      , AMQP.exchangeArguments =
+          AMQP.Types.FieldTable $
+          Map.fromList [("x-recent-history-length", AMQP.Types.FVInt32 1)]
+      }
 
 unsubscribe :: Text' "SubscriberId" -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
 unsubscribe subscriberId (consumerChan, consumerTag) = do

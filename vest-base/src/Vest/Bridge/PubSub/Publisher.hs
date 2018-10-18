@@ -73,10 +73,10 @@ instance ( HasNamespace t
   publish :: Stream a -> t -> Proxy (Topic_ f t transport name a) -> IO ()
   publish stream t _ =
     void . async $ do
-      let pubRoute = namespaced' @t $ symbolText' (Proxy :: Proxy name)
-      with @Lock.T (Lock.defaultLock (Redis.redis t) (retag pubRoute)) $
+      let topicName = namespaced' @t $ symbolText' (Proxy :: Proxy name)
+      with @Lock.T (Lock.defaultLock (Redis.redis t) (retag topicName)) $
         const $
         _publish
           (\send -> Stream.mapM_ (send . serialize' @f) stream)
-          pubRoute
+          topicName
           (pubSubTransport @transport t)

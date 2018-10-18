@@ -81,7 +81,7 @@ intervalRenewable ::
      (KnownDivRat unit Microsecond, KnownDivRat unit Second)
   => Time unit
   -> IO ()
-  -> IO (IO' "RenewInterval" (), IO' "Cancel" ())
+  -> IO (IO' "RenewInterval" (), IO' "CancelInterval" ())
 -- ^ Begins by waiting; does not execute immediately
 intervalRenewable interval action = do
   nextBeat <- newTVarIO (Timestamp 0)
