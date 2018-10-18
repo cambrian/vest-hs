@@ -10,12 +10,12 @@ synopsis:           Package containing all of the Vest backend services.
 description:        See README.md.
 
 dependencies:
-- aeson                 >= 1.4  && < 2
-- aeson-typescript      >= 0.1  && < 1
-- base                  >= 4.10 && < 5
-- streamly              >= 0.5  && < 1
-- unordered-containers  >= 0.2  && < 1
-- yaml                  >= 0.10 && < 1
+- aeson                 >= 1.4
+- aeson-typescript      >= 0.1
+- base                  >= 4.10
+- streamly              >= 0.5
+- unordered-containers  >= 0.2
+- yaml                  >= 0.10
 - vest-base
 
 # The default-extensions and ghc-options were inspired by this post (and modified for convenience):
