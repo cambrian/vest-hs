@@ -1,5 +1,7 @@
 module Vest.Bridge.Rpc.Client
-  ( module Vest.Bridge.Rpc.Client
+  ( Client
+  , ClientBindings
+  , makeClient
   ) where
 
 import qualified Data.HashMap.Strict as HashMap
@@ -8,14 +10,14 @@ import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
 import Vest.Prelude
 
-type StreamCallback res a = (Stream res -> IO a) -> IO a
-
 -- The structure of streaming RPC calls might seem more complicated than expected.
 -- The reason for this is that the result stream may throw a HeartbeatLostException to the calling
 -- thread at any time, so we limit them to within the body of the call by requiring the stream to be
 -- consumed within a callback.
 -- If you want to consume multiple streaming RPCs concurrently, you should nest the callbacks.
 -- This is admittedly ugly but it handles exceptions correctly.
+-- Note: we would prefer req -> (Stream res -> IO a) -> IO a, but the free variable a is disallowed
+-- by the type family declaration. Can we get around this?
 -- TODO: Implement as monad transformer?
 type family ClientBindings spec where
   ClientBindings () = ()

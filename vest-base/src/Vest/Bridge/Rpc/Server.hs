@@ -1,5 +1,8 @@
 module Vest.Bridge.Rpc.Server
-  ( module Vest.Bridge.Rpc.Server
+  ( Server
+  , Handlers
+  , AlreadyServingException(..)
+  , serve
   ) where
 
 import qualified Stream
@@ -31,9 +34,10 @@ type family Handlers spec where
             :<|> b) = (Handlers a
                        :<|> Handlers b)
 
-data RpcServerException =
-  AlreadyServing (NamespacedText' "Route")
-  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
+newtype AlreadyServingException =
+  AlreadyServingException (NamespacedText' "Route")
+  deriving (Eq, Ord, Show, Read, Generic)
+  deriving anyclass (Exception, FromJSON, ToJSON)
 
 class (HasNamespace t) =>
       Server t spec
