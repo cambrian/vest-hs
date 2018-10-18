@@ -17,6 +17,9 @@ data TransactionException =
   TransactionException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
+class HasRedis t where
+  redis :: t -> T
+
 instance Resource T where
   type ResourceConfig T = ConnectInfo
   make :: ConnectInfo -> IO T

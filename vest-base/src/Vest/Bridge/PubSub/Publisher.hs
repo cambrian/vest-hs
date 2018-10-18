@@ -4,7 +4,9 @@ module Vest.Bridge.PubSub.Publisher
 
 import qualified Stream
 import Vest.Bridge.PubSub.Prelude
+import qualified Vest.DistLock as Lock
 import Vest.Prelude
+import qualified Vest.Redis as Redis
 
 type family Topics spec where
   Topics () = '[]
@@ -63,13 +65,18 @@ instance ( HasUniqueTopics (a
 
 instance ( HasNamespace t
          , HasPubSubTransport transport t
+         , Redis.HasRedis t
          , Serializable f a
          , KnownSymbol name
          ) =>
          Publisher t (Topic f t transport name a) where
   publish :: Stream a -> t -> Proxy (Topic f t transport name a) -> IO ()
   publish stream t _ =
-    _publish
-      (\send -> Stream.mapM_ (send . serialize' @f) stream)
-      (namespaced' @t $ symbolText' (Proxy :: Proxy name))
-      (pubSubTransport @transport t)
+    void . async $ do
+      let pubRoute = namespaced' @t $ symbolText' (Proxy :: Proxy name)
+      with @Lock.T (Lock.defaultLock (Redis.redis t) (retag pubRoute)) $
+        const $
+        _publish
+          (\send -> Stream.mapM_ (send . serialize' @f) stream)
+          pubRoute
+          (pubSubTransport @transport t)

@@ -7,12 +7,14 @@ import Test
 import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified Vest.Redis as Redis
 
--- TODO: add test for HeartbeatLostExceptions
--- TODO: add test for server exceptions
+-- TODO: Add test for HeartbeatLostExceptions.
+-- TODO: Add test for server exceptions.
 data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T
+  , redis :: Redis.T
   }
 
 -- This instance is not really overlapping but for some reason GHC thinks it is.
@@ -27,6 +29,9 @@ instance HasRpcTransport WebSocket.T T where
 
 instance HasPubSubTransport Amqp.T T where
   pubSubTransport = amqp
+
+instance Redis.HasRedis T where
+  redis = redis
 
 type EchoIntsDirectEndpoint transport
    = Endpoint 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
@@ -67,10 +72,11 @@ makeWebSocketConfig = do
       }
 
 withT :: (T -> IO a) -> IO a
-withT f = do
-  webSocketConfig <- makeWebSocketConfig
-  with webSocketConfig $ \webSocket ->
-    with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket})
+withT f =
+  with Redis.localConfig $ \redis -> do
+    webSocketConfig <- makeWebSocketConfig
+    with webSocketConfig $ \webSocket ->
+      with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket, redis})
 
 echoDirect :: T -> a -> IO a
 echoDirect _ = return
