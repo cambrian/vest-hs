@@ -5,7 +5,8 @@ module Vest.Prelude.Serialize
 import Data.Aeson
 import qualified Data.ByteString.Lazy.UTF8 as LazyByteString
 import qualified Text.Read
-import Vest.Prelude.Core hiding (show)
+import Vest.Prelude.Core hiding (show) -- we redefine a non-polymorphic show
+import qualified Vest.Prelude.Core
 
 newtype DeserializeException =
   DeserializeException (Text' "Format", Text)
@@ -29,7 +30,7 @@ class (SerializationFormat fmt) =>
   serialize' = Tagged . serialize @fmt
 
 instance Show a => Serializable "Haskell" a where
-  serialize = show
+  serialize = Vest.Prelude.Core.show
 
 instance ToJSON a => Serializable "JSON" a where
   serialize = pack . LazyByteString.toString . encode
