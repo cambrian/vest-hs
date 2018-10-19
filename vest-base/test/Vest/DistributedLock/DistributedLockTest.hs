@@ -1,5 +1,5 @@
 module Vest.DistributedLock.DistributedLockTest
-  ( test_dist_lock
+  ( test_distributed_lock
   ) where
 
 import Test
@@ -53,5 +53,5 @@ simpleConcurrentTest =
        resultValue <- atomically $ takeTMVar result
        return . encodeUtf8 . pack $ resultValue)
 
-test_dist_lock :: TestTree
-test_dist_lock = testGroup "DistLock" [simpleConcurrentTest]
+test_distributed_lock :: TestTree
+test_distributed_lock = testGroup "DistributedLock" [simpleConcurrentTest]
