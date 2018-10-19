@@ -41,7 +41,7 @@ timeout ::
      KnownDivRat unit Microsecond
   => Time unit -- ^ time
   -> IO a -- ^ 'IO' action
-  -> IO (Either (TimeoutException unit) a) -- ^ returns 'Nothing' if no result is available within the given time
+  -> IO (Either (TimeoutException unit) a) -- ^ returns Nothing if no result is available within the given time
 timeout t action =
   Time.Units.timeout t action >>- \case
     Just a -> Right a
@@ -82,7 +82,7 @@ intervalRenewable ::
   => Time unit
   -> IO ()
   -> IO (IO' "RenewInterval" (), IO' "CancelInterval" ())
--- ^ Begins by waiting; does not execute immediately
+-- ^ Begins by waiting; does not execute immediately.
 intervalRenewable interval action = do
   nextBeat <- newTVarIO (Timestamp 0)
   let renew = do
@@ -102,7 +102,7 @@ intervalRenewable interval action = do
   return (Tagged renew, Tagged $ uninterruptibleCancel intervalThread)
 
 -- UTCTime <--> Timestamp
--- TODO: keep nanos
+-- TODO: Keep nanos.
 utcTimeFromTimestamp :: Timestamp -> UTCTime
 utcTimeFromTimestamp (Timestamp seconds) =
   systemToUTCTime $

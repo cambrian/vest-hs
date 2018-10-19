@@ -1,5 +1,6 @@
 module Vest.DistLock
   ( defaultLock
+  , Config(..)
   , T(..)
   ) where
 
@@ -31,19 +32,11 @@ data CacheStateException =
 defaultLock :: Redis.T -> Text' "LockId" -> ResourceConfig T
 defaultLock conn lockId = Config {conn, lockId, renewInterval = sec 5}
 
-waitForKey :: ByteString -> Redis ()
-waitForKey key = do
-  waitForResult <- liftIO newEmptyMVar
-  let channel = "__keyspace@0__:" <> key
-  pubSub (subscribe [channel]) $
-    const $ do
-      liftIO (putMVar waitForResult ())
-      return $ unsubscribe [channel]
-  liftIO $ takeMVar waitForResult
-
-acquire :: ByteString -> Integer -> Redis ()
--- ^ Blocks until lock is acquired
-acquire key ttl = do
+acquire :: ByteString -> Integer -> Time Second -> Redis ()
+-- ^ Polls every pollInterval until lock is acquired. Unfortunately there is no guaranteed way to
+-- wake on-demand using event notifications (PubSub delivery is best-effort), and Redis lacks a
+-- number of useful blocking calls.
+acquire key ttl pollInterval = do
   txResult <-
     multiExec $ do
       acquired <- setnx key "0"
@@ -52,18 +45,19 @@ acquire key ttl = do
       return $ (&&) <$> acquired <*> expired
   case txResult of
     TxSuccess True -> return ()
-    TxSuccess _ -> waitForKey key >> acquire key ttl
+    TxSuccess _ -> threadDelay pollInterval >> acquire key ttl pollInterval
     _ -> liftIO $ throw Redis.TransactionException
 
 instance Resource T where
   type ResourceConfig T = Config
   make :: Config -> IO T
-  -- ^ Blocks until lock is acquired
+  -- ^ Blocks until lock is acquired.
   make Config {conn, lockId, renewInterval} = do
     let connRaw = Redis.conn conn
         keyRaw = encodeUtf8 $ untag lockId
         ttlRaw = toNum @Second @Integer (2 *:* renewInterval)
-    runRedis connRaw (acquire keyRaw ttlRaw)
+    -- Default pollInterval is just the renewInterval.
+    runRedis connRaw (acquire keyRaw ttlRaw renewInterval)
     (_, cancelRenewer) <-
       intervalRenewable
         renewInterval
