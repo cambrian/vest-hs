@@ -20,7 +20,7 @@ diffCmd :: FilePath -> FilePath -> [GHC.Base.String]
 diffCmd ref new = ["diff", "-u", ref, new]
 
 testCase :: String -> FilePath -> IO Text -> TestTree
-testCase name path = goldenVsStringDiff name diffCmd path . fmap convertString
+testCase name path = testCaseRaw name path . fmap convertString
 
 testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =
