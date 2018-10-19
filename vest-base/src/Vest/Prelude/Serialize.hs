@@ -5,7 +5,7 @@ module Vest.Prelude.Serialize
 import Data.Aeson
 import qualified Data.ByteString.Lazy.UTF8 as LazyByteString
 import qualified Text.Read
-import Vest.Prelude.Core
+import Vest.Prelude.Core hiding (show)
 
 newtype DeserializeException =
   DeserializeException (Text' "Format", Text)
@@ -64,7 +64,11 @@ readUnsafe = deserializeUnsafe @"Haskell"
 readUnsafe' :: (Read a) => Text' t -> IO a
 readUnsafe' = deserializeUnsafe' @"Haskell"
 
+show :: (Show a) => a -> Text
+-- ^ Redefine show to be text only.
+-- If you want the old polymorphic behavior, use convertString . show
+show = serialize @"Haskell"
+
 show' :: (Show a) => a -> Text' t
 show' = serialize' @"Haskell"
--- show is defined in protolude
 -- Not providing encode/decode because you should prefer serialize/deserialize @'JSON.

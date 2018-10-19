@@ -27,7 +27,7 @@ simpleConcurrentTest =
              const $
              atomically $ do
                current <- readTMVar result
-               swapTMVar result (current ++ "A")
+               swapTMVar result (current <> "A")
       -- Acquire lock then sleep for 20 ms.
       -- Test renewals by changing this to 3 seconds.
        threadB <-
@@ -37,7 +37,7 @@ simpleConcurrentTest =
            threadDelay (ms 20)
            atomically $ do
              current <- readTMVar result
-             swapTMVar result (current ++ "B")
+             swapTMVar result (current <> "B")
        -- Wait 10 ms then try to acquire lock.
        threadC <-
          async $ do
@@ -46,12 +46,11 @@ simpleConcurrentTest =
              const $
              atomically $ do
                current <- readTMVar result
-               swapTMVar result (current ++ "C")
+               swapTMVar result (current <> "C")
        wait threadA
        wait threadB
        wait threadC
-       resultValue <- atomically $ takeTMVar result
-       return . encodeUtf8 . pack $ resultValue)
+       atomically $ takeTMVar result)
 
 test_distributed_lock :: TestTree
 test_distributed_lock = testGroup "DistributedLock" [simpleConcurrentTest]

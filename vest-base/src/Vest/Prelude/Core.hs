@@ -51,6 +51,14 @@ import Data.Aeson (withText)
 import Data.Aeson.Types (FromJSONKeyFunction(..), toJSONKeyText)
 import qualified Data.ByteString.Base64 as Base64
 import Data.Data as Vest.Prelude.Core (Data(..))
+import Data.String as Vest.Prelude.Core (IsString(..))
+import Data.String.Conversions as Vest.Prelude.Core hiding
+  ( LBS
+  , LT
+  , SBS
+  , ST
+  , cs
+  ) -- hide confusing abbreviations
 import Data.Tagged as Vest.Prelude.Core hiding (witness)
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)

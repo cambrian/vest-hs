@@ -1,6 +1,7 @@
 module Test
   ( module Reexports
   , testCase
+  , testCaseRaw
   , testWithResource
   , testWithService
   , TestService
@@ -9,7 +10,6 @@ module Test
 
 import Vest
 
-import qualified Data.ByteString.Lazy as LazyByteString
 import GHC.Base (String)
 import Test.Tasty as Reexports (TestTree, defaultMain, testGroup)
 import qualified Test.Tasty as Tasty
@@ -19,9 +19,12 @@ import Test.Tasty.Golden (goldenVsStringDiff)
 diffCmd :: FilePath -> FilePath -> [GHC.Base.String]
 diffCmd ref new = ["diff", "-u", ref, new]
 
-testCase :: String -> FilePath -> IO ByteString -> TestTree
-testCase name path =
-  goldenVsStringDiff name diffCmd path . fmap LazyByteString.fromStrict
+testCase :: String -> FilePath -> IO Text -> TestTree
+testCase name path = goldenVsStringDiff name diffCmd path . fmap convertString
+
+testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
+testCaseRaw name path =
+  goldenVsStringDiff name diffCmd path . fmap convertString
 
 type TestService a = (Async' "ServiceThread" Void, a)
 

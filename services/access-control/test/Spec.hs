@@ -86,7 +86,7 @@ instance Service TestClient where
 generatePublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file
 generatePublicKey =
-  testCase "Generate Access Control Public Key" pubKeyFile $ do
+  testCaseRaw "Generate Access Control Public Key" pubKeyFile $ do
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     (publicKey, _) <- seedKeyPairUnsafe seed
     return $ Yaml.encode publicKey
@@ -94,7 +94,7 @@ generatePublicKey =
 generateSubjects :: TestTree
 -- ^ somewhat hacky way to generate the subjects.yaml file
 generateSubjects =
-  testCase "Generate Access Control Subjects" subjectsFile $ do
+  testCaseRaw "Generate Access Control Subjects" subjectsFile $ do
     (publicKey, _) <- seedKeyPairUnsafe testClientSeed
     let subjects =
           HashMap.fromList
