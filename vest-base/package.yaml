@@ -34,6 +34,7 @@ dependencies:
 - mtl                     >= 2.2
 - postgresql-simple       >= 0.5
 - protolude               >= 0.2
+- pqueue                  >= 1.4
 - random                  >= 1.1
 - resource-pool           >= 0.2
 - safe-exceptions         >= 0.1
@@ -52,6 +53,7 @@ dependencies:
 - tasty-golden            >= 2.3
 - text                    >= 1.2
 - time                    >= 1.8  # Only for SQL formatting time.
+- transformers            >= 0.5
 - unordered-containers    >= 0.2
 - utf8-string             >= 1.0
 - uuid                    >= 1.3
