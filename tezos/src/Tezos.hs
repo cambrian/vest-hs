@@ -3,9 +3,9 @@ module Tezos
   ) where
 
 import Data.Aeson
+import qualified Http
 import Tezos.TzScan
 import Vest
-import qualified Vest.Http as Http
 
 data Delegation = Delegation
   { delegator :: Text' "TzOriginatedPkh"

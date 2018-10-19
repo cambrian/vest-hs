@@ -2,8 +2,8 @@ module Tezos.Node
   ( module Tezos.Node
   ) where
 
+import Http
 import Vest
-import Vest.Http
 
 mainChain :: Text
 mainChain = "main"

@@ -1,5 +1,5 @@
-module Vest.Http
-  ( module Vest.Http
+module Http
+  ( module Http
   , module Reexports
   ) where
 

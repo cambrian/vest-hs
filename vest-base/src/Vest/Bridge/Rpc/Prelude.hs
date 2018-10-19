@@ -50,7 +50,7 @@ data DirectOrStreaming a
 --
 -- We considered setting the heartbeat interval independently from the timeout interval, but
 -- ultimately found it cluttery.
-data Endpoint_ (timeoutSeconds :: Nat) serializationFormat (auth :: AuthOrNoAuth *) service transport (route :: k) req (res :: DirectOrStreaming *)
+data Endpoint_ (timeoutSeconds :: Nat) serializationFormat (auth :: AuthOrNoAuth Type) service transport (route :: k) req (res :: DirectOrStreaming Type)
 
 type DefaultTimeoutSeconds = 5
 
