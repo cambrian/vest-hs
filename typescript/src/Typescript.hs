@@ -6,6 +6,7 @@ import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import Data.List (nub)
 import DummyManager (DummyAuth)
+import GHC.TypeLits
 import qualified Transport.WebSocket as WebSocket
 import Vest
 
@@ -161,15 +162,16 @@ instance (KnownSymbol s) => TypeScript (NamespacedText' (s :: Symbol)) where
   getTypeScriptDeclarations _ =
     getTypeScriptDeclarations (Proxy :: Proxy (Text_ s))
 
+instance (KnownSymbol (AppendSymbol s "Id")) =>
+         TypeScript (UUID' (s :: Symbol)) where
+  getTypeScriptType _ =
+    getTypeScriptType (Proxy :: Proxy (Text_ (AppendSymbol s "Id")))
+  getTypeScriptDeclarations _ =
+    getTypeScriptDeclarations (Proxy :: Proxy (Text_ (AppendSymbol s "Id")))
+
 -- This is repetitive, but since the splicing happens at compile time and certain types depend on
 -- other types having instances of TypeScript, we separate out the derivation splices. For the same
--- reason
-$(deriveTypeScript defaultOptions ''DeserializeException)
-
-$(deriveTypeScript defaultOptions ''ClientException)
-
-$(deriveTypeScript defaultOptions ''ServerException)
-
+-- reason, these instance declarations do not sit next to their types.
 $(deriveTypeScript defaultOptions ''RpcResponse)
 
 $(deriveTypeScript defaultOptions ''StreamingResponse)

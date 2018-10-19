@@ -33,6 +33,8 @@ replaceRules =
   , Replace "\n\ntype IText_<T> = string" ""
   , Replace "IEndOfResults<T>" "IEndOfResults"
   , Replace "IHeartbeat<T>" "IHeartbeat"
+  , Replace "IRpcResponseClientException<T>" "IRpcResponseClientException"
+  , Replace "IRpcResponseServerException<T>" "IRpcResponseServerException"
   , Replace "Text_<\"Header\">" "string"
   , Replace "Text_" "Text"
   , Replace "\"" "\'"
@@ -59,10 +61,7 @@ main = do
       (versionText <> tagged <>
        (pack . formatTSDeclarations . concat $
         [ getTypeScriptDeclarations (Proxy :: Proxy Text_)
-        , getTypeScriptDeclarations (Proxy :: Proxy DeserializeException)
-        , getTypeScriptDeclarations (Proxy :: Proxy ClientException)
-        , getTypeScriptDeclarations (Proxy :: Proxy ServerException)
-        , getTypeScriptDeclarations (Proxy :: Proxy (RpcResponse Text))
+        , getTypeScriptDeclarations (Proxy :: Proxy RpcResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)

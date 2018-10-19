@@ -86,7 +86,7 @@ type Api
 
 instance Service T where
   type ServiceArgs T = DummyManager
-  type PubSubSpec T = ()
+  type PublishSpec T = ()
   type RpcSpec T = Api
   defaultArgs = Args {}
   init _ f =
