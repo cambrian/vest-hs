@@ -4,15 +4,19 @@ module Vest.Bridge.PubSub.Prelude
 
 import Vest.Prelude
 
+-- ^ The most recent <history size> messages should be delivered on _subscribe
+-- TODO: improve interface, and possibly remove the Word32 param
 class PubSubTransport t where
   _publish ::
        ((Text' "a" -> IO ()) -> IO ())
       -- ^ Publish fn, given a function to send a serialized @a over @t.
+    -> Word32 -- ^ size of message history
     -> NamespacedText' "TopicName"
-    -> t
+    -> t -- ^ Should be mutated to store cleanup details.
     -> IO ()
   _subscribe ::
-       (Text' "a" -> IO ()) -- ^ Fn to publish serialized object.
+       (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
+    -> Word32 -- ^ size of message history. Only used to create the AMQP exchange if it doesn't already exist
     -> NamespacedText' "TopicName"
     -> t -- ^ Should be mutated to store cleanup details.
     -> IO (IO' "Unsubscribe" ())
@@ -22,6 +26,20 @@ class (PubSubTransport transport) =>
   where
   pubSubTransport :: t -> transport
 
-data Topic_ serializationFormat service transport (name :: k) a
+data EventOrValue
+  = Event
+  | Value
+
+data Topic_ serializationFormat service transport (name :: k) (topictype :: EventOrValue) a
 
 type Topic = Topic_ "Haskell"
+
+class (Ord (IndexOf a), Enum (IndexOf a)) =>
+      Indexable a
+  where
+  type IndexOf a
+  index :: a -> IndexOf a
+
+instance (Ord (IndexOf a), Enum (IndexOf a)) => Indexable a where
+  type IndexOf a = a
+  index = identity

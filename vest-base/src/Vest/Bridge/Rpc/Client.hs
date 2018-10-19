@@ -16,9 +16,9 @@ import Vest.Prelude
 -- consumed within a callback.
 -- If you want to consume multiple streaming RPCs concurrently, you should nest the callbacks.
 -- This is admittedly ugly but it handles exceptions correctly.
+--
 -- Note: we would prefer req -> (Stream res -> IO a) -> IO a, but the free variable a is disallowed
 -- by the type family declaration. Can we get around this?
--- TODO: Implement as monad transformer?
 type family ClientBindings spec where
   ClientBindings () = ()
   ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Direct res)) = req -> IO res

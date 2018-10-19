@@ -25,7 +25,7 @@ simpleConcurrentTest =
            threadDelay (ms 30)
            with @DistributedLock (testLock connection lockId) $
              const $ atomically $ modifyTVar result (<> "A")
-      -- Acquire lock then sleep for 20 ms.
+      -- Wait 0 ms, acquire lock, then sleep for 20 ms more.
       -- Test renewals by changing this to 3 seconds.
        threadB <-
          async $

@@ -186,8 +186,8 @@ instance RpcTransport T where
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
     return $ Tagged $ HashTable.delete responseHandlers id
 
-declarePubSubExchange :: AMQP.Channel -> Text -> IO ()
-declarePubSubExchange chan exchangeName =
+declarePubSubExchange :: AMQP.Channel -> Text -> Word32 -> IO ()
+declarePubSubExchange chan exchangeName historySize =
   AMQP.declareExchange
     chan
     AMQP.newExchange
@@ -195,7 +195,10 @@ declarePubSubExchange chan exchangeName =
       , AMQP.exchangeType = "x-recent-history"
       , AMQP.exchangeArguments =
           AMQP.Types.FieldTable $
-          Map.fromList [("x-recent-history-length", AMQP.Types.FVInt32 1)]
+          Map.fromList
+            [ ( "x-recent-history-length"
+              , AMQP.Types.FVInt32 $ fromIntegral historySize)
+            ]
       }
 
 unsubscribe :: Text' "SubscriberId" -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
@@ -206,28 +209,30 @@ unsubscribe subscriberId (consumerChan, consumerTag) = do
 instance PubSubTransport T where
   _publish ::
        ((Text' "a" -> IO ()) -> IO ())
+    -> Word32
     -> NamespacedText' "TopicName"
     -> T
     -> IO ()
   -- Like _serve, has race condition on publisherThreads. Not likely to be a problem.
-  _publish publisher topic T {publishChan, publisherThreads} = do
+  _publish publisher historySize topic T {publishChan, publisherThreads} = do
     HashTable.lookup publisherThreads topic >>= \case
       Just _ -> throw $ AlreadyPublishing topic
       Nothing -> return ()
     let Tagged exchangeName = topic
-    declarePubSubExchange publishChan exchangeName
+    declarePubSubExchange publishChan exchangeName historySize
     let send (Tagged a) =
           void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
     publisherThread <- async $ publisher send
     HashTable.insert publisherThreads topic publisherThread
   _subscribe ::
        (Text' "a" -> IO ())
+    -> Word32
     -> NamespacedText' "TopicName"
     -> T
     -> IO (IO' "Unsubscribe" ())
-  _subscribe push (Tagged exchangeName) T {conn, subscribers} = do
+  _subscribe push historySize (Tagged exchangeName) T {conn, subscribers} = do
     consumerChan <- AMQP.openChannel conn
-    declarePubSubExchange consumerChan exchangeName
+    declarePubSubExchange consumerChan exchangeName historySize
     queueName <- newQueueName
     AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
     AMQP.bindQueue consumerChan queueName exchangeName "" -- Routing key blank.

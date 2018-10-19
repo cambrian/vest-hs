@@ -109,12 +109,15 @@ increment =
             else Nothing
    in Stream.unfoldrM f 0
 
-type IncrementTopic transport = Topic T transport "increment" Int
+type IncrementValueTopic transport
+   = Topic T transport "incrementValue" 'Value Int
 
-type TestPubSubApi transport = IncrementTopic transport
+-- type IncrementEventTopic transport
+--    = Topic T transport "incrementEvent" 'Event Int
+type TestPubSubApi transport = IncrementValueTopic transport --  :<|> IncrementEventTopic transport
 
 streams :: Streams (TestPubSubApi Amqp.T)
-streams = increment
+streams = increment -- :<|> increment
 
 withSubscribed ::
      forall transport spec a.
@@ -207,12 +210,12 @@ multipleStreamingTest =
           putMVar result (show (lastInt1, lastInt2, lastText))
     takeMVar result
 
-simplePubSubTest ::
+valuePubSubTest ::
      forall transport. HasPubSubTransport transport T
   => TestTree
-simplePubSubTest =
-  testCase "Simple" "test/Vest/Bridge/pubsub-simple.gold" $
-  withSubscribed @transport (Proxy :: Proxy (IncrementTopic transport)) $ \(_id, results) -> do
+valuePubSubTest =
+  testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
+  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \results -> do
     results <- Stream.toList $ Stream.take 5 $ Stream.drop 1 results
     return $ show results
 
@@ -238,7 +241,7 @@ streamingTests =
 pubSubTests ::
      forall transport. HasPubSubTransport transport T
   => TestTree
-pubSubTests = testGroup "PubSub" [simplePubSubTest @transport]
+pubSubTests = testGroup "PubSub" [valuePubSubTest @transport]
 
 test_bridge :: TestTree
 test_bridge =

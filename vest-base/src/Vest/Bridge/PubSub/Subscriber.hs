@@ -2,13 +2,16 @@ module Vest.Bridge.PubSub.Subscriber
   ( module Vest.Bridge.PubSub.Subscriber
   ) where
 
+import qualified Stream
 import Vest.Bridge.PubSub.Prelude
+import Vest.DistributedLock
 import Vest.Prelude
+import Vest.Redis
 
--- The bound streams close iff unsubscribe is called.
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Topic_ _ _ _ _ a) = (IO' "Unsubscribe" (), Stream a)
+  SubscriberBindings (Topic_ _ _ _ _ 'Value a) = Stream a
+  SubscriberBindings (Topic_ _ _ _ _ 'Event a) = IndexOf a -> Stream a -- lastIndexSeen -> events
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -42,18 +45,42 @@ instance ( HasNamespace service
          , Deserializable fmt a
          , KnownSymbol name
          ) =>
-         Subscriber t (Topic_ fmt service transport name a) where
+         Subscriber t (Topic_ fmt service transport name 'Value a) where
   subscribe ::
-       t
-    -> Proxy (Topic_ fmt service transport name a)
-    -> IO (IO' "Unsubscribe" (), Stream a)
+       t -> Proxy (Topic_ fmt service transport name 'Value a) -> IO (Stream a)
   subscribe t _ = do
-    (push_, Tagged close, stream) <- pushStream
-    let push = push_ <=< deserializeUnsafe' @fmt
-    Tagged unsubscribe_ <-
+    (push, _close, stream) <- pushStream
+    _ <-
       _subscribe
-        push
+        (push <=< deserializeUnsafe' @fmt)
+        1
         (namespaced' @service $ symbolText' (Proxy :: Proxy name))
         (pubSubTransport @transport t)
-    let unsubscribe = Tagged $ close >> unsubscribe_
-    return (unsubscribe, stream)
+    return stream
+
+instance ( HasNamespace service
+         , HasPubSubTransport transport t
+         , HasRedisConnection t
+         , Deserializable fmt a
+         , KnownSymbol name
+         , Indexable a
+         ) =>
+         Subscriber t (Topic_ fmt service transport name 'Event a) where
+  subscribe ::
+       t
+    -> Proxy (Topic_ fmt service transport name 'Event a)
+    -> IO (IndexOf a -> Stream a)
+  subscribe t _ = do
+    let topicName = namespaced' @service $ symbolText' (Proxy :: Proxy name)
+    let lockId = retag $ topicName <> "/subscriber"
+    (push, _close, stream) <- pushStream
+    void . async $
+      with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
+      const $
+      _subscribe
+        (push <=< deserializeUnsafe' @fmt)
+        20
+        (namespaced' @service $ symbolText' (Proxy :: Proxy name))
+        (pubSubTransport @transport t)
+    return $ \lastIndexSeen ->
+      Stream.dropWhile ((lastIndexSeen >) . index) stream
