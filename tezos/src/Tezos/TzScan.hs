@@ -5,8 +5,8 @@ module Tezos.TzScan
 import Data.Aeson
 import Data.Aeson.Encoding.Internal
 import qualified Data.ByteString.Lazy as Lazy
+import Http
 import Vest
-import Vest.Http
 
 type V1 = "v1"
 
