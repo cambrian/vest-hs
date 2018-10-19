@@ -3,28 +3,23 @@ module Vest.Redis
   ) where
 
 import Database.Redis
-import Vest.Prelude.Core
-import Vest.Prelude.Resource
+import Vest.Prelude
 
-data T = T
-  { conn :: Connection
-  }
+type RedisConnection = Connection
 
-localConfig :: ConnectInfo
-localConfig = defaultConnectInfo -- Uses localhost:6379.
+localRedisConfig :: ConnectInfo
+localRedisConfig = defaultConnectInfo
 
-data TransactionException =
-  TransactionException
+data RedisTransactionException =
+  RedisTransactionException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-class HasRedis t where
-  redis :: t -> T
+class HasRedisConnection t where
+  redisConnection :: t -> Connection
 
-instance Resource T where
-  type ResourceConfig T = ConnectInfo
-  make :: ConnectInfo -> IO T
-  make config = do
-    conn <- checkedConnect config
-    return T {conn}
-  cleanup :: T -> IO ()
-  cleanup T {conn} = disconnect conn
+instance Resource Connection where
+  type ResourceConfig Connection = ConnectInfo
+  make :: ConnectInfo -> IO Connection
+  make = checkedConnect
+  cleanup :: Connection -> IO ()
+  cleanup = disconnect

@@ -98,6 +98,7 @@ default-extensions:
 - OverloadedLabels
 - PatternSynonyms
 - PolyKinds
+- QuasiQuotes
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving

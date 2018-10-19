@@ -7,6 +7,12 @@ rm -f rabbit.log
 /usr/local/sbin/rabbitmq-plugins enable rabbitmq_recent_history_exchange
 
 # /usr/local/sbin/rabbitmqctl shutdown
+
+# to completely clear RabbitMQ
+# rabbitmqctl stop_app
+# rabbitmqctl reset
+# rabbitmqctl shutdown
+
 # NOTE: If you get weird errors, run this manually:
 /usr/local/sbin/rabbitmq-server > ~/.vest-hs/rabbit-run.log &
 stack test --fast --file-watch --no-rerun-tests

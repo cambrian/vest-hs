@@ -59,14 +59,14 @@ instance {-# OVERLAPPING #-} Permission.Is p =>
   authVerifier T {accessControlPublicKey, accessTokenVersionVar} =
     Auth.Verifier {accessControlPublicKey, accessTokenVersionVar}
 
-class Is t where
+class Has t where
   accessControlClient :: t -> T
 
-instance Is T where
+instance Has T where
   accessControlClient = identity
 
-instance (Permission.Is p, Is t) => HasAuthSigner (Auth.T p) t where
+instance (Permission.Is p, Has t) => HasAuthSigner (Auth.T p) t where
   authSigner = authSigner @(Auth.T p) . accessControlClient
 
-instance (Permission.Is p, Is t) => HasAuthVerifier (Auth.T p) t where
+instance (Permission.Is p, Has t) => HasAuthVerifier (Auth.T p) t where
   authVerifier = authVerifier @(Auth.T p) . accessControlClient

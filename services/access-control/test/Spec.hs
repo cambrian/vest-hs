@@ -35,7 +35,7 @@ instance HasRpcTransport Amqp.T TestServer where
   rpcTransport = amqp
 
 -- There has to be a way to automatically derive this... right?
-instance AccessControl.Client.Is TestServer where
+instance AccessControl.Client.Has TestServer where
   accessControlClient = accessControlClient
 
 type PermittedEndpoint
@@ -67,7 +67,7 @@ instance HasRpcTransport Amqp.T TestClient where
   rpcTransport = amqp
 
 -- There has to be a way to automatically derive this... right?
-instance AccessControl.Client.Is TestClient where
+instance AccessControl.Client.Has TestClient where
   accessControlClient = accessControlClient
 
 instance Service TestClient where

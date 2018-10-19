@@ -108,6 +108,7 @@ serve_ sender verifier handler = _consumeRequests asyncHandle
             sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: SomeException) -> do
             sendToClient $ RpcResponseServerException $ show x
+            -- TODO: send a generic 503 type message instead of `show x`, and add logging
             throw x
         ]
       where

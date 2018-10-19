@@ -7,14 +7,13 @@ import Test
 import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
 import Vest
-import qualified Vest.Redis as Redis
 
 -- TODO: Add test for HeartbeatLostExceptions.
 -- TODO: Add test for server exceptions.
 data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T
-  , redis :: Redis.T
+  , redis :: RedisConnection
   }
 
 -- This instance is not really overlapping but for some reason GHC thinks it is.
@@ -30,8 +29,8 @@ instance HasRpcTransport WebSocket.T T where
 instance HasPubSubTransport Amqp.T T where
   pubSubTransport = amqp
 
-instance Redis.HasRedis T where
-  redis = redis
+instance HasRedisConnection T where
+  redisConnection = redis
 
 type EchoIntsDirectEndpoint transport
    = Endpoint 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
@@ -72,9 +71,9 @@ makeWebSocketConfig = do
       }
 
 withT :: (T -> IO a) -> IO a
-withT f =
-  with Redis.localConfig $ \redis -> do
-    webSocketConfig <- makeWebSocketConfig
+withT f = do
+  webSocketConfig <- makeWebSocketConfig
+  with localRedisConfig $ \redis ->
     with webSocketConfig $ \webSocket ->
       with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket, redis})
 
@@ -214,7 +213,7 @@ simplePubSubTest ::
 simplePubSubTest =
   testCase "Simple" "test/Vest/Bridge/pubsub-simple.gold" $
   withSubscribed @transport (Proxy :: Proxy (IncrementTopic transport)) $ \(_id, results) -> do
-    results <- Stream.toList $ Stream.take 5 results
+    results <- Stream.toList $ Stream.take 5 $ Stream.drop 1 results
     return $ show results
 
 directTests ::

@@ -1,21 +1,19 @@
-module Vest.DistLock.DistLockTest
+module Vest.DistributedLock.DistributedLockTest
   ( test_dist_lock
   ) where
 
 import Test
 import Vest
-import qualified Vest.DistLock as Lock
-import qualified Vest.Redis as Redis
 
-testLock :: Redis.T -> Text' "LockId" -> ResourceConfig Lock.T
-testLock conn lockId = Lock.Config {conn, lockId, renewInterval = sec 1}
+testLock :: RedisConnection -> Text' "LockId" -> DistributedLockConfig
+testLock redis lockId =
+  DistributedLockConfig {redis, lockId, renewInterval = sec 1}
 
 simpleConcurrentTest :: TestTree
 simpleConcurrentTest =
-  testCase "simpleConcurrent" "test/Vest/DistLock/simple-concurrent.gold" $
+  testCase "simpleConcurrent" "test/Vest/DistributedLock/simple-concurrent.gold" $
   with
-    @Redis.T
-    Redis.localConfig
+    localRedisConfig
     (\connection -> do
        let key = "simpleConcurrent"
        result <- newTMVarIO ""
@@ -25,7 +23,7 @@ simpleConcurrentTest =
        threadA <-
          async $ do
            threadDelay (ms 30)
-           with @Lock.T (testLock connection key) $
+           with @DistributedLock (testLock connection key) $
              const $
              atomically $ do
                current <- readTMVar result
@@ -34,7 +32,7 @@ simpleConcurrentTest =
       -- Test renewals by changing this to 3 seconds.
        threadB <-
          async $
-         with @Lock.T (testLock connection key) $
+         with @DistributedLock (testLock connection key) $
          const $ do
            threadDelay (ms 20)
            atomically $ do
@@ -44,7 +42,7 @@ simpleConcurrentTest =
        threadC <-
          async $ do
            threadDelay (ms 10)
-           with @Lock.T (testLock connection key) $
+           with @DistributedLock (testLock connection key) $
              const $
              atomically $ do
                current <- readTMVar result
