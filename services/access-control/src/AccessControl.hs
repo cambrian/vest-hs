@@ -43,7 +43,7 @@ makeStreams = return . tokenVersions
 
 instance Permission.Is p => HasAuthVerifier (Auth.T p) T where
   authVerifier T {publicKey, tokenVersionVar} =
-    Auth.Verifier publicKey tokenVersionVar
+    Auth.Verifier publicKey (readTVar tokenVersionVar)
 
 instance Service T where
   type ServiceArgs T = AccessControl
@@ -59,16 +59,16 @@ instance Service T where
     let bumpTokenVersion = nextUUID' >>= pushTokenVersion
     bumpTokenVersion
     tokenVersionVar <- tvarFromStreamUnsafe tokenVersions
-    with
-      Amqp.localConfig
-      (\amqp ->
-         f $
-         T
-           { subjects
-           , amqp
-           , publicKey
-           , secretKey
-           , tokenVersionVar
-           , tokenVersions
-           , bumpTokenVersion
-           })
+    with localRedisConfig $ \redis ->
+      with Amqp.localConfig $ \amqp ->
+        f $
+        T
+          { subjects
+          , amqp
+          , redis
+          , publicKey
+          , secretKey
+          , tokenVersionVar
+          , tokenVersions
+          , bumpTokenVersion
+          }

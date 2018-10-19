@@ -62,7 +62,7 @@ packRequest ::
   -> IO (Headers, Text' "Request")
 packRequest signer req = do
   let reqText = serialize' @fmt req
-  headers <- signRequest signer HashMap.empty reqText
+  headers <- atomically $ signRequest signer HashMap.empty reqText
   return (headers, reqText)
 
 callDirect ::

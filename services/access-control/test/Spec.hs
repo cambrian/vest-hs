@@ -95,7 +95,7 @@ generateSubjects :: TestTree
 -- ^ somewhat hacky way to generate the subjects.yaml file
 generateSubjects =
   testCase "Generate Access Control Subjects" subjectsFile $ do
-    (publicKey, _) <- seedKeyPairUnsafe testServerSeed
+    (publicKey, _) <- seedKeyPairUnsafe testClientSeed
     let subjects =
           HashMap.fromList
             [ ( publicKey
@@ -165,6 +165,5 @@ tests =
   testWithService testClientConfig $ \testClient ->
     testGroup "Tests" [testPermitted testClient, testForbidden testClient]
 
--- The tests don't work right now because we have no persistence in our pub sub transport
 main :: IO ()
-main = return () --defaultMain $ testGroup "All" [generateDataFiles, tests]
+main = defaultMain $ testGroup "All" [generateDataFiles, tests]

@@ -23,6 +23,7 @@ data Token = Token
 data T = T
   { subjects :: HashMap PublicKey Subject
   , amqp :: Amqp.T
+  , redis :: RedisConnection
   , publicKey :: PublicKey
   , secretKey :: SecretKey
   -- The redundancy here is a bit sad but it's currently necessary to fit T into the service
@@ -37,3 +38,6 @@ instance HasRpcTransport Amqp.T T where
 
 instance HasPubSubTransport Amqp.T T where
   pubSubTransport = amqp
+
+instance HasRedisConnection T where
+  redisConnection = redis

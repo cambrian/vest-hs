@@ -26,18 +26,18 @@ data Claims = Claims
 
 data Signer = Signer
   { secretKey :: SecretKey
-  , signedTokenVar :: TVar AccessControl.SignedToken
+  , getSignedToken :: STM AccessControl.SignedToken
   }
 
 data Verifier permission = Verifier
   { accessControlPublicKey :: PublicKey
-  , accessTokenVersionVar :: TVar (UUID' "AccessTokenVersion")
+  , getAccessTokenVersion :: STM (UUID' "AccessTokenVersion")
   }
 
 instance (Permission.Is p) => RequestVerifier (Verifier p) where
   type VerifierClaims (Verifier p) = Claims
-  verifyRequest Verifier {accessControlPublicKey, accessTokenVersionVar} headers reqText = do
-    currentTokenVersion <- readTVarIO accessTokenVersionVar
+  verifyRequest Verifier {accessControlPublicKey, getAccessTokenVersion} headers reqText = do
+    currentTokenVersion <- getAccessTokenVersion
     return . eitherFromMaybe AuthException $ do
       clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
       signedToken <-
@@ -52,8 +52,8 @@ instance (Permission.Is p) => RequestVerifier (Verifier p) where
         else Nothing
 
 instance RequestSigner Signer where
-  signRequest Signer {secretKey, signedTokenVar} headers reqText = do
-    signedToken <- readTVarIO signedTokenVar
+  signRequest Signer {secretKey, getSignedToken} headers reqText = do
+    signedToken <- getSignedToken
     let (sig, _) = sign' secretKey reqText
     return $
       HashMap.insert signatureHeader (show sig) $

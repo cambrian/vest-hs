@@ -16,8 +16,8 @@ data T = T
   { accessControlPublicKey :: PublicKey
   , publicKey :: PublicKey
   , secretKey :: SecretKey
-  , signedTokenVar :: TVar AccessControl.SignedToken
-  , accessTokenVersionVar :: TVar (UUID' "AccessTokenVersion")
+  , accessTokenVar :: TVar ( UUID' "AccessTokenVersion"
+                           , AccessControl.SignedToken)
   , unsubscribe :: IO' "Unsubscribe" ()
   }
 
@@ -35,29 +35,32 @@ instance Resource T where
           makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint)
     (unsubscribe, tokenVersions) <-
       subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionTopic)
-    signedTokenVar <-
+    accessTokenVar <-
       tvarFromStreamUnsafe $
-      Stream.mapM (const $ getAccessToken publicKey) tokenVersions
-    accessTokenVersionVar <- tvarFromStreamUnsafe tokenVersions
+      Stream.mapM
+        (\version -> do
+           token <- getAccessToken publicKey
+           return (version, token))
+        tokenVersions
     return $
       T
         { accessControlPublicKey
         , publicKey
         , secretKey
-        , signedTokenVar
-        , accessTokenVersionVar
+        , accessTokenVar
         , unsubscribe
         }
   cleanup T {unsubscribe} = untag unsubscribe
 
 -- These instances are not really overlapping but for some reason GHC thinks they are.
 instance {-# OVERLAPPING #-} Permission.Is p => HasAuthSigner (Auth.T p) T where
-  authSigner = Auth.Signer <$> secretKey <*> signedTokenVar
+  authSigner T {secretKey, accessTokenVar} =
+    Auth.Signer secretKey (readTVar accessTokenVar >>- snd)
 
 instance {-# OVERLAPPING #-} Permission.Is p =>
                              HasAuthVerifier (Auth.T p) T where
-  authVerifier T {accessControlPublicKey, accessTokenVersionVar} =
-    Auth.Verifier {accessControlPublicKey, accessTokenVersionVar}
+  authVerifier T {accessControlPublicKey, accessTokenVar} =
+    Auth.Verifier accessControlPublicKey (readTVar accessTokenVar >>- fst)
 
 class Has t where
   accessControlClient :: t -> T

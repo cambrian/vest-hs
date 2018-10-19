@@ -99,7 +99,8 @@ serve_ sender verifier handler = _consumeRequests asyncHandle
       async $
       catches
         (do claims <-
-              verifyRequest verifier headers reqText >>= fromRightOrThrowLeft
+              atomically (verifyRequest verifier headers reqText) >>=
+              fromRightOrThrowLeft
             req <- deserializeUnsafe' @fmt reqText
             sender (sendToClient . RpcResponse) (handler claims req))
         [ Handler $ \(x :: AuthException) ->

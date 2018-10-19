@@ -15,11 +15,10 @@ data AuthException =
   AuthException
   deriving (Eq, Read, Show, Generic, Exception, ToJSON, FromJSON)
 
+-- | Signing and verification are STM operations because they may want to read some state (e.g.
+-- the current access token version), but should still be lightweight.
 class RequestSigner a where
-  signRequest :: a -> Headers -> Text' "Request" -> IO Headers
-  -- Signing is an IO operation because a signer may want to encapsulate logic for renewing expired
-  -- credentials, for example. However, you should avoid slow operations because it is called
-  -- per-request.
+  signRequest :: a -> Headers -> Text' "Request" -> STM Headers
 
 class RequestVerifier a where
   type VerifierClaims a
@@ -27,10 +26,7 @@ class RequestVerifier a where
        a
     -> Headers
     -> Text' "Request"
-    -> IO (Either AuthException (VerifierClaims a))
-  -- ^ Verification is an IO operation because it might want to read the current time, or a list of
-  -- banned public keys, etc. However, you should avoid slow operations because it is called
-  -- per-request.
+    -> STM (Either AuthException (VerifierClaims a))
 
 class (RequestSigner (AuthSigner a), RequestVerifier (AuthVerifier a)) =>
       Auth a
