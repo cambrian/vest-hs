@@ -8,7 +8,7 @@ import Vest
 testLock :: RedisConnection -> Text' "LockId" -> DistributedLockConfig
 testLock redis lockId =
   DistributedLockConfig
-    {redis, lockId, renewInterval = sec 1, pollInterval = ms 5}
+    {redis, lockId, renewInterval = sec 4, pollInterval = ms 5}
 
 simpleConcurrentTest :: TestTree
 simpleConcurrentTest =
@@ -32,10 +32,10 @@ simpleConcurrentTest =
          const $ do
            threadDelay (ms 20)
            atomically $ modifyTVar result (<> "B")
-       -- Wait 40 ms then try to acquire lock.
+       -- Wait 100 ms then try to acquire lock.
        threadC <-
          async $ do
-           threadDelay (ms 40)
+           threadDelay (ms 100)
            with @DistributedLock (testLock connection lockId) $
              const $ atomically $ modifyTVar result (<> "C")
        wait threadA

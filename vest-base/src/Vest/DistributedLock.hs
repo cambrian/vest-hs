@@ -29,28 +29,22 @@ defaultDistributedLock redis lockId =
   DistributedLockConfig
     {redis, lockId, renewInterval = sec 5, pollInterval = ms 5000}
 
--- Sadly, pubSub blocks in the Redis monad, so this function has to be IO.
-waitForEvent :: Connection -> ByteString -> Time Millisecond -> IO ()
-waitForEvent conn redisKey pollInterval = do
-  eventOccurred <- liftIO newEmptyTMVarIO
+-- | Wait for an event on the given key but un-block eventually in case of a network glitch.
+waitThenPoll :: PubSubController -> ByteString -> Time Millisecond -> IO ()
+waitThenPoll pubSub redisKey pollInterval = do
+  done <- newEmptyTMVarIO
   let channel = "__keyspace@0__:" <> redisKey
-  async $ threadDelay pollInterval >> atomically (putTMVar eventOccurred ())
-  -- ^ If no event arrives, auto-unblock after period pollInterval.
-  async $
-    runRedis conn $
-    pubSub (subscribe [channel]) $
-    const $ do
-      liftIO $ atomically $ putTMVar eventOccurred ()
-      return $ unsubscribe [channel]
-  liftIO $ atomically $ takeTMVar eventOccurred
+  _ <- async $ threadDelay pollInterval >> atomically (putTMVar done ())
+  -- ^ Auto-unblock the waiter after pollInterval is over.
+  removeKeySubscription <-
+    addChannels pubSub [(channel, const $ atomically $ putTMVar done ())] []
+  atomically $ takeTMVar done
+  removeKeySubscription
 
-acquire :: Connection -> ByteString -> Integer -> Time Millisecond -> IO ()
--- ^ Polls every pollInterval until lock is acquired. Unfortunately there is no guaranteed way to
--- wake on-demand using event notifications (PubSub delivery is best-effort), and Redis lacks a
--- number of useful blocking calls.
-acquire redis redisKey ttlSeconds pollInterval = do
+acquire ::
+     PubSubController -> ByteString -> Integer -> Time Millisecond -> Redis ()
+acquire pubSub redisKey ttlSeconds pollInterval = do
   txResult <-
-    runRedis redis $
     multiExec $ do
       acquired <- setnx redisKey "0"
       expired <- expire redisKey ttlSeconds
@@ -59,9 +53,10 @@ acquire redis redisKey ttlSeconds pollInterval = do
   case txResult of
     TxSuccess True -> return ()
     TxSuccess _ ->
-      waitForEvent redis redisKey pollInterval >>
-      acquire redis redisKey ttlSeconds pollInterval
-    _ -> throw RedisTransactionException
+      liftIO (waitThenPoll pubSub redisKey pollInterval) >>
+      acquire pubSub redisKey ttlSeconds pollInterval
+      -- ^ Block on key then retry acquire (see waitThenPoll).
+    _ -> liftIO $ throw RedisTransactionException
 
 instance Resource DistributedLock where
   type ResourceConfig DistributedLock = DistributedLockConfig
@@ -70,7 +65,14 @@ instance Resource DistributedLock where
   make DistributedLockConfig {redis, lockId, renewInterval, pollInterval} = do
     let redisKey = encodeUtf8 $ untag lockId
         ttlSeconds = toNum @Second @Integer (2 *:* renewInterval)
-    acquire redis redisKey ttlSeconds pollInterval
+    pubSub <- newPubSubController [] []
+    threadId <- myThreadId
+    async $
+      forever $
+      pubSubForever redis pubSub (return ()) `catch`
+      (\(e :: SomeException) -> throwTo threadId e)
+    -- ^ Setup a manager thread for pubSub (see hedis docs).
+    runRedis redis (acquire pubSub redisKey ttlSeconds pollInterval)
     (_, cancelRenewer) <-
       intervalRenewable
         renewInterval

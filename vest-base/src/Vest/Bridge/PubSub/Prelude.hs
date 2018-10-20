@@ -33,13 +33,3 @@ data EventOrValue
 data Topic_ serializationFormat service transport (name :: k) (topictype :: EventOrValue) a
 
 type Topic = Topic_ "Haskell"
-
-class (Ord (IndexOf a), Enum (IndexOf a)) =>
-      Indexable a
-  where
-  type IndexOf a
-  index :: a -> IndexOf a
-
-instance (Ord (IndexOf a), Enum (IndexOf a)) => Indexable a where
-  type IndexOf a = a
-  index = identity
