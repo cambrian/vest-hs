@@ -18,13 +18,13 @@ simpleConcurrentTest =
     (\connection -> do
        let lockId = "simpleConcurrent"
        result <- newTVarIO ""
-       -- Wait 10 ms then try to acquire lock.
+       -- Wait 30 ms then try to acquire lock.
        threadA <-
          async $ do
-           threadDelay (ms 10)
+           threadDelay (ms 30)
            with @DistributedLock (testLock connection lockId) $
              const $ atomically $ modifyTVar result (<> "A")
-      -- Wait 0 ms, acquire lock, then sleep for 20 ms more.
+      -- Wait 0 ms, acquire lock, then sleep for 20 ms.
       -- Test renewals by changing this to 3 seconds.
        threadB <-
          async $
