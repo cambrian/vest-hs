@@ -11,8 +11,7 @@ import Vest.Redis
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
   SubscriberBindings (Topic_ _ 'Value _ _ _ a) = (Stream a, STM a)
-  -- ^ Returns an STM operation to get the most recent value. The STM operation will block until
-  -- the first value is received.
+  -- ^ Returns (stream, read). Read blocks until the value is received.
   SubscriberBindings (Topic_ _ 'Event _ _ _ a) = Maybe (IndexOf a) -> Stream a
   -- ^ Maybe LastIndexSeen -> events
   -- Event topic subscribes is locked so that only 1 process can subscribe to an event stream at a

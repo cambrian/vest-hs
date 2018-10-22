@@ -26,18 +26,18 @@ data Claims = Claims
 
 data Signer = Signer
   { secretKey :: SecretKey
-  , peekSignedToken :: STM AccessControl.SignedToken
+  , readSignedToken :: STM AccessControl.SignedToken
   }
 
 data Verifier permission = Verifier
   { accessControlPublicKey :: PublicKey
-  , peekMinTokenTime :: STM Timestamp
+  , readMinTokenTime :: STM Timestamp
   }
 
 instance (Permission.Is p) => RequestVerifier (Verifier p) where
   type VerifierClaims (Verifier p) = Claims
-  verifyRequest Verifier {accessControlPublicKey, peekMinTokenTime} headers reqText = do
-    minTokenTime <- peekMinTokenTime
+  verifyRequest Verifier {accessControlPublicKey, readMinTokenTime} headers reqText = do
+    minTokenTime <- readMinTokenTime
     return . eitherFromMaybe AuthException $ do
       clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
       signedToken <-
@@ -52,8 +52,8 @@ instance (Permission.Is p) => RequestVerifier (Verifier p) where
         else Nothing
 
 instance RequestSigner Signer where
-  signRequest Signer {secretKey, peekSignedToken} headers reqText = do
-    signedToken <- peekSignedToken
+  signRequest Signer {secretKey, readSignedToken} headers reqText = do
+    signedToken <- readSignedToken
     let (sig, _) = sign' secretKey reqText
     return $
       HashMap.insert signatureHeader (show sig) $
