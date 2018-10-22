@@ -34,7 +34,7 @@ class ( Data (ServiceArgs a)
     init args $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) handlers
       streams <- makeStreams a
-      publish streams a (Proxy :: Proxy (PublishSpec a))
+      publish a (Proxy :: Proxy (PublishSpec a)) streams
       f a
       blockForever
   start ::

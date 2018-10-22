@@ -49,13 +49,6 @@ instance ( HasUniqueRoutes (a
          ) =>
          Server t (a
                    :<|> b) where
-  serve ::
-       t
-    -> Proxy (a
-              :<|> b)
-    -> (Handlers a
-        :<|> Handlers b)
-    -> IO ()
   serve t _ (aHandlers :<|> bHandlers) = do
     serve t (Proxy :: Proxy a) aHandlers
     serve t (Proxy :: Proxy b) bHandlers
@@ -74,7 +67,7 @@ streamingSender timeout send xs = do
   send EndOfResults
 
 serve_ ::
-     forall fmt auth transport t route req res x.
+     forall fmt auth transport route t req res x.
      ( Deserializable fmt req
      , Serializable fmt (RpcResponse res)
      , HasAuthVerifier auth t
@@ -86,10 +79,9 @@ serve_ ::
      -- ^ x is typically res or Streamly.Serial res.
      -- res itself may be StreamingResponse a in the case of a streaming sender.
   -> t
-  -> Proxy route
   -> (t -> AuthClaims auth -> req -> IO x)
   -> IO ()
-serve_ sender t _ handler =
+serve_ sender t handler =
   _consumeRequests (rpcTransport @transport t) rawRoute asyncHandle
   where
     rawRoute = show' $ namespaced @t $ symbolText' (Proxy :: Proxy route)
@@ -107,7 +99,7 @@ serve_ sender t _ handler =
             sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: SomeException) -> do
             sendToClient $ RpcResponseServerException $ show x
-            -- TODO: send a generic 503 type message instead of `show x`, and add logging
+            -- ^ TODO: send a generic 503 type message instead of `show x`, and add logging
             throw x
         ]
       where
@@ -130,9 +122,9 @@ instance ( HasNamespace t
       @fmt
       @()
       @transport
+      @route
       directSender
       t
-      (Proxy :: Proxy route)
       (\t () req -> handler t req)
 
 instance ( HasNamespace t
@@ -153,9 +145,9 @@ instance ( HasNamespace t
       @fmt
       @()
       @transport
+      @route
       (streamingSender $ natSeconds @timeout)
       t
-      (Proxy :: Proxy route)
       (\t () req -> handler t req)
 
 instance ( HasNamespace t
@@ -171,7 +163,7 @@ instance ( HasNamespace t
     -> Proxy (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res))
     -> (t -> AuthClaims auth -> req -> IO res)
     -> IO ()
-  serve t _ = serve_ @fmt @auth @transport directSender t (Proxy :: Proxy route)
+  serve t _ = serve_ @fmt @auth @transport @route directSender t
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
@@ -192,6 +184,6 @@ instance ( HasNamespace t
       @fmt
       @auth
       @transport
+      @route
       (streamingSender $ natSeconds @timeout)
       t
-      (Proxy :: Proxy route)
