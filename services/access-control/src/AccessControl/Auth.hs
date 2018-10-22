@@ -26,34 +26,34 @@ data Claims = Claims
 
 data Signer = Signer
   { secretKey :: SecretKey
-  , getSignedToken :: STM AccessControl.SignedToken
+  , peekSignedToken :: STM AccessControl.SignedToken
   }
 
 data Verifier permission = Verifier
   { accessControlPublicKey :: PublicKey
-  , getAccessTokenVersion :: STM (UUID' "AccessTokenVersion")
+  , peekMinTokenTime :: STM Timestamp
   }
 
 instance (Permission.Is p) => RequestVerifier (Verifier p) where
   type VerifierClaims (Verifier p) = Claims
-  verifyRequest Verifier {accessControlPublicKey, getAccessTokenVersion} headers reqText = do
-    currentTokenVersion <- getAccessTokenVersion
+  verifyRequest Verifier {accessControlPublicKey, peekMinTokenTime} headers reqText = do
+    minTokenTime <- peekMinTokenTime
     return . eitherFromMaybe AuthException $ do
       clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
       signedToken <-
         HashMap.lookup tokenHeader headers >>= read @AccessControl.SignedToken
-      AccessControl.Token {publicKey, name, permissions, version} <-
+      AccessControl.Token {publicKey, name, permissions, time} <-
         verify' accessControlPublicKey signedToken >>=
         read' @AccessControl.Token
       _ <- verify' publicKey (clientSig, reqText)
       if HashSet.member (Permission.runtimeRep @p) permissions &&
-         version == currentTokenVersion
+         time >= minTokenTime
         then Just $ Claims {publicKey, name}
         else Nothing
 
 instance RequestSigner Signer where
-  signRequest Signer {secretKey, getSignedToken} headers reqText = do
-    signedToken <- getSignedToken
+  signRequest Signer {secretKey, peekSignedToken} headers reqText = do
+    signedToken <- peekSignedToken
     let (sig, _) = sign' secretKey reqText
     return $
       HashMap.insert signatureHeader (show sig) $

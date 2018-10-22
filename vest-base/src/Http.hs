@@ -97,7 +97,7 @@ resultLoop caller push (Tagged close) pull = do
 -- TODO: Consider encoding streaming/direct with the API route definitions.
 streaming :: ClientM (ResultStream result) -> T -> IO (Stream result)
 streaming requester t = do
-  (push, Tagged close, stream) <- pushStream
+  (push, Tagged close, stream, _) <- pushStream
   receivedFirst <- newEmptyMVar
   caller <- myThreadId
   let pushNotify x =

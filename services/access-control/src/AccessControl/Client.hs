@@ -16,9 +16,9 @@ data T = T
   { accessControlPublicKey :: PublicKey
   , publicKey :: PublicKey
   , secretKey :: SecretKey
-  , accessTokenVar :: TVar ( UUID' "AccessTokenVersion"
-                           , AccessControl.SignedToken)
-  , unsubscribe :: IO' "Unsubscribe" ()
+  , peekToken :: STM AccessControl.SignedToken
+  , peekMinTokenTime :: STM Timestamp
+  , tokenFetcherThread :: Async ()
   }
 
 data Config = Config
@@ -31,37 +31,51 @@ instance Resource T where
   type ResourceConfig T = Config
   make Config {accessControlPublicKey, seed, amqp} = do
     (publicKey, secretKey) <- seedKeyPairUnsafe seed
-    let getAccessToken =
-          makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint)
-    (unsubscribe, tokenVersions) <-
+    let getToken =
+          makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
+    (minTokenTimeUpdates, peekMinTokenTime) <-
       subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionTopic)
-    accessTokenVar <-
-      tvarFromStreamUnsafe $
-      Stream.mapM
-        (\version -> do
-           token <- getAccessToken publicKey
-           return (version, token))
-        tokenVersions
+    tokenVar <- getToken >>= newTVarIO
+    tokenFetcherThread <-
+      async $
+      Stream.mapM_
+        (\_ -> do
+           token <- getToken
+           atomically $ writeTVar tokenVar token)
+        minTokenTimeUpdates
     return $
       T
         { accessControlPublicKey
         , publicKey
         , secretKey
-        , accessTokenVar
-        , unsubscribe
+        , peekToken = readTVar tokenVar
+        , peekMinTokenTime
+        , tokenFetcherThread
         }
-  cleanup T {unsubscribe} = untag unsubscribe
+  cleanup T {tokenFetcherThread} = cancel tokenFetcherThread
 
--- These instances are not really overlapping but for some reason GHC thinks they are.
+-- These instances overlap with the definitions below when t == T.
+-- TODO: There's probably a way to remove the overlap?
 instance {-# OVERLAPPING #-} Permission.Is p => HasAuthSigner (Auth.T p) T where
-  authSigner T {secretKey, accessTokenVar} =
-    Auth.Signer secretKey (readTVar accessTokenVar >>- snd)
+  authSigner T {secretKey, peekToken} = Auth.Signer secretKey peekToken
 
 instance {-# OVERLAPPING #-} Permission.Is p =>
                              HasAuthVerifier (Auth.T p) T where
-  authVerifier T {accessControlPublicKey, accessTokenVar} =
-    Auth.Verifier accessControlPublicKey (readTVar accessTokenVar >>- fst)
+  authVerifier T {accessControlPublicKey, peekMinTokenTime} =
+    Auth.Verifier accessControlPublicKey peekMinTokenTime
 
+-- This is a shorthand to allow service implementers to write:
+--
+-- instance AccessControl.Client.Has T where
+--   accessControlClient = accessControlClient
+--
+-- instead of:
+--
+-- instance Permission.Is p => HasAuthSigner (AccessControl.Auth.T p) T where
+--   authSigner = accessControlClient
+--
+-- instance Permission.Is p => HasAuthVerifier (AccessControl.Auth.T p) T where
+--   authVerifier = accessControlClient
 class Has t where
   accessControlClient :: t -> T
 

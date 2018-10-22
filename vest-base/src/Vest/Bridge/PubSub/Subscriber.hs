@@ -10,7 +10,7 @@ import Vest.Redis
 
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Topic_ _ 'Value _ _ _ a) = STM a
+  SubscriberBindings (Topic_ _ 'Value _ _ _ a) = (Stream a, STM a)
   -- ^ Returns an STM operation to get the most recent value. The STM operation will block until
   -- the first value is received.
   SubscriberBindings (Topic_ _ 'Event _ _ _ a) = Maybe (IndexOf a) -> Stream a
@@ -49,21 +49,17 @@ instance ( HasNamespace service
          ) =>
          Subscriber t (Topic_ fmt 'Value service transport name a) where
   subscribe ::
-       t -> Proxy (Topic_ fmt 'Value service transport name a) -> IO (STM a)
+       t
+    -> Proxy (Topic_ fmt 'Value service transport name a)
+    -> IO (Stream a, STM a)
   subscribe t _ = do
     let rawTopicName =
           show' $ namespaced @service $ symbolText' (Proxy :: Proxy name)
         transport = pubSubTransport @transport t
     initTopic transport rawTopicName Value
-    var <- newTVarIO Nothing
-    subscribe_
-      transport
-      rawTopicName
-      ((atomically . writeTVar var . Just) <=< deserializeUnsafe' @fmt)
-    return $
-      readTVar var >>= \case
-        Nothing -> retry
-        Just v -> return v
+    (push, _, stream, peek) <- pushStream
+    subscribe_ transport rawTopicName (push <=< deserializeUnsafe' @fmt)
+    return (stream, peek)
 
 instance ( HasNamespace service
          , HasPubSubTransport transport t
@@ -82,7 +78,7 @@ instance ( HasNamespace service
           show' $ namespaced @service $ symbolText' (Proxy :: Proxy name)
         lockId = retag $ rawTopicName <> "/subscriber"
         transport = pubSubTransport @transport t
-    (push, _close, stream) <- pushStream
+    (push, _, stream, _) <- pushStream
     void . async $
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do

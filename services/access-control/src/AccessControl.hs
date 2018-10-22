@@ -23,27 +23,27 @@ type InvalidateAllExistingTokensEndpoint
    = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
 
 type TokenVersionTopic
-   = Topic 'Value T Amqp.T "currentTokenVersion" (UUID' "AccessTokenVersion")
+   = Topic 'Value T Amqp.T "minValidTokenTimestamp" Timestamp
 
 accessToken :: T -> PublicKey -> IO SignedToken
-accessToken T {subjects, secretKey, tokenVersionVar} publicKey = do
-  version <- readTVarIO tokenVersionVar
+accessToken T {subjects, secretKey} publicKey = do
+  time <- now
   let Subject {name, permissions} =
         fromMaybe Subject {name = "unknown", permissions = HashSet.empty} $
         HashMap.lookup publicKey subjects
-      token = Token {publicKey, name, permissions, version}
+      token = Token {publicKey, name, permissions, time}
       signedToken = sign' secretKey (show' token)
   return signedToken
 
 handlers :: Handlers (RpcSpec T)
-handlers = accessToken :<|> (\T {bumpTokenVersion} _ () -> bumpTokenVersion)
+handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
 
 makeStreams :: T -> IO (Streams (PublishSpec T))
-makeStreams = return . tokenVersions
+makeStreams = return . minTokenTimes
 
 instance Permission.Is p => HasAuthVerifier (Auth.T p) T where
-  authVerifier T {publicKey, tokenVersionVar} =
-    Auth.Verifier publicKey (readTVar tokenVersionVar)
+  authVerifier T {publicKey, getMinTokenTime} =
+    Auth.Verifier publicKey getMinTokenTime
 
 instance Service T where
   type ServiceArgs T = AccessControl
@@ -55,10 +55,9 @@ instance Service T where
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     (publicKey, secretKey) <- seedKeyPairUnsafe seed
-    (pushTokenVersion, _close, tokenVersions) <- pushStream -- do we need to close tokenVersions?
-    let bumpTokenVersion = nextUUID' >>= pushTokenVersion
-    bumpTokenVersion
-    tokenVersionVar <- tvarFromStreamUnsafe tokenVersions
+    (pushTokenTime, _, minTokenTimes, getMinTokenTime) <- pushStream
+    let bumpMinTokenTime = now >>= pushTokenTime
+    bumpMinTokenTime
     with localRedisConfig $ \redis ->
       with Amqp.localConfig $ \amqp ->
         f $
@@ -68,7 +67,7 @@ instance Service T where
           , redis
           , publicKey
           , secretKey
-          , tokenVersionVar
-          , tokenVersions
-          , bumpTokenVersion
+          , getMinTokenTime
+          , minTokenTimes
+          , bumpMinTokenTime
           }

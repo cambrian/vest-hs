@@ -74,6 +74,8 @@ type Text' t = Tagged t Text
 
 type IO' t a = Tagged t (IO a)
 
+type STM' t a = Tagged t (STM a)
+
 type Async' t a = Tagged t (Async a)
 
 async' :: IO a -> IO (Async' t a)
@@ -133,3 +135,9 @@ blockForever = do
 
 last :: [a] -> Maybe a
 last = lastMay
+
+class (Ord (IndexOf a), Enum (IndexOf a)) =>
+      Indexable a
+  where
+  type IndexOf a
+  index :: a -> IndexOf a

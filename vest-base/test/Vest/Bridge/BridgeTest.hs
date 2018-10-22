@@ -224,9 +224,9 @@ valuePubSubTest ::
   => TestTree
 valuePubSubTest =
   testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
-  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \getValue -> do
+  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \(_, peekValue) -> do
     threadDelay $ sec 0.1
-    value <- atomically getValue
+    value <- atomically peekValue
     return $ show value
 
 directTests ::

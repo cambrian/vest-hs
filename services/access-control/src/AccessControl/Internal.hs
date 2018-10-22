@@ -6,6 +6,8 @@ import qualified AccessControl.Permission as Permission
 import qualified Transport.Amqp as Amqp
 import Vest
 
+-- We had to put the core types in their own file because the access control auth / client need to
+-- import then.
 data Subject = Subject
   { name :: Text
   , permissions :: HashSet Permission.T
@@ -17,7 +19,7 @@ data Token = Token
   { publicKey :: PublicKey
   , name :: Text
   , permissions :: HashSet Permission.T
-  , version :: UUID' "AccessTokenVersion"
+  , time :: Timestamp
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data T = T
@@ -26,11 +28,10 @@ data T = T
   , redis :: RedisConnection
   , publicKey :: PublicKey
   , secretKey :: SecretKey
-  -- The redundancy here is a bit sad but it's currently necessary to fit T into the service
-  -- interface
-  , tokenVersionVar :: TVar (UUID' "AccessTokenVersion")
-  , tokenVersions :: Stream (UUID' "AccessTokenVersion")
-  , bumpTokenVersion :: IO ()
+  -- The redundancy here is a bit sad, but necessary bc it's not possible to publish a TVar.
+  , getMinTokenTime :: STM Timestamp
+  , minTokenTimes :: Stream Timestamp
+  , bumpMinTokenTime :: IO ()
   }
 
 instance HasRpcTransport Amqp.T T where
