@@ -32,10 +32,10 @@ simpleConcurrentTest =
          const $ do
            threadDelay (ms 20)
            atomically $ modifyTVar result (<> "B")
-       -- Wait 100 ms then try to acquire lock.
+       -- Wait 10 ms then try to acquire lock.
        threadC <-
          async $ do
-           threadDelay (ms 100)
+           threadDelay (ms 10)
            with @DistributedLock (testLock connection lockId) $
              const $ atomically $ modifyTVar result (<> "C")
        wait threadA
