@@ -46,12 +46,6 @@ instance Client t () where
 instance (Client t a, Client t b) =>
          Client t (a
                    :<|> b) where
-  makeClient ::
-       t
-    -> Proxy (a
-              :<|> b)
-    -> ClientBindings a
-       :<|> ClientBindings b
   makeClient t _ =
     makeClient t (Proxy :: Proxy a) :<|> makeClient t (Proxy :: Proxy b)
 
@@ -66,20 +60,19 @@ packRequest signer req = do
   return (headers, reqText)
 
 callDirect ::
-     forall fmt auth transport server t route req res.
-     ( Serializable fmt req
+     forall timeout fmt auth transport server route t req res.
+     ( KnownNat timeout
+     , Serializable fmt req
      , Deserializable fmt (RpcResponse res)
      , HasNamespace server
      , HasAuthSigner auth t
      , HasRpcTransport transport t
      , KnownSymbol route
      )
-  => Time Second
-  -> t
-  -> Proxy route
+  => t
   -> req
   -> IO res
-callDirect timeout_ t _ req = do
+callDirect t req = do
   resultVar <- newEmptyMVar
   mainThread <- myThreadId
   (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
@@ -98,27 +91,27 @@ callDirect timeout_ t _ req = do
       headersWithSignature
       reqText
       handleResponse
-  result <- timeout timeout_ $ readMVar resultVar
+  result <- timeout (natSeconds @timeout) (readMVar resultVar)
   doCleanup
   throwIfTimeout result
 
 callStreaming ::
-     forall fmt auth transport server t route req res a.
-     ( Serializable fmt req
+     forall timeout fmt auth transport server route t req res a.
+     ( KnownNat timeout
+     , Serializable fmt req
      , Deserializable fmt (RpcResponse (StreamingResponse res))
      , HasNamespace server
      , HasAuthSigner auth t
      , HasRpcTransport transport t
      , KnownSymbol route
      )
-  => Time Second
-  -> t
-  -> Proxy route
+  => t
   -> req
   -> (Stream res -> IO a)
   -> IO a
-callStreaming timeout_ t _ req f = do
-  let twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
+callStreaming t req f = do
+  let timeout_ = natSeconds @timeout
+      twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
       rawRoute = show' $ namespaced @server $ symbolText' (Proxy :: Proxy route)
   (push, close, results, _) <- pushStream
   (renewHeartbeatTimer, heartbeatLostOrDone) <-
@@ -171,19 +164,7 @@ instance ( KnownNat timeout
          , KnownSymbol route
          ) =>
          Client t (Endpoint_ timeout fmt 'NoAuth server transport route req ('Direct res)) where
-  makeClient ::
-       t
-    -> Proxy (Endpoint_ timeout fmt 'NoAuth server transport route req ('Direct res))
-    -> (req -> IO res)
-  makeClient t _ =
-    callDirect
-      @fmt
-      @()
-      @transport
-      @server
-      (natSeconds @timeout)
-      t
-      (Proxy :: Proxy route)
+  makeClient t _ = callDirect @timeout @fmt @() @transport @server @route t
 
 instance ( KnownNat timeout
          , Serializable fmt req
@@ -193,19 +174,7 @@ instance ( KnownNat timeout
          , KnownSymbol route
          ) =>
          Client t (Endpoint_ timeout fmt 'NoAuth server transport route req ('Streaming res)) where
-  makeClient ::
-       t
-    -> Proxy (Endpoint_ timeout fmt 'NoAuth server transport route req ('Streaming res))
-    -> (req -> (Stream res -> IO ()) -> IO ())
-  makeClient t _ =
-    callStreaming
-      @fmt
-      @()
-      @transport
-      @server
-      (natSeconds @timeout)
-      t
-      (Proxy :: Proxy route)
+  makeClient t _ = callStreaming @timeout @fmt @() @transport @server @route t
 
 instance ( KnownNat timeout
          , Serializable fmt req
@@ -216,19 +185,7 @@ instance ( KnownNat timeout
          , KnownSymbol route
          ) =>
          Client t (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Direct res)) where
-  makeClient ::
-       t
-    -> Proxy (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Direct res))
-    -> (req -> IO res)
-  makeClient t _ =
-    callDirect
-      @fmt
-      @auth
-      @transport
-      @server
-      (natSeconds @timeout)
-      t
-      (Proxy :: Proxy route)
+  makeClient t _ = callDirect @timeout @fmt @auth @transport @server @route t
 
 instance ( KnownNat timeout
          , Serializable fmt req
@@ -239,16 +196,4 @@ instance ( KnownNat timeout
          , KnownSymbol route
          ) =>
          Client t (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Streaming res)) where
-  makeClient ::
-       t
-    -> Proxy (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Streaming res))
-    -> (req -> (Stream res -> IO ()) -> IO ())
-  makeClient t _ =
-    callStreaming
-      @fmt
-      @auth
-      @transport
-      @server
-      (natSeconds @timeout)
-      t
-      (Proxy :: Proxy route)
+  makeClient t _ = callStreaming @timeout @fmt @auth @transport @server @route t

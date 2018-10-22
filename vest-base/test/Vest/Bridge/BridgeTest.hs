@@ -128,7 +128,7 @@ withSubscribed ::
 withSubscribed _ f =
   withT $ \t -> do
     subscribed <- subscribe t (Proxy :: Proxy spec)
-    publish streams t (Proxy :: Proxy (TestPubSubApi transport))
+    publish t (Proxy :: Proxy (TestPubSubApi transport)) streams
     f subscribed
 
 emptyRpcTest :: TestTree
@@ -142,7 +142,7 @@ emptyPubSubTest :: TestTree
 emptyPubSubTest =
   testCase "PubSub" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
     () <- subscribe t (Proxy :: Proxy ())
-    publish () t (Proxy :: Proxy ())
+    publish t (Proxy :: Proxy ()) ()
     return ""
 
 singleDirectTest ::

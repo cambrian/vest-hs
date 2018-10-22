@@ -17,6 +17,9 @@ data RedisTransactionException =
 class HasRedisConnection t where
   redisConnection :: t -> Connection
 
+instance HasRedisConnection RedisConnection where
+  redisConnection = identity
+
 instance Resource Connection where
   type ResourceConfig Connection = ConnectInfo
   make :: ConnectInfo -> IO Connection

@@ -36,7 +36,7 @@ type family Streams spec where
 class (HasNamespace t) =>
       Publisher t spec
   where
-  publish :: Streams spec -> t -> Proxy spec -> IO ()
+  publish :: t -> Proxy spec -> Streams spec -> IO ()
 
 instance HasNamespace t => Publisher t () where
   publish _ _ _ = return ()
@@ -48,19 +48,12 @@ instance ( HasUniqueTopics (a
          ) =>
          Publisher t (a
                       :<|> b) where
-  publish ::
-       (Streams a
-        :<|> Streams b)
-    -> t
-    -> Proxy (a
-              :<|> b)
-    -> IO ()
-  publish (aStreams :<|> bStreams) t _ = do
-    publish aStreams t (Proxy :: Proxy a)
-    publish bStreams t (Proxy :: Proxy b)
+  publish t _ (aStreams :<|> bStreams) = do
+    publish t (Proxy :: Proxy a) aStreams
+    publish t (Proxy :: Proxy b) bStreams
 
 publish_ ::
-     forall fmt transport t topicName a.
+     forall fmt transport topicName t a.
      ( Serializable fmt a
      , HasNamespace t
      , HasPubSubTransport transport t
@@ -68,11 +61,10 @@ publish_ ::
      , KnownSymbol topicName
      )
   => TopicType
-  -> Stream a
   -> t
-  -> Proxy topicName
+  -> Stream a
   -> IO ()
-publish_ topicType stream t _ =
+publish_ topicType t stream =
   void . async $ do
     let rawTopicName =
           show' $ namespaced @t $ symbolText' (Proxy :: Proxy topicName)
@@ -91,10 +83,7 @@ instance ( HasNamespace t
          , KnownSymbol name
          ) =>
          Publisher t (Topic_ fmt 'Value t transport name a) where
-  publish ::
-       Stream a -> t -> Proxy (Topic_ fmt 'Value t transport name a) -> IO ()
-  publish stream t _ =
-    publish_ @fmt @transport Value stream t (Proxy :: Proxy name)
+  publish t _ = publish_ @fmt @transport @name Value t
 
 instance ( HasNamespace t
          , HasPubSubTransport transport t
@@ -103,7 +92,4 @@ instance ( HasNamespace t
          , KnownSymbol name
          ) =>
          Publisher t (Topic_ fmt 'Event t transport name a) where
-  publish ::
-       Stream a -> t -> Proxy (Topic_ fmt 'Event t transport name a) -> IO ()
-  publish stream t _ =
-    publish_ @fmt @transport Event stream t (Proxy :: Proxy name)
+  publish t _ = publish_ @fmt @transport @name Event t
