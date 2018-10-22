@@ -16,8 +16,8 @@ data T = T
   { accessControlPublicKey :: PublicKey
   , publicKey :: PublicKey
   , secretKey :: SecretKey
-  , peekToken :: STM AccessControl.SignedToken
-  , peekMinTokenTime :: STM Timestamp
+  , readToken :: STM AccessControl.SignedToken
+  , readMinTokenTime :: STM Timestamp
   , tokenFetcherThread :: Async ()
   }
 
@@ -33,7 +33,7 @@ instance Resource T where
     (publicKey, secretKey) <- seedKeyPairUnsafe seed
     let getToken =
           makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
-    (minTokenTimeUpdates, peekMinTokenTime) <-
+    (minTokenTimeUpdates, readMinTokenTime) <-
       subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionTopic)
     tokenVar <- getToken >>= newTVarIO
     tokenFetcherThread <-
@@ -48,8 +48,8 @@ instance Resource T where
         { accessControlPublicKey
         , publicKey
         , secretKey
-        , peekToken = readTVar tokenVar
-        , peekMinTokenTime
+        , readToken = readTVar tokenVar
+        , readMinTokenTime
         , tokenFetcherThread
         }
   cleanup T {tokenFetcherThread} = cancel tokenFetcherThread
@@ -57,12 +57,12 @@ instance Resource T where
 -- These instances overlap with the definitions below when t == T.
 -- TODO: There's probably a way to remove the overlap?
 instance {-# OVERLAPPING #-} Permission.Is p => HasAuthSigner (Auth.T p) T where
-  authSigner T {secretKey, peekToken} = Auth.Signer secretKey peekToken
+  authSigner T {secretKey, readToken} = Auth.Signer secretKey readToken
 
 instance {-# OVERLAPPING #-} Permission.Is p =>
                              HasAuthVerifier (Auth.T p) T where
-  authVerifier T {accessControlPublicKey, peekMinTokenTime} =
-    Auth.Verifier accessControlPublicKey peekMinTokenTime
+  authVerifier T {accessControlPublicKey, readMinTokenTime} =
+    Auth.Verifier accessControlPublicKey readMinTokenTime
 
 -- This is a shorthand to allow service implementers to write:
 --

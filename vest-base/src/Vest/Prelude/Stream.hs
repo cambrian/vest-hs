@@ -13,13 +13,13 @@ data StreamPushAfterCloseException =
   StreamPushAfterCloseException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-pushStream :: IO (a -> IO (), IO' "CloseStream" (), Stream a, STM a)
--- ^ Returns (push, close, stream, read).
+pushStream :: IO (a -> IO (), IO (), Stream a, STM a)
+-- ^ Returns (push, close, stream, readStream).
 -- Push throws if called after close is bound.
 -- Close does nothing on repeated binds.
 -- Remembers the most recent item pushed. A new consumption from this stream will see the most
 -- recently pushed item, even if it is already closed.
--- Read returns the most recent value.
+-- readStream returns the most recent value.
 -- TODO: rewrite this as a newtype / data? (TStream). Would allow us to use STM instead of IO in
 -- a more convenient way
 pushStream = do
@@ -43,11 +43,11 @@ pushStream = do
                         Nothing -> throwSTM BugException
                  else return Nothing)
           0
-      peek =
+      readStream =
         readTVar t >>= \case
           (Nothing, _, _) -> retry
           (Just v, _, _) -> return v
-  return (push, Tagged close, stream, peek)
+  return (push, close, stream, readStream)
 
 -- | Prepends historical values to an indexable stream and runs an action for each value.
 observeFromIndex ::
