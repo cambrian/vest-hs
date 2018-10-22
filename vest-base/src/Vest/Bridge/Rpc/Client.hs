@@ -93,8 +93,8 @@ callDirect timeout_ t _ req = do
           RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
     _issueRequest
-      rawRoute
       (rpcTransport @transport t)
+      rawRoute
       headersWithSignature
       reqText
       handleResponse
@@ -142,8 +142,8 @@ callStreaming timeout_ t _ req f = do
               EndOfResults -> close
   Tagged doCleanup <-
     _issueRequest
-      rawRoute
       (rpcTransport @transport t)
+      rawRoute
       headersWithSignature
       reqText
       handleResponse

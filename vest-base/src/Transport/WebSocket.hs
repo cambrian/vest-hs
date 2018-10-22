@@ -173,11 +173,11 @@ wsClientApp clientResponseHandlers requestMVar conn =
 
 instance RpcTransport T where
   _consumeRequests ::
-       RawRoute
-    -> T
+       T
+    -> RawRoute
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
-  _consumeRequests route T {serverRequestHandlers, serverResponseHandlers} asyncHandler =
+  _consumeRequests T {serverRequestHandlers, serverResponseHandlers} route asyncHandler =
     HashTable.lookup serverRequestHandlers route >>= \case
       Just _ -> throw $ AlreadyServingException route
       Nothing -> HashTable.insert serverRequestHandlers route handleMsg
@@ -189,13 +189,13 @@ instance RpcTransport T where
             let respond resText = handler ResponseMessage {requestId, resText}
              in asyncHandler headers reqText respond
   _issueRequest ::
-       RawRoute
-    -> T
+       T
+    -> RawRoute
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
-  _issueRequest route T {clientRequestHandlers, clientResponseHandlers} headers reqText respond = do
+  _issueRequest T {clientRequestHandlers, clientResponseHandlers} route headers reqText respond = do
     namespace <-
       readUnsafe' @(Namespaced "Server" (Text' "Route")) route >>- getNamespace
     id <- nextUUID'

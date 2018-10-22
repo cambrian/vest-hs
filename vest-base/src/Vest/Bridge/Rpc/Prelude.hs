@@ -17,15 +17,15 @@ newtype AlreadyServingException =
 -- don't have persistence and TB[M]Queues are ugly.
 class RpcTransport t where
   _consumeRequests ::
-       RawRoute
+       t
+    -> RawRoute
        -- ^ Called per request, supplied with (headers request respondToClient).
-    -> t
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
     -- ^ Returns a stream of requests, with response function per-request.
   _issueRequest ::
-       RawRoute
-    -> t
+       t
+    -> RawRoute
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ()) -- ^ Called per response.

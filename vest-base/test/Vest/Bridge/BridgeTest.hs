@@ -96,7 +96,7 @@ withRpcClient ::
   -> IO a
 withRpcClient _ f =
   withT $ \t -> do
-    serve handlers t (Proxy :: Proxy (TestRpcApi transport))
+    serve t (Proxy :: Proxy (TestRpcApi transport)) handlers
     f $ makeClient t (Proxy :: Proxy spec)
 
 increment :: Stream Int
@@ -134,7 +134,7 @@ withSubscribed _ f =
 emptyRpcTest :: TestTree
 emptyRpcTest =
   testCase "RPC" "test/Vest/Bridge/empty-rpc.gold" $ withT $ \t -> do
-    serve () t (Proxy :: Proxy ())
+    serve t (Proxy :: Proxy ()) ()
     () <- return $ makeClient t (Proxy :: Proxy ())
     return ""
 

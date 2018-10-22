@@ -32,7 +32,7 @@ class ( Data (ServiceArgs a)
   -- ^ This function runs a service with the provided streams, handlers, and body function
   run args makeStreams handlers f =
     init args $ \a -> do
-      serve handlers a (Proxy :: Proxy (RpcSpec a))
+      serve a (Proxy :: Proxy (RpcSpec a)) handlers
       streams <- makeStreams a
       publish streams a (Proxy :: Proxy (PublishSpec a))
       f a

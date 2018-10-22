@@ -11,20 +11,17 @@ import Vest.Redis
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
   SubscriberBindings (Topic_ _ 'Value _ _ _ a) = STM a
-  -- ^ Returns STM operation to get the most recent value. The STM operation will block until the
-  -- first value is received.
+  -- ^ Returns an STM operation to get the most recent value. The STM operation will block until
+  -- the first value is received.
   SubscriberBindings (Topic_ _ 'Event _ _ _ a) = Maybe (IndexOf a) -> Stream a
   -- ^ Maybe LastIndexSeen -> events
-  -- Will return even if the lock is not acquired, however the stream will not receive events until
-  -- it is.
+  -- Event topic subscribes is locked so that only 1 process can subscribe to an event stream at a
+  -- time. subscribe will return immediately even if the lock is not acquired, however the stream
+  -- will not receive events until it is.
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
 
--- | SubscribeOne (non-streaming version) is deliberately unimplemented, because RabbitMQ does not
--- support message history. Candidate solutions are building a separate pub/sub system on Kafka (or
--- similar), or adding Cassandra to RabbitMQ. For now, you can use makeStreamVar in conjunction
--- with subscribe to get one-off values from a published topic.
 class Subscriber t spec where
   subscribe :: t -> Proxy spec -> IO (SubscriberBindings spec)
 

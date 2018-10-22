@@ -129,12 +129,12 @@ instance Resource T where
 
 instance RpcTransport T where
   _consumeRequests ::
-       RawRoute
-    -> T
+       T
+    -> RawRoute
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
-  _consumeRequests route T {conn, publishChan, consumedRoutes} asyncHandler = do
+  _consumeRequests T {conn, publishChan, consumedRoutes} route asyncHandler = do
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServingException route
@@ -164,13 +164,13 @@ instance RpcTransport T where
            AMQP.ackEnv env)
     HashTable.insert consumedRoutes route (consumerChan, consumerTag)
   _issueRequest ::
-       RawRoute
-    -> T
+       T
+    -> RawRoute
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
-  _issueRequest route T {publishChan, responseQueue, responseHandlers} headers reqText respond = do
+  _issueRequest T {publishChan, responseQueue, responseHandlers} route headers reqText respond = do
     id <- nextUUID'
     HashTable.insert responseHandlers id respond
     AMQP.publishMsg

@@ -37,7 +37,7 @@ type family Handlers spec where
 class (HasNamespace t) =>
       Server t spec
   where
-  serve :: Handlers spec -> t -> Proxy spec -> IO ()
+  serve :: t -> Proxy spec -> Handlers spec -> IO ()
 
 instance HasNamespace t => Server t () where
   serve _ _ _ = return ()
@@ -50,15 +50,15 @@ instance ( HasUniqueRoutes (a
          Server t (a
                    :<|> b) where
   serve ::
-       (Handlers a
-        :<|> Handlers b)
-    -> t
+       t
     -> Proxy (a
               :<|> b)
+    -> (Handlers a
+        :<|> Handlers b)
     -> IO ()
-  serve (aHandlers :<|> bHandlers) t _ = do
-    serve aHandlers t (Proxy :: Proxy a)
-    serve bHandlers t (Proxy :: Proxy b)
+  serve t _ (aHandlers :<|> bHandlers) = do
+    serve t (Proxy :: Proxy a) aHandlers
+    serve t (Proxy :: Proxy b) bHandlers
 
 directSender :: (res -> IO ()) -> IO res -> IO ()
 directSender send = (>>= send)
@@ -85,12 +85,12 @@ serve_ ::
   => ((res -> IO ()) -> IO x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
      -- res itself may be StreamingResponse a in the case of a streaming sender.
-  -> (t -> AuthClaims auth -> req -> IO x)
   -> t
   -> Proxy route
+  -> (t -> AuthClaims auth -> req -> IO x)
   -> IO ()
-serve_ sender handler t _ =
-  _consumeRequests rawRoute (rpcTransport @transport t) asyncHandle
+serve_ sender t _ handler =
+  _consumeRequests (rpcTransport @transport t) rawRoute asyncHandle
   where
     rawRoute = show' $ namespaced @t $ symbolText' (Proxy :: Proxy route)
     asyncHandle headers reqText respond =
@@ -121,19 +121,19 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res)) where
   serve ::
-       (t -> req -> IO res)
-    -> t
+       t
     -> Proxy (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res))
+    -> (t -> req -> IO res)
     -> IO ()
-  serve handler t _ =
+  serve t _ handler =
     serve_
       @fmt
       @()
       @transport
       directSender
-      (\t () req -> handler t req)
       t
       (Proxy :: Proxy route)
+      (\t () req -> handler t req)
 
 instance ( HasNamespace t
          , HasRpcTransport transport t
@@ -144,19 +144,19 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res)) where
   serve ::
-       (t -> req -> IO (Stream res))
-    -> t
+       t
     -> Proxy (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res))
+    -> (t -> req -> IO (Stream res))
     -> IO ()
-  serve handler t _ =
+  serve t _ handler =
     serve_
       @fmt
       @()
       @transport
       (streamingSender $ natSeconds @timeout)
-      (\t () req -> handler t req)
       t
       (Proxy :: Proxy route)
+      (\t () req -> handler t req)
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
@@ -167,12 +167,11 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res)) where
   serve ::
-       (t -> AuthClaims auth -> req -> IO res)
-    -> t
+       t
     -> Proxy (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res))
+    -> (t -> AuthClaims auth -> req -> IO res)
     -> IO ()
-  serve handler t _ =
-    serve_ @fmt @auth @transport directSender handler t (Proxy :: Proxy route)
+  serve t _ = serve_ @fmt @auth @transport directSender t (Proxy :: Proxy route)
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
@@ -184,16 +183,15 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res)) where
   serve ::
-       (t -> AuthClaims auth -> req -> IO (Stream res))
-    -> t
+       t
     -> Proxy (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res))
+    -> (t -> AuthClaims auth -> req -> IO (Stream res))
     -> IO ()
-  serve handler t _ =
+  serve t _ =
     serve_
       @fmt
       @auth
       @transport
       (streamingSender $ natSeconds @timeout)
-      handler
       t
       (Proxy :: Proxy route)
