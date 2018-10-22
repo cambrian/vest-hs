@@ -156,12 +156,6 @@ instance (KnownSymbol s) => TypeScript (Text' (s :: Symbol)) where
   getTypeScriptDeclarations _ =
     getTypeScriptDeclarations (Proxy :: Proxy (Text_ s))
 
--- This COULD be represented in TypeScript but might be more effort than worth.
-instance (KnownSymbol s) => TypeScript (NamespacedText' (s :: Symbol)) where
-  getTypeScriptType _ = getTypeScriptType (Proxy :: Proxy (Text_ s))
-  getTypeScriptDeclarations _ =
-    getTypeScriptDeclarations (Proxy :: Proxy (Text_ s))
-
 instance (KnownSymbol (AppendSymbol s "Id")) =>
          TypeScript (UUID' (s :: Symbol)) where
   getTypeScriptType _ =

@@ -22,6 +22,9 @@ type WithChainBlock spec = WithChain ("blocks" :> Capture "block" Text :> spec)
 type WithChainBlockContract spec
    = WithChainBlock ("context" :> "contracts" :> Capture "contract" Text :> spec)
 
+type WithChainBlockDelegate spec
+   = WithChainBlock ("context" :> "delegates" :> Capture "delegate" Text :> spec)
+
 data NotifyBlock = NotifyBlock
   { hash :: Text
   , level :: Int
@@ -70,3 +73,18 @@ type GetConstants
 type ListContracts = WithChainBlock ("context" :> "contracts" :> Direct [Text])
 
 type GetContractManager = WithChainBlockContract ("manager" :> Direct Text)
+
+type GetContractBalance = WithChainBlockContract ("balance" :> Direct Text)
+
+data FrozenBalance = FrozenBalance
+  { cycle :: Int
+  , deposit :: Text
+  , fees :: Text
+  , rewards :: Text
+  }
+
+type ListFrozenBalanceCycles
+   = WithChainBlockDelegate ("frozen_balance_by_cycle" :> Direct [FrozenBalance])
+
+type ListDelegatedContracts
+   = WithChainBlockDelegate ("delegated_contracts" :> Direct [Text])
