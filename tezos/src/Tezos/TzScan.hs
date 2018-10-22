@@ -1,4 +1,4 @@
-module Tezos.TzScan
+module Tezos.TzScan {-# DEPRECATED "Use node RPC directly" #-}
   ( module Tezos.TzScan
   ) where
 
