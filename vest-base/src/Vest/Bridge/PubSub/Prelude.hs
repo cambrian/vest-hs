@@ -38,13 +38,3 @@ class (PubSubTransport transport) =>
 data Topic_ serializationFormat (topictype :: TopicType) service transport (name :: k) a
 
 type Topic = Topic_ "Haskell"
-
-class (Ord (IndexOf a), Enum (IndexOf a)) =>
-      Indexable a
-  where
-  type IndexOf a
-  index :: a -> IndexOf a
-
-instance (Ord (IndexOf a), Enum (IndexOf a)) => Indexable a where
-  type IndexOf a = a
-  index = identity

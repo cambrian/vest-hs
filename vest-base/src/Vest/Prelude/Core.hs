@@ -10,6 +10,7 @@ import Control.Concurrent.STM.TVar as Vest.Prelude.Core
 import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
+import Control.Monad.Trans.Maybe as Vest.Prelude.Core
 import Data.HashMap.Strict as Vest.Prelude.Core (HashMap)
 import Data.HashSet as Vest.Prelude.Core (HashSet)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
