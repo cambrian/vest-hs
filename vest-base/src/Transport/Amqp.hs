@@ -209,12 +209,12 @@ instance PubSubTransport T where
       (case topicType of
          Value -> 1
          Event -> 20)
-  initPublisher :: RawTopicName -> T -> IO (Text' "a" -> IO ())
-  initPublisher (Tagged exchangeName) T {publishChan} =
+  initPublisher :: T -> RawTopicName -> IO (Text' "a" -> IO ())
+  initPublisher T {publishChan} (Tagged exchangeName) =
     return $
     void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
-  subscribe_ :: RawTopicName -> T -> (Text' "a" -> IO ()) -> IO ()
-  subscribe_ (Tagged exchangeName) T {conn, subscribers} push = do
+  subscribe_ :: T -> RawTopicName -> (Text' "a" -> IO ()) -> IO ()
+  subscribe_ T {conn, subscribers} (Tagged exchangeName) push = do
     consumerChan <- AMQP.openChannel conn
     queueName <- newQueueName
     AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}

@@ -20,13 +20,13 @@ newtype AlreadyPublishingException =
 class PubSubTransport t where
   initTopic :: t -> RawTopicName -> TopicType -> IO ()
   initPublisher ::
-       RawTopicName
-    -> t -- ^ Should be mutated to store cleanup details.
+       t -- ^ Should be mutated to store cleanup details.
+    -> RawTopicName
     -> IO (Text' "a" -> IO ())
     -- ^ Returns publish fn for this topic.
   subscribe_ ::
-       RawTopicName
-    -> t -- ^ Should be mutated to store cleanup details.
+       t -- ^ Should be mutated to store cleanup details.
+    -> RawTopicName
     -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
     -> IO () -- ^ Expects message history to be delivered on subscription.
 

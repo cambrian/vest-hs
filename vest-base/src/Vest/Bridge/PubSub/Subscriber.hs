@@ -57,8 +57,8 @@ instance ( HasNamespace service
     initTopic transport rawTopicName Value
     var <- newTVarIO Nothing
     subscribe_
-      rawTopicName
       transport
+      rawTopicName
       ((atomically . writeTVar var . Just) <=< deserializeUnsafe' @fmt)
     return $
       readTVar var >>= \case
@@ -87,7 +87,7 @@ instance ( HasNamespace service
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do
         initTopic transport rawTopicName Event
-        subscribe_ rawTopicName transport (push <=< deserializeUnsafe' @fmt)
+        subscribe_ transport rawTopicName (push <=< deserializeUnsafe' @fmt)
     return $ \case
       Just lastIndexSeen -> Stream.dropWhile ((lastIndexSeen >) . index) stream
       Nothing -> stream
