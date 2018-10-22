@@ -79,10 +79,10 @@ direct requester t = do
 resultLoop ::
      ThreadId
   -> (result -> IO ())
-  -> IO' "CloseStream" ()
+  -> IO ()
   -> IO (Maybe (Either GHC.Base.String result))
   -> IO ()
-resultLoop caller push (Tagged close) pull = do
+resultLoop caller push close pull = do
   resultMaybe <- pull
   case resultMaybe of
     Nothing -> close
@@ -90,14 +90,14 @@ resultLoop caller push (Tagged close) pull = do
       case result of
         Left error ->
           close >> evilThrowTo caller (HttpClientException (pack error))
-        Right value -> push value >> resultLoop caller push (Tagged close) pull
+        Right value -> push value >> resultLoop caller push close pull
 
 -- Only returns a stream when the first result has been received.
 -- TODO: Figure out how to pass an exception thrower fn to resultLoop.
 -- TODO: Consider encoding streaming/direct with the API route definitions.
 streaming :: ClientM (ResultStream result) -> T -> IO (Stream result)
 streaming requester t = do
-  (push, Tagged close, stream, _) <- pushStream
+  (push, close, stream, _) <- pushStream
   receivedFirst <- newEmptyMVar
   caller <- myThreadId
   let pushNotify x =
@@ -109,7 +109,7 @@ streaming requester t = do
     case errorOrResult of
       Left error -> close >> evilThrowTo caller error
       Right (ResultStream results) ->
-        results $ resultLoop caller pushNotify (Tagged close)
+        results $ resultLoop caller pushNotify close
   takeMVar receivedFirst
   return stream
 

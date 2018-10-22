@@ -120,7 +120,7 @@ callStreaming ::
 callStreaming timeout_ t _ req f = do
   let twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
       rawRoute = show' $ namespaced @server $ symbolText' (Proxy :: Proxy route)
-  (push, Tagged close, results, _) <- pushStream
+  (push, close, results, _) <- pushStream
   (renewHeartbeatTimer, heartbeatLostOrDone) <-
     timeoutRenewable twoHeartbeats (Stream.mapM_ return results)
   gotFirstResponse <- newEmptyMVar
