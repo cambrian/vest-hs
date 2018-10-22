@@ -10,21 +10,17 @@ import Vest.Redis
 
 type family Topics spec where
   Topics () = '[]
-  Topics (Topic_ _ _ _ (name :: Symbol) _ _) = '[ name]
+  Topics (Topic_ _ _ _ _ (name :: Symbol) _) = '[ name]
   Topics (a
           :<|> b) = Topics a :++ Topics b
 
 type family NubTopics spec where
   NubTopics () = '[]
-  NubTopics (Topic_ _ _ _ (name :: Symbol) _ _) = '[ name]
+  NubTopics (Topic_ _ _ _ _ (name :: Symbol) _) = '[ name]
   NubTopics (a
              :<|> b) = Nub (NubTopics a :++ NubTopics b)
 
 type HasUniqueTopics spec = Topics spec ~ NubTopics spec
-
-data PubSubPublisherException =
-  AlreadyPublishing (NamespacedText' "TopicName")
-  deriving (Eq, Ord, Show, Read, Generic, Exception, FromJSON, ToJSON)
 
 type family Streams spec where
   Streams () = ()
@@ -71,22 +67,22 @@ publish_ ::
      , HasRedisConnection t
      , KnownSymbol topicName
      )
-  => Word32
+  => TopicType
   -> Stream a
   -> t
   -> Proxy topicName
   -> IO ()
-publish_ historySize stream t _ =
+publish_ topicType stream t _ =
   void . async $ do
-    let topicName = namespaced' @t $ symbolText' (Proxy :: Proxy topicName)
-    let lockId = retag $ topicName <> "/publisher"
+    let rawTopicName =
+          show' $ namespaced @t $ symbolText' (Proxy :: Proxy topicName)
+        lockId = retag $ rawTopicName <> "/publisher"
+        transport = pubSubTransport @transport t
     with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
-      const $
-      _publish
-        (\send -> Stream.mapM_ (send . serialize' @fmt) stream)
-        historySize
-        topicName
-        (pubSubTransport @transport t)
+      const $ do
+      initTopic transport rawTopicName topicType
+      send <- initPublisher rawTopicName transport
+      Stream.mapM_ (send . serialize' @fmt) stream
 
 instance ( HasNamespace t
          , HasPubSubTransport transport t
@@ -94,19 +90,20 @@ instance ( HasNamespace t
          , Serializable fmt a
          , KnownSymbol name
          ) =>
-         Publisher t (Topic_ fmt t transport name 'Value a) where
+         Publisher t (Topic_ fmt 'Value t transport name a) where
   publish ::
-       Stream a -> t -> Proxy (Topic_ fmt t transport name 'Value a) -> IO ()
-  publish stream t _ = publish_ @fmt @transport 1 stream t (Proxy :: Proxy name)
-
-instance ( HasNamespace t
-         , HasPubSubTransport transport t
-         , HasRedisConnection t
-         , Serializable fmt a
-         , KnownSymbol name
-         ) =>
-         Publisher t (Topic_ fmt t transport name 'Event a) where
-  publish ::
-       Stream a -> t -> Proxy (Topic_ fmt t transport name 'Event a) -> IO ()
+       Stream a -> t -> Proxy (Topic_ fmt 'Value t transport name a) -> IO ()
   publish stream t _ =
-    publish_ @fmt @transport 20 stream t (Proxy :: Proxy name)
+    publish_ @fmt @transport Value stream t (Proxy :: Proxy name)
+
+instance ( HasNamespace t
+         , HasPubSubTransport transport t
+         , HasRedisConnection t
+         , Serializable fmt a
+         , KnownSymbol name
+         ) =>
+         Publisher t (Topic_ fmt 'Event t transport name a) where
+  publish ::
+       Stream a -> t -> Proxy (Topic_ fmt 'Event t transport name a) -> IO ()
+  publish stream t _ =
+    publish_ @fmt @transport Event stream t (Proxy :: Proxy name)

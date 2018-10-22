@@ -34,11 +34,6 @@ type family Handlers spec where
             :<|> b) = (Handlers a
                        :<|> Handlers b)
 
-newtype AlreadyServingException =
-  AlreadyServingException (NamespacedText' "Route")
-  deriving (Eq, Ord, Show, Read, Generic)
-  deriving anyclass (Exception, FromJSON, ToJSON)
-
 class (HasNamespace t) =>
       Server t spec
   where
@@ -79,30 +74,33 @@ streamingSender timeout send xs = do
   send EndOfResults
 
 serve_ ::
-     forall fmt req res verifier transport x.
+     forall fmt auth transport t route req res x.
      ( Deserializable fmt req
      , Serializable fmt (RpcResponse res)
-     , RequestVerifier verifier
-     , RpcTransport transport
+     , HasAuthVerifier auth t
+     , HasRpcTransport transport t
+     , HasNamespace t
+     , KnownSymbol route
      )
   => ((res -> IO ()) -> IO x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
      -- res itself may be StreamingResponse a in the case of a streaming sender.
-  -> verifier
-  -> (VerifierClaims verifier -> req -> IO x)
-  -> NamespacedText' "Route"
-  -> transport
+  -> (t -> AuthClaims auth -> req -> IO x)
+  -> t
+  -> Proxy route
   -> IO ()
-serve_ sender verifier handler = _consumeRequests asyncHandle
+serve_ sender handler t _ =
+  _consumeRequests rawRoute (rpcTransport @transport t) asyncHandle
   where
+    rawRoute = show' $ namespaced @t $ symbolText' (Proxy :: Proxy route)
     asyncHandle headers reqText respond =
       async $
       catches
         (do claims <-
-              atomically (verifyRequest verifier headers reqText) >>=
+              atomically (verifyRequest (authVerifier @auth t) headers reqText) >>=
               fromRightOrThrowLeft
             req <- deserializeUnsafe' @fmt reqText
-            sender (sendToClient . RpcResponse) (handler claims req))
+            sender (sendToClient . RpcResponse) (handler t claims req))
         [ Handler $ \(x :: AuthException) ->
             sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: DeserializeException) ->
@@ -130,11 +128,12 @@ instance ( HasNamespace t
   serve handler t _ =
     serve_
       @fmt
+      @()
+      @transport
       directSender
-      ()
-      (const $ handler t)
-      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      (\t () req -> handler t req)
+      t
+      (Proxy :: Proxy route)
 
 instance ( HasNamespace t
          , HasRpcTransport transport t
@@ -152,11 +151,12 @@ instance ( HasNamespace t
   serve handler t _ =
     serve_
       @fmt
+      @()
+      @transport
       (streamingSender $ natSeconds @timeout)
-      ()
-      (const $ handler t)
-      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      (\t () req -> handler t req)
+      t
+      (Proxy :: Proxy route)
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
@@ -172,13 +172,7 @@ instance ( HasNamespace t
     -> Proxy (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res))
     -> IO ()
   serve handler t _ =
-    serve_
-      @fmt
-      directSender
-      (authVerifier @auth t)
-      (handler t)
-      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+    serve_ @fmt @auth @transport directSender handler t (Proxy :: Proxy route)
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
@@ -197,8 +191,9 @@ instance ( HasNamespace t
   serve handler t _ =
     serve_
       @fmt
+      @auth
+      @transport
       (streamingSender $ natSeconds @timeout)
-      (authVerifier @auth t)
-      (handler t)
-      (namespaced' @t $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      handler
+      t
+      (Proxy :: Proxy route)

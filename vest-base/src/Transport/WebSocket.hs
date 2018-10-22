@@ -23,7 +23,7 @@ type HashTable k v = HashTable.BasicHashTable k v
 data RequestMessage = RequestMessage
   { id :: UUID' "Request"
   , headers :: Headers
-  , route :: NamespacedText' "Route"
+  , route :: RawRoute
   , reqText :: Text' "Request"
   } deriving (Generic, FromJSON, ToJSON)
 
@@ -41,7 +41,7 @@ data ServerInfo = ServerInfo
 data Config = Config
   { servePort :: Int' "Port"
   , pingInterval :: Int
-  , servers :: [(Namespace, ServerInfo)]
+  , servers :: [(Text' "Server", ServerInfo)]
   }
 
 localConfig :: Config
@@ -51,16 +51,17 @@ localConfig = Config {servePort = Tagged 3000, pingInterval = 30, servers = []}
 isLocalHost :: (Eq a, IsString a) => a -> Bool
 isLocalHost x = x == "localhost" || x == "127.0.0.1"
 
-data WebSocketClientException =
-  NoServerForNamespace Namespace
-  deriving (Show, Exception)
+newtype NoServerForNamespaceException =
+  NoServerForNamespace (Text' "Server")
+  deriving (Eq, Show)
+  deriving anyclass (Exception)
 
 data T = T
-  { serverRequestHandlers :: HashTable (NamespacedText' "Route") (UUID' "Client" -> RequestMessage -> IO (Async ()))
+  { serverRequestHandlers :: HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -- ^ For a server, requests need to be aggregated by route.
   , serverResponseHandlers :: HashTable (UUID' "Client") (ResponseMessage -> IO ())
   -- ^ For a server, stores each client's response queue.
-  , clientRequestHandlers :: HashTable Namespace (RequestMessage -> IO ())
+  , clientRequestHandlers :: HashTable (Text' "Server") (RequestMessage -> IO ())
   , clientResponseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
   , serverThread :: Async' "ServerThread" ()
   , clientThreads :: [Async' "ClientThread" ()]
@@ -120,7 +121,7 @@ noHttpApp _ respond =
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
-     HashTable (NamespacedText' "Route") (UUID' "Client" -> RequestMessage -> IO (Async ()))
+     HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> HashTable (UUID' "Client") (ResponseMessage -> IO ())
   -> Int
   -> WS.ServerApp
@@ -137,7 +138,7 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
     (HashTable.delete serverResponseHandlers clientId)
 
 serveClient ::
-     HashTable (NamespacedText' "Route") (UUID' "Client" -> RequestMessage -> IO (Async ()))
+     HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> UUID' "Client"
   -> WS.Connection
   -> IO ()
@@ -172,13 +173,11 @@ wsClientApp clientResponseHandlers requestMVar conn =
 
 instance RpcTransport T where
   _consumeRequests ::
-       (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-    -> NamespacedText' "Route"
+       RawRoute
     -> T
+    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
-  _consumeRequests asyncHandler route T { serverRequestHandlers
-                                        , serverResponseHandlers
-                                        } =
+  _consumeRequests route T {serverRequestHandlers, serverResponseHandlers} asyncHandler =
     HashTable.lookup serverRequestHandlers route >>= \case
       Just _ -> throw $ AlreadyServingException route
       Nothing -> HashTable.insert serverRequestHandlers route handleMsg
@@ -190,14 +189,15 @@ instance RpcTransport T where
             let respond resText = handler ResponseMessage {requestId, resText}
              in asyncHandler headers reqText respond
   _issueRequest ::
-       (Text' "Response" -> IO ())
-    -> NamespacedText' "Route"
+       RawRoute
     -> T
     -> Headers
     -> Text' "Request"
+    -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
-  _issueRequest respond route T {clientRequestHandlers, clientResponseHandlers} headers reqText = do
-    let namespace = getNamespace route
+  _issueRequest route T {clientRequestHandlers, clientResponseHandlers} headers reqText respond = do
+    namespace <-
+      readUnsafe' @(Namespaced "Server" (Text' "Route")) route >>- getNamespace
     id <- nextUUID'
     makeRequest <-
       HashTable.lookup clientRequestHandlers namespace >>=

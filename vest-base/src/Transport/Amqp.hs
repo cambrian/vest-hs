@@ -50,10 +50,8 @@ data T = T
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerChan :: AMQP.Channel
   , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: HashTable (NamespacedText' "Route") ( AMQP.Channel
-                                                          , AMQP.ConsumerTag)
+  , consumedRoutes :: HashTable RawRoute (AMQP.Channel, AMQP.ConsumerTag)
   , responseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
-  , publisherThreads :: HashTable (NamespacedText' "TopicName") (Async ())
   , subscribers :: HashTable (Text' "SubscriberId") ( AMQP.Channel
                                                     , AMQP.ConsumerTag)
     -- ^ Key: subscriberId to Value: (consumerTag, close)
@@ -96,7 +94,6 @@ instance Resource T where
            -- ^ Do nothing if response message malformed.
            AMQP.ackEnv env)
     consumedRoutes <- HashTable.new
-    publisherThreads <- HashTable.new
     subscribers <- HashTable.new
     return
       T
@@ -107,7 +104,6 @@ instance Resource T where
         , responseConsumerTag
         , consumedRoutes
         , responseHandlers
-        , publisherThreads
         , subscribers
         }
   cleanup :: T -> IO ()
@@ -118,12 +114,10 @@ instance Resource T where
             , responseConsumerChan
             , responseConsumerTag
             , consumedRoutes
-            , publisherThreads
             , subscribers
             } = do
     AMQP.cancelConsumer responseConsumerChan responseConsumerTag
     HashTable.mapM_ (uncurry AMQP.cancelConsumer . snd) consumedRoutes
-    HashTable.mapM_ (cancel . snd) publisherThreads
     HashTable.mapM_ (uncurry unsubscribe) subscribers
     _ <- AMQP.deleteQueue responseConsumerChan (untag responseQueue)
     -- AMQP.closeConnection is not thread safe, so we choose to leak the connection instead.
@@ -135,12 +129,12 @@ instance Resource T where
 
 instance RpcTransport T where
   _consumeRequests ::
-       (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-    -> NamespacedText' "Route"
+       RawRoute
     -> T
+    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
-  _consumeRequests asyncHandler route T {conn, publishChan, consumedRoutes} = do
+  _consumeRequests route T {conn, publishChan, consumedRoutes} asyncHandler = do
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServingException route
@@ -170,13 +164,13 @@ instance RpcTransport T where
            AMQP.ackEnv env)
     HashTable.insert consumedRoutes route (consumerChan, consumerTag)
   _issueRequest ::
-       (Text' "Response" -> IO ())
-    -> NamespacedText' "Route"
+       RawRoute
     -> T
     -> Headers
     -> Text' "Request"
+    -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
-  _issueRequest respond route T {publishChan, responseQueue, responseHandlers} headers reqText = do
+  _issueRequest route T {publishChan, responseQueue, responseHandlers} headers reqText respond = do
     id <- nextUUID'
     HashTable.insert responseHandlers id respond
     AMQP.publishMsg
@@ -207,32 +201,21 @@ unsubscribe subscriberId (consumerChan, consumerTag) = do
   AMQP.deleteQueue consumerChan (untag subscriberId) & void
 
 instance PubSubTransport T where
-  _publish ::
-       ((Text' "a" -> IO ()) -> IO ())
-    -> Word32
-    -> NamespacedText' "TopicName"
-    -> T
-    -> IO ()
-  -- Like _serve, has race condition on publisherThreads. Not likely to be a problem.
-  _publish publisher historySize topic T {publishChan, publisherThreads} = do
-    HashTable.lookup publisherThreads topic >>= \case
-      Just _ -> throw $ AlreadyPublishing topic
-      Nothing -> return ()
-    let Tagged exchangeName = topic
-    declarePubSubExchange publishChan exchangeName historySize
-    let send (Tagged a) =
-          void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg $ a -- Queue name is blank.
-    publisherThread <- async $ publisher send
-    HashTable.insert publisherThreads topic publisherThread
-  _subscribe ::
-       (Text' "a" -> IO ())
-    -> Word32
-    -> NamespacedText' "TopicName"
-    -> T
-    -> IO (IO' "Unsubscribe" ())
-  _subscribe push historySize (Tagged exchangeName) T {conn, subscribers} = do
+  initTopic :: T -> RawTopicName -> TopicType -> IO ()
+  initTopic T {publishChan} (Tagged exchangeName) topicType =
+    declarePubSubExchange
+      publishChan
+      exchangeName
+      (case topicType of
+         Value -> 1
+         Event -> 20)
+  initPublisher :: RawTopicName -> T -> IO (Text' "a" -> IO ())
+  initPublisher (Tagged exchangeName) T {publishChan} =
+    return $
+    void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
+  subscribe_ :: RawTopicName -> T -> (Text' "a" -> IO ()) -> IO ()
+  subscribe_ (Tagged exchangeName) T {conn, subscribers} push = do
     consumerChan <- AMQP.openChannel conn
-    declarePubSubExchange consumerChan exchangeName historySize
     queueName <- newQueueName
     AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
     AMQP.bindQueue consumerChan queueName exchangeName "" -- Routing key blank.
@@ -244,10 +227,6 @@ instance PubSubTransport T where
         (push . Tagged . fromAmqpMsg . fst)
     let subscriberId = Tagged queueName
     HashTable.insert subscribers subscriberId (consumerChan, consumerTag)
-    let unsubscribe_ = do
-          HashTable.delete subscribers subscriberId
-          unsubscribe subscriberId (consumerChan, consumerTag)
-    return $ Tagged unsubscribe_
 
 instance HasRpcTransport T T where
   rpcTransport = identity

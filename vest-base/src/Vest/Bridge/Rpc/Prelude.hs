@@ -6,22 +6,29 @@ import qualified Control.Exception as Evil
 import Time.Units (KnownUnitName)
 import Vest.Prelude
 
+type RawRoute = Text' "RawRoute"
+
+newtype AlreadyServingException =
+  AlreadyServingException RawRoute
+  deriving (Eq, Show, Read, Generic)
+  deriving anyclass (Exception, FromJSON, ToJSON)
+
 -- | We use callbacks instread of streaming interfaces because Streamly streams
 -- don't have persistence and TB[M]Queues are ugly.
 class RpcTransport t where
   _consumeRequests ::
-       (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
-    -> NamespacedText' "Route"
+       RawRoute
        -- ^ Called per request, supplied with (headers request respondToClient).
     -> t
+    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
     -- ^ Returns a stream of requests, with response function per-request.
   _issueRequest ::
-       (Text' "Response" -> IO ()) -- ^ Called per response.
-    -> NamespacedText' "Route"
+       RawRoute
     -> t
     -> Headers
     -> Text' "Request"
+    -> (Text' "Response" -> IO ()) -- ^ Called per response.
     -> IO (IO' "Cleanup" ())
 
 -- | A descriptive reimplementation of Maybe.

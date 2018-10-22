@@ -23,7 +23,7 @@ type InvalidateAllExistingTokensEndpoint
    = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
 
 type TokenVersionTopic
-   = Topic T Amqp.T "currentTokenVersion" (UUID' "AccessTokenVersion")
+   = Topic 'Value T Amqp.T "currentTokenVersion" (UUID' "AccessTokenVersion")
 
 accessToken :: T -> PublicKey -> IO SignedToken
 accessToken T {subjects, secretKey, tokenVersionVar} publicKey = do

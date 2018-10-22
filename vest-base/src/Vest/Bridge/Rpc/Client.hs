@@ -66,23 +66,25 @@ packRequest signer req = do
   return (headers, reqText)
 
 callDirect ::
-     forall fmt signer transport req res.
+     forall fmt auth transport server t route req res.
      ( Serializable fmt req
      , Deserializable fmt (RpcResponse res)
-     , RequestSigner signer
-     , RpcTransport transport
+     , HasNamespace server
+     , HasAuthSigner auth t
+     , HasRpcTransport transport t
+     , KnownSymbol route
      )
   => Time Second
-  -> signer
-  -> NamespacedText' "Route"
-  -> transport
+  -> t
+  -> Proxy route
   -> req
   -> IO res
-callDirect timeout_ signer route transport req = do
+callDirect timeout_ t _ req = do
   resultVar <- newEmptyMVar
   mainThread <- myThreadId
-  (headersWithSignature, reqText) <- packRequest @fmt signer req
-  let handleResponse resOrExcText =
+  (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
+  let rawRoute = show' $ namespaced @server $ symbolText' (Proxy :: Proxy route)
+      handleResponse resOrExcText =
         deserializeUnsafe' @fmt resOrExcText >>= \case
           RpcResponseClientException eText ->
             evilThrowTo mainThread $ ClientException eText
@@ -90,33 +92,40 @@ callDirect timeout_ signer route transport req = do
             evilThrowTo mainThread $ ServerException eText
           RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
-    _issueRequest handleResponse route transport headersWithSignature reqText
+    _issueRequest
+      rawRoute
+      (rpcTransport @transport t)
+      headersWithSignature
+      reqText
+      handleResponse
   result <- timeout timeout_ $ readMVar resultVar
   doCleanup
   throwIfTimeout result
 
 callStreaming ::
-     forall fmt signer transport req res a.
+     forall fmt auth transport server t route req res a.
      ( Serializable fmt req
      , Deserializable fmt (RpcResponse (StreamingResponse res))
-     , RequestSigner signer
-     , RpcTransport transport
+     , HasNamespace server
+     , HasAuthSigner auth t
+     , HasRpcTransport transport t
+     , KnownSymbol route
      )
   => Time Second
-  -> signer
-  -> NamespacedText' "Route"
-  -> transport
+  -> t
+  -> Proxy route
   -> req
   -> (Stream res -> IO a)
   -> IO a
-callStreaming timeout_ signer route transport req f = do
+callStreaming timeout_ t _ req f = do
   let twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
+      rawRoute = show' $ namespaced @server $ symbolText' (Proxy :: Proxy route)
   (push, Tagged close, results) <- pushStream
   (renewHeartbeatTimer, heartbeatLostOrDone) <-
     timeoutRenewable twoHeartbeats (Stream.mapM_ return results)
   gotFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
-  (headersWithSignature, reqText) <- packRequest @fmt signer req
+  (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
   let handleResponse resOrExcText = do
         _ <- tryPutMVar gotFirstResponse ()
         renewHeartbeatTimer twoHeartbeats
@@ -132,7 +141,12 @@ callStreaming timeout_ signer route transport req f = do
               Result res -> push res
               EndOfResults -> close
   Tagged doCleanup <-
-    _issueRequest handleResponse route transport headersWithSignature reqText
+    _issueRequest
+      rawRoute
+      (rpcTransport @transport t)
+      headersWithSignature
+      reqText
+      handleResponse
   timeout timeout_ (takeMVar gotFirstResponse) >>= \case
     Left exn -> do
       close
@@ -164,10 +178,12 @@ instance ( KnownNat timeout
   makeClient t _ =
     callDirect
       @fmt
+      @()
+      @transport
+      @server
       (natSeconds @timeout)
-      (authSigner @() t)
-      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      t
+      (Proxy :: Proxy route)
 
 instance ( KnownNat timeout
          , Serializable fmt req
@@ -184,10 +200,12 @@ instance ( KnownNat timeout
   makeClient t _ =
     callStreaming
       @fmt
+      @()
+      @transport
+      @server
       (natSeconds @timeout)
-      (authSigner @() t)
-      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      t
+      (Proxy :: Proxy route)
 
 instance ( KnownNat timeout
          , Serializable fmt req
@@ -205,10 +223,12 @@ instance ( KnownNat timeout
   makeClient t _ =
     callDirect
       @fmt
+      @auth
+      @transport
+      @server
       (natSeconds @timeout)
-      (authSigner @auth t)
-      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      t
+      (Proxy :: Proxy route)
 
 instance ( KnownNat timeout
          , Serializable fmt req
@@ -226,7 +246,9 @@ instance ( KnownNat timeout
   makeClient t _ =
     callStreaming
       @fmt
+      @auth
+      @transport
+      @server
       (natSeconds @timeout)
-      (authSigner @auth t)
-      (namespaced' @server $ symbolText' (Proxy :: Proxy route))
-      (rpcTransport @transport t)
+      t
+      (Proxy :: Proxy route)

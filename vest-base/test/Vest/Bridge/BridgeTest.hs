@@ -110,10 +110,10 @@ increment =
    in Stream.unfoldrM f 0
 
 type IncrementValueTopic transport
-   = Topic T transport "incrementValue" 'Value Int
+   = Topic 'Value T transport "incrementValue" Int
 
 -- type IncrementEventTopic transport
---    = Topic T transport "incrementEvent" 'Event Int
+--    = Topic T transport "incrementEvent" ('Event Int)
 type TestPubSubApi transport = IncrementValueTopic transport --  :<|> IncrementEventTopic transport
 
 streams :: Streams (TestPubSubApi Amqp.T)
@@ -210,14 +210,24 @@ multipleStreamingTest =
           putMVar result (show (lastInt1, lastInt2, lastText))
     takeMVar result
 
+-- eventPubSubTest ::
+--      forall transport. HasPubSubTransport transport T
+--   => TestTree
+-- eventPubSubTest =
+--   testCase "Event" "test/Vest/Bridge/pubsub-event.gold" $
+--   withSubscribed @transport (Proxy :: Proxy (IncrementEventTopic transport)) $ \getEvents -> do
+--     getEvents
+--     value <- atomically getValue
+--     return $ show value
 valuePubSubTest ::
      forall transport. HasPubSubTransport transport T
   => TestTree
 valuePubSubTest =
   testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
-  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \results -> do
-    results <- Stream.toList $ Stream.take 5 $ Stream.drop 1 results
-    return $ show results
+  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \getValue -> do
+    threadDelay $ sec 0.1
+    value <- atomically getValue
+    return $ show value
 
 directTests ::
      forall transport. HasRpcTransport transport T

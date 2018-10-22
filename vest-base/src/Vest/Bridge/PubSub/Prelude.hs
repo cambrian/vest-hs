@@ -4,33 +4,38 @@ module Vest.Bridge.PubSub.Prelude
 
 import Vest.Prelude
 
--- ^ The most recent <history size> messages should be delivered on _subscribe
--- TODO: improve interface, and possibly remove the Word32 param
+data TopicType
+  = Event
+  | Value
+
+type RawTopicName = Text' "RawTopicName"
+
+newtype AlreadyPublishingException =
+  AlreadyPublishing RawTopicName
+  deriving (Eq, Show, Read, Generic)
+  deriving anyclass (Exception, FromJSON, ToJSON)
+
+-- TODO: rename methods
+-- TODO: split into event/value transports?
 class PubSubTransport t where
-  _publish ::
-       ((Text' "a" -> IO ()) -> IO ())
-      -- ^ Publish fn, given a function to send a serialized @a over @t.
-    -> Word32 -- ^ size of message history
-    -> NamespacedText' "TopicName"
+  initTopic :: t -> RawTopicName -> TopicType -> IO ()
+  initPublisher ::
+       RawTopicName
     -> t -- ^ Should be mutated to store cleanup details.
-    -> IO ()
-  _subscribe ::
-       (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
-    -> Word32 -- ^ size of message history. Only used to create the AMQP exchange if it doesn't already exist
-    -> NamespacedText' "TopicName"
+    -> IO (Text' "a" -> IO ())
+    -- ^ Returns publish fn for this topic.
+  subscribe_ ::
+       RawTopicName
     -> t -- ^ Should be mutated to store cleanup details.
-    -> IO (IO' "Unsubscribe" ())
+    -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
+    -> IO () -- ^ Expects message history to be delivered on subscription.
 
 class (PubSubTransport transport) =>
       HasPubSubTransport transport t
   where
   pubSubTransport :: t -> transport
 
-data EventOrValue
-  = Event
-  | Value
-
-data Topic_ serializationFormat service transport (name :: k) (topictype :: EventOrValue) a
+data Topic_ serializationFormat (topictype :: TopicType) service transport (name :: k) a
 
 type Topic = Topic_ "Haskell"
 

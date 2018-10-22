@@ -10,8 +10,13 @@ import Vest.Redis
 
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Topic_ _ _ _ _ 'Value a) = Stream a
-  SubscriberBindings (Topic_ _ _ _ _ 'Event a) = IndexOf a -> Stream a -- lastIndexSeen -> events
+  SubscriberBindings (Topic_ _ 'Value _ _ _ a) = STM a
+  -- ^ Returns STM operation to get the most recent value. The STM operation will block until the
+  -- first value is received.
+  SubscriberBindings (Topic_ _ 'Event _ _ _ a) = Maybe (IndexOf a) -> Stream a
+  -- ^ Maybe LastIndexSeen -> events
+  -- Will return even if the lock is not acquired, however the stream will not receive events until
+  -- it is.
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -45,18 +50,23 @@ instance ( HasNamespace service
          , Deserializable fmt a
          , KnownSymbol name
          ) =>
-         Subscriber t (Topic_ fmt service transport name 'Value a) where
+         Subscriber t (Topic_ fmt 'Value service transport name a) where
   subscribe ::
-       t -> Proxy (Topic_ fmt service transport name 'Value a) -> IO (Stream a)
+       t -> Proxy (Topic_ fmt 'Value service transport name a) -> IO (STM a)
   subscribe t _ = do
-    (push, _close, stream) <- pushStream
-    _ <-
-      _subscribe
-        (push <=< deserializeUnsafe' @fmt)
-        1
-        (namespaced' @service $ symbolText' (Proxy :: Proxy name))
-        (pubSubTransport @transport t)
-    return stream
+    let rawTopicName =
+          show' $ namespaced @service $ symbolText' (Proxy :: Proxy name)
+        transport = pubSubTransport @transport t
+    initTopic transport rawTopicName Value
+    var <- newTVarIO Nothing
+    subscribe_
+      rawTopicName
+      transport
+      ((atomically . writeTVar var . Just) <=< deserializeUnsafe' @fmt)
+    return $
+      readTVar var >>= \case
+        Nothing -> retry
+        Just v -> return v
 
 instance ( HasNamespace service
          , HasPubSubTransport transport t
@@ -65,22 +75,22 @@ instance ( HasNamespace service
          , KnownSymbol name
          , Indexable a
          ) =>
-         Subscriber t (Topic_ fmt service transport name 'Event a) where
+         Subscriber t (Topic_ fmt 'Event service transport name a) where
   subscribe ::
        t
-    -> Proxy (Topic_ fmt service transport name 'Event a)
-    -> IO (IndexOf a -> Stream a)
+    -> Proxy (Topic_ fmt 'Event service transport name a)
+    -> IO (Maybe (IndexOf a) -> Stream a)
   subscribe t _ = do
-    let topicName = namespaced' @service $ symbolText' (Proxy :: Proxy name)
-    let lockId = retag $ topicName <> "/subscriber"
+    let rawTopicName =
+          show' $ namespaced @service $ symbolText' (Proxy :: Proxy name)
+        lockId = retag $ rawTopicName <> "/subscriber"
+        transport = pubSubTransport @transport t
     (push, _close, stream) <- pushStream
     void . async $
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
-      const $
-      _subscribe
-        (push <=< deserializeUnsafe' @fmt)
-        20
-        (namespaced' @service $ symbolText' (Proxy :: Proxy name))
-        (pubSubTransport @transport t)
-    return $ \lastIndexSeen ->
-      Stream.dropWhile ((lastIndexSeen >) . index) stream
+      const $ do
+        initTopic transport rawTopicName Event
+        subscribe_ rawTopicName transport (push <=< deserializeUnsafe' @fmt)
+    return $ \case
+      Just lastIndexSeen -> Stream.dropWhile ((lastIndexSeen >) . index) stream
+      Nothing -> stream
