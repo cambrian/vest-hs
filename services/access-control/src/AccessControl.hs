@@ -54,7 +54,7 @@ instance Service T where
   init Args {subjectsFile, seedFile} f = do
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
-    (publicKey, secretKey) <- seedKeyPairUnsafe seed
+    let (publicKey, secretKey) = seedKeyPair seed
     (pushTokenTime, _, minTokenTimes, getMinTokenTime) <- pushStream
     let bumpMinTokenTime = now >>= pushTokenTime
     bumpMinTokenTime

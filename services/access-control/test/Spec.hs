@@ -88,17 +88,15 @@ generatePublicKey :: TestTree
 generatePublicKey =
   testCaseRaw "Generate Access Control Public Key" pubKeyFile $ do
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
-    (publicKey, _) <- seedKeyPairUnsafe seed
-    return $ Yaml.encode publicKey
+    return $ Yaml.encode $ fst $ seedKeyPair seed
 
 generateSubjects :: TestTree
 -- ^ somewhat hacky way to generate the subjects.yaml file
 generateSubjects =
   testCaseRaw "Generate Access Control Subjects" subjectsFile $ do
-    (publicKey, _) <- seedKeyPairUnsafe testClientSeed
     let subjects =
           HashMap.fromList
-            [ ( publicKey
+            [ ( fst $ seedKeyPair testClientSeed
               , AccessControl.Subject
                   { AccessControl.name = namespace @TestClient
                   , AccessControl.permissions = HashSet.fromList [Permission.B]

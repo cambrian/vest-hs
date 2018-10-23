@@ -30,8 +30,8 @@ data Config = Config
 instance Resource T where
   type ResourceConfig T = Config
   make Config {accessControlPublicKey, seed, amqp} = do
-    (publicKey, secretKey) <- seedKeyPairUnsafe seed
-    let getToken =
+    let (publicKey, secretKey) = seedKeyPair seed
+        getToken =
           makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
     (minTokenTimeUpdates, readMinTokenTime) <-
       subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionTopic)

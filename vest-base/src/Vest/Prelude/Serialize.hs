@@ -72,7 +72,11 @@ show' = serialize' @'Haskell
 
 -- Pretty printing. This might be good to break out into a submodule.
 --
--- Currently prints strings without the surrounding quotations.
+-- Summary of differences from read/show for base types:
+-- - Strings (and string-like types) serialized without surrounding quotes
+-- - Tagged serialized without (Tagged ...) wrapping
+-- - (KnownSymbol s) => Proxy s serialized as s, instead of Proxy
+--
 -- Add instances as needed
 instance {-# OVERLAPPABLE #-} Show a => Serializable 'Pretty a where
   serialize = show
