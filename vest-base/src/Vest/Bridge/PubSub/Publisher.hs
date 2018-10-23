@@ -67,7 +67,7 @@ publish_ ::
 publish_ topicType t stream =
   void . async $ do
     let rawTopicName =
-          show' $ namespaced @t $ symbolText' (Proxy :: Proxy topicName)
+          serialize' @'Pretty $ namespaced @t (Proxy :: Proxy topicName)
         lockId = retag $ rawTopicName <> "/publisher"
         transport = pubSubTransport @transport t
     with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .

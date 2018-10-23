@@ -53,7 +53,7 @@ instance ( HasNamespace service
     -> IO (Stream a, STM a)
   subscribe t _ = do
     let rawTopicName =
-          show' $ namespaced @service $ symbolText' (Proxy :: Proxy name)
+          serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name)
         transport = pubSubTransport @transport t
     initTopic transport rawTopicName Value
     (push, _, stream, peek) <- pushStream
@@ -74,7 +74,7 @@ instance ( HasNamespace service
     -> IO (Maybe (IndexOf a) -> Stream a)
   subscribe t _ = do
     let rawTopicName =
-          show' $ namespaced @service $ symbolText' (Proxy :: Proxy name)
+          serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name)
         lockId = retag $ rawTopicName <> "/subscriber"
         transport = pubSubTransport @transport t
     (push, _, stream, _) <- pushStream

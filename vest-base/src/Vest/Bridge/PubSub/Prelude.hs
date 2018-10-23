@@ -35,6 +35,6 @@ class (PubSubTransport transport) =>
   where
   pubSubTransport :: t -> transport
 
-data Topic_ serializationFormat (topictype :: TopicType) service transport (name :: k) a
+data Topic_ (fmt :: SerializationFormat) (topictype :: TopicType) service transport (name :: k) a
 
-type Topic = Topic_ "Haskell"
+type Topic = Topic_ 'Haskell

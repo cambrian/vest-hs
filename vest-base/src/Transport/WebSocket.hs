@@ -131,7 +131,7 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
   HashTable.insert
     serverResponseHandlers
     clientId
-    (WS.sendTextData conn . serialize @"JSON")
+    (WS.sendTextData conn . serialize @'JSON)
   WS.forkPingThread conn pingInterval
   finally
     (serveClient serverRequestHandlers clientId conn)
@@ -147,7 +147,7 @@ serveClient serverRequestHandlers clientId conn =
   forever $ do
     msg <- WS.receiveData conn
     forM_
-      (deserialize @"JSON" msg)
+      (deserialize @'JSON msg)
       (\reqMsg -> do
          let RequestMessage {route} = reqMsg
          maybeHandler <- HashTable.lookup serverRequestHandlers route
@@ -161,7 +161,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
   withAsync
     (async . forever $ do
        msg <- WS.receiveData conn
-       case deserialize @"JSON" msg of
+       case deserialize @'JSON msg of
          Nothing -> return () -- Swallow if entire message is garbled.
          Just ResponseMessage {requestId, resText} -> do
            maybeHandler <- HashTable.lookup clientResponseHandlers requestId
@@ -169,7 +169,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
            forM_ maybeHandler ($ resText))
     (const . forever $ do
        request <- takeMVar requestMVar
-       WS.sendTextData conn (serialize @"JSON" request))
+       WS.sendTextData conn (serialize @'JSON request))
 
 instance RpcTransport T where
   _consumeRequests ::
@@ -197,7 +197,8 @@ instance RpcTransport T where
     -> IO (IO' "Cleanup" ())
   _issueRequest T {clientRequestHandlers, clientResponseHandlers} route headers reqText respond = do
     namespace <-
-      readUnsafe' @(Namespaced "Server" (Text' "Route")) route >>- getNamespace
+      deserializeUnsafe' @'Pretty @(Namespaced "Server" Text) route >>-
+      getNamespace'
     id <- nextUUID'
     makeRequest <-
       HashTable.lookup clientRequestHandlers namespace >>=

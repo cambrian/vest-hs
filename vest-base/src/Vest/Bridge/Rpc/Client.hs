@@ -76,7 +76,7 @@ callDirect t req = do
   resultVar <- newEmptyMVar
   mainThread <- myThreadId
   (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
-  let rawRoute = show' $ namespaced @server $ symbolText' (Proxy :: Proxy route)
+  let rawRoute = serialize' @'Pretty $ namespaced @server (Proxy :: Proxy route)
       handleResponse resOrExcText =
         deserializeUnsafe' @fmt resOrExcText >>= \case
           RpcResponseClientException eText ->
@@ -112,7 +112,7 @@ callStreaming ::
 callStreaming t req f = do
   let timeout_ = natSeconds @timeout
       twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
-      rawRoute = show' $ namespaced @server $ symbolText' (Proxy :: Proxy route)
+      rawRoute = serialize' @'Pretty $ namespaced @server (Proxy :: Proxy route)
   (push, close, results, _) <- pushStream
   (renewHeartbeatTimer, heartbeatLostOrDone) <-
     timeoutRenewable twoHeartbeats (Stream.mapM_ return results)

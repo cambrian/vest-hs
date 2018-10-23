@@ -3,48 +3,49 @@ module Vest.Prelude.Namespace
   ) where
 
 import Data.List (span)
+import Data.Text (breakOn, stripPrefix)
 import Data.Typeable (tyConModule, typeRepTyCon)
-import GHC.Read (Read(readPrec))
-import qualified GHC.Show (Show(show))
-import Text.ParserCombinators.ReadP (char, munch)
-import qualified Text.ParserCombinators.ReadPrec as ReadPrec
-import Vest.Prelude.Core
+import Vest.Prelude.Core hiding (moduleName)
+import Vest.Prelude.Serialize
 
 -- TODO: custom ToJSON, FromJSON instances?
 -- TODO: doctests for read/show/isstring
-newtype Namespaced (s :: k) t =
-  Namespaced (Text' s, t)
-  deriving (Eq, Generic)
+newtype Namespaced (ns :: k) a =
+  Namespaced (Text' ns, a)
+  deriving (Eq, Read, Show, Generic)
   deriving anyclass (Hashable, ToJSON, FromJSON)
 
-instance (Read t) => Read (Namespaced s t) where
-  readPrec = do
-    ns <- ReadPrec.lift $ munch (/= '/')
-    ReadPrec.lift $ char '/'
-    t <- readPrec
-    return $ Namespaced (Tagged $ pack ns, t)
+instance (Serializable 'Pretty a) =>
+         Serializable 'Pretty (Namespaced ns a) where
+  serialize (Namespaced (ns, a)) =
+    serialize @'Pretty ns <> "/" <> serialize @'Pretty a
 
-instance (Show t) => Show (Namespaced s t) where
-  show (Namespaced (Tagged s, t)) = unpack s <> "/" <> GHC.Show.show t
+instance (Deserializable 'Pretty a) =>
+         Deserializable 'Pretty (Namespaced ns a) where
+  deserialize text = do
+    let (ns, slasha) = breakOn "/" text
+    a <- stripPrefix "/" slasha >>= deserialize @'Pretty
+    return $ Namespaced (Tagged ns, a)
 
-instance (IsString t) => IsString (Namespaced s t) where
+instance (IsString a) => IsString (Namespaced ns a) where
   fromString s =
-    let (ns, slasht) = span (/= '/') s
-     in Namespaced (Tagged $ pack ns, fromString $ tailSafe slasht)
+    let (ns, slasha) = span (/= '/') s
+     in Namespaced (Tagged $ pack ns, fromString $ tailSafe slasha)
 
-getNamespace :: Namespaced s t -> Text' s
-getNamespace (Namespaced (ns, _)) = ns
+getNamespace' :: Namespaced ns a -> Text' ns
+getNamespace' (Namespaced (ns, _)) = ns
 
-unnamespaced :: Namespaced s t -> t
-unnamespaced (Namespaced (_, t)) = t
+unnamespaced :: Namespaced ns a -> a
+unnamespaced (Namespaced (_, a)) = a
 
-class HasNamespace a where
-  namespace :: Text' s
-  namespaced :: t -> Namespaced s t
-  namespaced t = Namespaced (namespace @a, t)
+class HasNamespace t where
+  namespace :: Text
+  namespace' :: forall ns. Text' ns
+  namespace' = Tagged $ namespace @t
+  namespaced :: forall ns a. a -> Namespaced ns a
+  namespaced a = Namespaced (namespace' @t @ns, a)
 
-moduleName' ::
-     forall a t. Typeable a
-  => Text' t
-moduleName' =
-  Tagged . pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy a)
+moduleName ::
+     forall t. Typeable t
+  => Text
+moduleName = pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy t)

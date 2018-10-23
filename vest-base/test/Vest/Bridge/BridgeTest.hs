@@ -18,7 +18,7 @@ data T = T
 
 -- This instance is not really overlapping but for some reason GHC thinks it is.
 instance {-# OVERLAPPING #-} HasNamespace T where
-  namespace = Tagged "test"
+  namespace = "test"
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
@@ -45,7 +45,7 @@ type EchoTextsStreamingEndpoint transport
    = Endpoint 'NoAuth T transport "echoTextsStreaming" [Text] ('Streaming Text)
 
 type TimeoutEndpoint transport
-   = Endpoint_ 0 "Haskell" 'NoAuth T transport "timeout" () ('Direct ())
+   = Endpoint_ 0 'Haskell 'NoAuth T transport "timeout" () ('Direct ())
 
 type TestRpcApi transport
    = EchoIntsDirectEndpoint transport
@@ -60,7 +60,7 @@ makeWebSocketConfig = do
   return $
     WebSocket.localConfig
       { WebSocket.servers =
-          [ ( namespace @T
+          [ ( namespace' @T @"Server"
             , WebSocket.ServerInfo
                 { uri = Tagged "127.0.0.1"
                 , port = Tagged portNum
@@ -90,7 +90,7 @@ handlers =
   (\_ () -> threadDelay (sec 0.01))
 
 withRpcClient ::
-     forall transport spec a. (Server T (TestRpcApi transport), Client T spec)
+     forall transport spec a. (HasRpcTransport transport T, Client T spec)
   => Proxy spec
   -> (ClientBindings spec -> IO a)
   -> IO a
@@ -121,7 +121,7 @@ streams = increment -- :<|> increment
 
 withSubscribed ::
      forall transport spec a.
-     (Publisher T (TestPubSubApi transport), Subscriber T spec)
+     (HasPubSubTransport transport T, Subscriber T spec)
   => Proxy spec
   -> (SubscriberBindings spec -> IO a)
   -> IO a
@@ -184,12 +184,12 @@ singleStreamingTest =
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport)) $ \call -> do
-    result <- newEmptyMVar
+    result <- newTVarIO ""
     call [1, 2, 3] $ \results -> do
       last1 <- Stream.toList results >>- last
       last2 <- Stream.toList results >>- last
-      putMVar result (show (last1, last2))
-    takeMVar result
+      atomically $ writeTVar result (show (last1, last2))
+    readTVarIO result
 
 multipleStreamingTest ::
      forall transport. HasRpcTransport transport T
@@ -200,15 +200,15 @@ multipleStreamingTest =
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport
                      :<|> EchoTextsStreamingEndpoint transport)) $ \(echoInts :<|> echoTexts) -> do
-    result <- newEmptyMVar
+    result <- newTVarIO ""
     echoInts (replicate 3 4) $ \resultInts1 ->
       echoInts (replicate 3 5) $ \resultInts2 ->
         echoTexts (replicate 3 "a") $ \resultTexts -> do
           lastInt1 <- Stream.toList resultInts1 >>- last
           lastInt2 <- Stream.toList resultInts2 >>- last
           lastText <- Stream.toList resultTexts >>- last
-          putMVar result (show (lastInt1, lastInt2, lastText))
-    takeMVar result
+          atomically $ writeTVar result (show (lastInt1, lastInt2, lastText))
+    readTVarIO result
 
 -- eventPubSubTest ::
 --      forall transport. HasPubSubTransport transport T

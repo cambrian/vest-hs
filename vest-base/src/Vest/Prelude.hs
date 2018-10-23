@@ -3,7 +3,7 @@ module Vest.Prelude
   ) where
 
 import Vest.Prelude.Blockchain as Reexports
-import Vest.Prelude.Core as Reexports hiding (show)
+import Vest.Prelude.Core as Reexports hiding (moduleName, show)
 import Vest.Prelude.Counter as Reexports
 import Vest.Prelude.Crypto as Reexports
 import Vest.Prelude.Money as Reexports

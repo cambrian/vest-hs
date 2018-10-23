@@ -84,7 +84,7 @@ serve_ ::
 serve_ sender t handler =
   _consumeRequests (rpcTransport @transport t) rawRoute asyncHandle
   where
-    rawRoute = show' $ namespaced @t $ symbolText' (Proxy :: Proxy route)
+    rawRoute = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy route)
     asyncHandle headers reqText respond =
       async $
       catches
@@ -95,7 +95,7 @@ serve_ sender t handler =
             sender (sendToClient . RpcResponse) (handler t claims req))
         [ Handler $ \(x :: AuthException) ->
             sendToClient $ RpcResponseClientException $ show x
-        , Handler $ \(x :: DeserializeException) ->
+        , Handler $ \(x :: DeserializeException fmt) ->
             sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: SomeException) -> do
             sendToClient $ RpcResponseServerException $ show x

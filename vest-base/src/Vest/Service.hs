@@ -21,8 +21,10 @@ class ( Data (ServiceArgs a)
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ rename?
-  serviceName :: Text' "ServiceName"
-  serviceName = moduleName' @a
+  serviceName :: Text
+  serviceName = moduleName @a
+  serviceName' :: forall t. Text' t
+  serviceName' = Tagged $ serviceName @a
   run ::
        ServiceArgs a
     -> (a -> IO (Streams (PublishSpec a)))
@@ -44,4 +46,4 @@ class ( Data (ServiceArgs a)
     run @a args_ makeStreams handlers return
 
 instance Service a => HasNamespace a where
-  namespace = retag $ serviceName @a
+  namespace = serviceName @a
