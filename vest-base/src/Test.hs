@@ -4,6 +4,7 @@ module Test
   , testCaseRaw
   , testWithResource
   , testWithService
+  , ignoreIO
   , TestService
   , TestServiceConfig(..)
   ) where
@@ -66,3 +67,6 @@ testWithService config f =
     (make @(TestService a) config)
     (cleanup @(TestService a))
     (f . fmap snd)
+
+ignoreIO :: a -> IO ()
+ignoreIO _ = return ()

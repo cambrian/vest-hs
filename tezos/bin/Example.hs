@@ -1,5 +1,7 @@
 import Http
 import qualified Stream
+import Test
+import Tezos
 import Tezos.Node
 import Vest
 
@@ -53,10 +55,19 @@ printDelegatedContracts delegate connection =
     connection >>=
   print
 
-printMainHead :: T -> IO ()
-printMainHead connection =
-  direct (request (Proxy :: Proxy GetBlock) mainChain headBlock) connection >>=
-  print
+printMainBlock :: Text -> T -> IO ()
+printMainBlock block connection =
+  direct
+    (request (Proxy :: Proxy GetBlockOperations) mainChain block)
+    connection >>=
+  (print .
+   filter
+     (\case
+        Delegation _ -> True
+        Transaction _ -> True
+        Origination _ -> True
+        _ -> False) .
+   concatMap contents . concat)
 
 printMonitorBlocks :: T -> IO ()
 printMonitorBlocks connection = do
@@ -66,15 +77,23 @@ printMonitorBlocks connection = do
 main :: IO ()
 main = do
   connection <- make publicTezosConfig
-  witness $ printMainHeadConstants connection
-  witness $ printMainHeadContractsCount connection
-  witness $
+  ignoreIO $ printMainHeadConstants connection
+  ignoreIO $ printMainHeadContractsCount connection
+  ignoreIO $
     printContractManager "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
-  witness $
+  ignoreIO $
     printContractBalance "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
-  witness $
+  ignoreIO $
     printFrozenBalanceCycles "tz1Zhv3RkfU2pHrmaiDyxp7kFZpZrUCu1CiF" connection
-  witness $
+  ignoreIO $
     printDelegatedContracts "tz1Zhv3RkfU2pHrmaiDyxp7kFZpZrUCu1CiF" connection
-  printMainHead connection
-  witness $ printMonitorBlocks connection
+  ignoreIO $
+    printMainBlock
+      "BLpySJC2wRULnED2Y8nPkH7nUzASeorvft1iBMC2KhQbD79rw7r"
+      connection
+  getCycleRewardInfo
+    connection
+    (Tagged "BMA132SHdAJ9jueDF7BazcQoSsU28kV3gvusZsDVi3HvPkUHC4y")
+    (Tagged "tz3VEZ4k6a4Wx42iyev6i2aVAptTRLEAivNN") >>=
+    print
+  ignoreIO $ printMonitorBlocks connection

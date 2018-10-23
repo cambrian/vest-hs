@@ -11,11 +11,12 @@ category:           Network
 description:        See README.md.
 
 dependencies:
-- aeson             >= 1.4
-- base              >= 4.10
-- bytestring        >= 0.10
-- casing            >= 0.1
-- streamly          >= 0.5
+- aeson                 >= 1.4
+- base                  >= 4.10
+- bytestring            >= 0.10
+- casing                >= 0.1
+- streamly              >= 0.5
+- unordered-containers  >= 0.2
 - vest-base
 
 # The default-extensions and ghc-options were inspired by this post (and modified for convenience):

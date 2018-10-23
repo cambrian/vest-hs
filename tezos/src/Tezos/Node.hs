@@ -3,10 +3,8 @@ module Tezos.Node
   ) where
 
 import Data.Aeson
-import Data.Aeson.TH
-import Data.Char
+import qualified Data.HashMap.Strict as HashMap
 import Http
-import Text.Casing
 import Vest
 
 mainChain :: Text
@@ -110,84 +108,82 @@ data BlockMetadata = BlockMetadata
 
 type GetBlockMetadata = WithChainBlock ("metadata" :> Direct [BlockMetadata])
 
--- { "kind": "endorsement",
--- "level": integer ∈ [-2^31-2, 2^31+2] }
--- || { "kind": "seed_nonce_revelation",
---    "level": integer ∈ [-2^31-2, 2^31+2],
---    "nonce": /^[a-zA-Z0-9]+$/ }
--- || { "kind": "double_endorsement_evidence",
---    "op1": $inlined.endorsement,
---    "op2": $inlined.endorsement }
--- || { "kind": "double_baking_evidence",
---    "bh1": $block_header.alpha.full_header,
---    "bh2": $block_header.alpha.full_header }
--- || { "kind": "activate_account",
---    "pkh": $Ed25519.Public_key_hash,
---    "secret": /^[a-zA-Z0-9]+$/ }
--- || { "kind": "proposals",
---    "source": $Signature.Public_key_hash,
---    "period": integer ∈ [-2^31-2, 2^31+2],
---    "proposals": [ $Protocol_hash ... ] }
--- || { "kind": "ballot",
---    "source": $Signature.Public_key_hash,
---    "period": integer ∈ [-2^31-2, 2^31+2],
---    "proposal": $Protocol_hash,
---    "ballot": "nay" | "yay" | "pass" }
--- || { "kind": "reveal",
---    "source": $contract_id,
---    "fee": $mutez,
---    "counter": $positive_bignum,
---    "gas_limit": $positive_bignum,
---    "storage_limit": $positive_bignum,
---    "public_key": $Signature.Public_key }
--- || { "kind": "transaction",
---    "source": $contract_id,
---    "fee": $mutez,
---    "counter": $positive_bignum,
---    "gas_limit": $positive_bignum,
---    "storage_limit": $positive_bignum,
---    "amount": $mutez,
---    "destination": $contract_id,
---    "parameters"?: $micheline.michelson_v1.expression }
--- || { "kind": "origination",
---    "source": $contract_id,
---    "fee": $mutez,
---    "counter": $positive_bignum,
---    "gas_limit": $positive_bignum,
---    "storage_limit": $positive_bignum,
---    "managerPubkey": $Signature.Public_key_hash,
---    "balance": $mutez,
---    "spendable"?: boolean,
---    "delegatable"?: boolean,
---    "delegate"?: $Signature.Public_key_hash,
---    "script"?: $scripted.contracts }
--- || { "kind": "delegation",
---    "source": $contract_id,
---    "fee": $mutez,
---    "counter": $positive_bignum,
---    "gas_limit": $positive_bignum,
---    "storage_limit": $positive_bignum,
---    "delegate"?: $Signature.Public_key_hash }
+data DelegationOp = DelegationOp
+  { kind :: Text
+  , source :: Text
+  , fee :: Text
+  , counter :: Text
+  , gas_limit :: Text
+  , storage_limit :: Text
+  , delegate :: Maybe Text
+  } deriving (Show, Generic, FromJSON, ToJSON)
+
+data OriginationOp = OriginationOp
+  { kind :: Text
+  , source :: Text
+  , fee :: Text
+  , counter :: Text
+  , gas_limit :: Text
+  , storage_limit :: Text
+  , managerPubkey :: Text
+  , balance :: Text
+  , spendable :: Maybe Bool
+  , delegatable :: Maybe Bool
+  , delegate :: Maybe Text
+  , script :: Maybe Value
+  } deriving (Show, Generic, FromJSON)
+
+data TransactionOp = TransactionOp
+  { kind :: Text
+  , source :: Text
+  , fee :: Text
+  , counter :: Text
+  , gas_limit :: Text
+  , storage_limit :: Text
+  , amount :: Text
+  , destination :: Text
+  , parameters :: Maybe Value
+  } deriving (Show, Generic, FromJSON)
+
+data UndefinedOp = UndefinedOp
+  { kind :: Text
+  } deriving (Show, Generic, FromJSON)
+
 data Operation
-  = Delegation Object
-  | Origination Object
-  | Transaction Object
-  | Endorsement Object
-  | Reveal Object
-  | Ballot Object
-  | Proposals Object
-  | ActivateAccount Object
-  | DoubleBakingEvidence Object
-  | DoubleEndorsementEvidence Object
+  = Delegation DelegationOp
+  | Origination OriginationOp
+  | Transaction TransactionOp
+  | Endorsement UndefinedOp
+  | Reveal UndefinedOp
+  | Ballot UndefinedOp
+  | Proposals UndefinedOp
+  | ActivateAccount UndefinedOp
+  | DoubleBakingEvidence UndefinedOp
+  | DoubleEndorsementEvidence UndefinedOp
   deriving (Show, Generic)
 
-$(deriveJSON
-    defaultOptions
-      { constructorTagModifier = map toLower . toSnake . fromHumps
-      , sumEncoding =
-          TaggedObject {tagFieldName = "kind", contentsFieldName = "kind"}
-      }
-    ''Operation)
+-- This manual dispatch is absolute shit but (after much effort and a question on GitHub) remains
+-- the best way to actually parse an Operation.
+instance FromJSON Operation where
+  parseJSON operation =
+    case operation of
+      Object object ->
+        case HashMap.lookup "kind" object of
+          Just (String "delegation") -> Delegation <$> parseJSON operation
+          Just (String "origination") -> Origination <$> parseJSON operation
+          Just (String "transaction") -> Transaction <$> parseJSON operation
+          Just (String "endorsement") -> Endorsement <$> parseJSON operation
+          Just (String "reveal") -> Reveal <$> parseJSON operation
+          Just (String "ballot") -> Ballot <$> parseJSON operation
+          Just (String "proposals") -> Proposals <$> parseJSON operation
+          Just (String "activate_account") ->
+            ActivateAccount <$> parseJSON operation
+          Just (String "double_baking_evidence") ->
+            DoubleBakingEvidence <$> parseJSON operation
+          Just (String "double_endorsement_evidence") ->
+            DoubleEndorsementEvidence <$> parseJSON operation
+          _ -> fail "unexpected operation kind"
+      _ -> fail "unexpected JSON shape"
 
 data OperationGroup = OperationGroup
   { protocol :: Text
@@ -199,7 +195,7 @@ data OperationGroup = OperationGroup
   } deriving (Show, Generic, FromJSON)
 
 type GetBlockOperations
-   = WithChainBlock ("operations" :> Direct [OperationGroup])
+   = WithChainBlock ("operations" :> Direct [[OperationGroup]])
 
 data BlockHeader = BlockHeader
   { level :: Int
@@ -245,3 +241,16 @@ type ListDelegatedContracts
 
 type GetStakingBalance
    = WithChainBlockDelegate ("staking_balance" :> Direct Text)
+
+data Delegate = Delegate
+  { balance :: Text
+  , frozen_balance :: Text
+  , frozen_balance_by_cycle :: [FrozenBalance]
+  , staking_balance :: Text
+  , delegated_contracts :: [Text]
+  , delegated_balance :: Text
+  , deactivated :: Bool
+  , grace_period :: Int
+  } deriving (Show, Generic, FromJSON)
+
+type GetDelegate = WithChainBlockDelegate (Direct Delegate)
