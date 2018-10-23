@@ -19,10 +19,9 @@ class RpcTransport t where
   serveRaw ::
        t
     -> RawRoute
-    -> ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO (Async ()))
-    -- ^ Called per request, supplied with (respondToClient headers request).
+    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
+    -- ^ Called per request, supplied with (headers request respondFn).
     -> IO ()
-    -- ^ Returns a stream of requests, with response function per-request.
   callRaw ::
        t
     -> RawRoute

@@ -82,16 +82,17 @@ instance Resource T where
     queueName <- newQueueName
     AMQP.declareQueue responseConsumerChan AMQP.newQueue {AMQP.queueName}
     responseHandlers <- HashTable.new
-    let handleMsg ResponseMessage {requestId, resText} =
-          HashTable.lookup responseHandlers requestId >>= mapM_ ($ resText)
     responseConsumerTag <-
       AMQP.consumeMsgs
         responseConsumerChan
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           forM_ (read $ fromAmqpMsg msg) handleMsg
-           -- ^ Do nothing if response message malformed.
+           void . runMaybeT $ do
+             ResponseMessage {requestId, resText} <-
+               MaybeT $ return $ read $ fromAmqpMsg msg
+             handler <- MaybeT $ HashTable.lookup responseHandlers requestId
+             liftIO $ handler resText
            AMQP.ackEnv env)
     consumedRoutes <- HashTable.new
     subscribers <- HashTable.new
@@ -131,7 +132,7 @@ instance RpcTransport T where
   serveRaw ::
        T
     -> RawRoute
-    -> ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO (Async ()))
+    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
   serveRaw T {conn, publishChan, consumedRoutes} route asyncHandler = do
@@ -141,26 +142,23 @@ instance RpcTransport T where
     let Tagged queueName = route
     consumerChan <- AMQP.openChannel conn
     _ <- AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
-    let asyncHandle RequestMessage { id = requestId
-                                   , headers
-                                   , responseQueue
-                                   , reqText
-                                   } = do
-          let respond resText =
-                void $
-                AMQP.publishMsg
-                  publishChan
-                  "" -- Default exchange just sends message to queue specified by routing key.
-                  (untag responseQueue) -- Exchange routing key.
-                  (toAmqpMsg . show $ ResponseMessage {requestId, resText})
-          asyncHandler respond headers reqText
     consumerTag <-
       AMQP.consumeMsgs
         consumerChan
         queueName
         AMQP.Ack
         (\(msg, env) -> do
-           forM_ (read $ fromAmqpMsg msg) asyncHandle -- Do nothing if message fails to read.
+           void . runMaybeT $ do
+             RequestMessage {id = requestId, headers, responseQueue, reqText} <-
+               MaybeT $ return $ read $ fromAmqpMsg msg
+             let respond resText =
+                   void $
+                   AMQP.publishMsg
+                     publishChan
+                     "" -- Default exchange just sends message to queue specified by routing key.
+                     (untag responseQueue) -- Exchange routing key.
+                     (toAmqpMsg . show $ ResponseMessage {requestId, resText})
+             liftIO $ asyncHandler headers reqText respond
            AMQP.ackEnv env)
     HashTable.insert consumedRoutes route (consumerChan, consumerTag)
   callRaw ::
