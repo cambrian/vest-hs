@@ -19,6 +19,7 @@ dependencies:
 - base64-bytestring-type  >= 1
 - beam-core               >= 0.7
 - beam-postgres           >= 0.3
+- blake2                  >= 0.2
 - bytestring              >= 0.10
 - containers              >= 0.5
 - cmdargs                 >= 0.10

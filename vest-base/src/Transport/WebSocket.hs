@@ -141,17 +141,13 @@ serveClient ::
      HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> UUID' "Client"
   -> WS.Connection
-  -> IO ()
+  -> IO () -- Can this be IO Void?
 -- ^ If the message fails to parse or the route is not served, swallows the request.
 serveClient serverRequestHandlers clientId conn =
-  forever $ do
-    msg <- WS.receiveData conn
-    forM_
-      (deserialize @'JSON msg)
-      (\reqMsg -> do
-         let RequestMessage {route} = reqMsg
-         maybeHandler <- HashTable.lookup serverRequestHandlers route
-         forM_ maybeHandler (\h -> h clientId reqMsg))
+  forever . runMaybeT $ do
+    reqMsg <- MaybeT $ WS.receiveData conn >>- deserialize @'JSON
+    handler <- MaybeT $ HashTable.lookup serverRequestHandlers $ route reqMsg
+    liftIO $ handler clientId reqMsg
 
 wsClientApp ::
      HashTable (UUID' "Request") (Text' "Response" -> IO ())
@@ -159,14 +155,11 @@ wsClientApp ::
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn =
   withAsync
-    (async . forever $ do
-       msg <- WS.receiveData conn
-       case deserialize @'JSON msg of
-         Nothing -> return () -- Swallow if entire message is garbled.
-         Just ResponseMessage {requestId, resText} -> do
-           maybeHandler <- HashTable.lookup clientResponseHandlers requestId
-            -- If the route is not served, swallow the request.
-           forM_ maybeHandler ($ resText))
+    (async . forever . runMaybeT $ do
+       ResponseMessage {requestId, resText} <-
+         MaybeT $ WS.receiveData conn >>- deserialize @'JSON
+       handler <- MaybeT $ HashTable.lookup clientResponseHandlers requestId
+       liftIO $ handler resText)
     (const . forever $ do
        request <- takeMVar requestMVar
        WS.sendTextData conn (serialize @'JSON request))
@@ -175,7 +168,7 @@ instance RpcTransport T where
   serveRaw ::
        T
     -> RawRoute
-    -> ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO (Async ()))
+    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   serveRaw T {serverRequestHandlers, serverResponseHandlers} route asyncHandler =
     HashTable.lookup serverRequestHandlers route >>= \case
@@ -183,11 +176,13 @@ instance RpcTransport T where
       Nothing -> HashTable.insert serverRequestHandlers route handleMsg
     where
       handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
-        HashTable.lookup serverResponseHandlers clientId >>= \case
-          Nothing -> async $ return ()
-          Just handler ->
-            let respond resText = handler ResponseMessage {requestId, resText}
-             in asyncHandler respond headers reqText
+        async . void . runMaybeT $ do
+          handler <- MaybeT $ HashTable.lookup serverResponseHandlers clientId
+          lift $
+            asyncHandler
+              headers
+              reqText
+              (\resText -> handler ResponseMessage {requestId, resText})
   callRaw ::
        T
     -> RawRoute

@@ -8,8 +8,7 @@ import Data.Typeable (tyConModule, typeRepTyCon)
 import Vest.Prelude.Core hiding (moduleName)
 import Vest.Prelude.Serialize
 
--- TODO: custom ToJSON, FromJSON instances?
--- TODO: doctests for read/show/isstring
+-- TODO: doctests for pretty serialization roundtrip, isstring
 newtype Namespaced (ns :: k) a =
   Namespaced (Text' ns, a)
   deriving (Eq, Read, Show, Generic)

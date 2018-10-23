@@ -85,7 +85,7 @@ serve_ sender t handler =
   serveRaw (rpcTransport @transport t) rawRoute asyncHandle
   where
     rawRoute = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy route)
-    asyncHandle respond headers reqText =
+    asyncHandle headers reqText respond =
       async $
       catches
         (do claims <-
