@@ -20,6 +20,7 @@ hash256 = BLAKE2b.hash 32 mempty
 
 instance Hashable PublicKey
 
+-- TODO: custom instance that doesn't include the unpublickey: thing
 deriving instance Read PublicKey
 
 instance ToJSON PublicKey
