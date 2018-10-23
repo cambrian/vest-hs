@@ -70,7 +70,7 @@ show = serialize @'Haskell
 show' :: (Show a) => a -> Text' t
 show' = serialize' @'Haskell
 
--- Pretty printing
+-- Pretty printing. This might be good to break out into a submodule.
 --
 -- Currently prints strings without the surrounding quotations.
 -- Add instances as needed
@@ -97,6 +97,12 @@ instance {-# OVERLAPS #-} Serializable 'Pretty Text where
   serialize = convertString
 
 instance {-# OVERLAPS #-} Deserializable 'Pretty Text where
+  deserialize = Just . convertString
+
+instance {-# OVERLAPS #-} Serializable 'Pretty LazyText where
+  serialize = convertString
+
+instance {-# OVERLAPS #-} Deserializable 'Pretty LazyText where
   deserialize = Just . convertString
 
 instance {-# OVERLAPS #-} Serializable 'Pretty ByteString where

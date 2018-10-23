@@ -66,15 +66,15 @@ printMonitorBlocks connection = do
 main :: IO ()
 main = do
   connection <- make publicTezosConfig
-  ignoreIO $ printMainHeadConstants connection
-  ignoreIO $ printMainHeadContractsCount connection
-  ignoreIO $
+  witness $ printMainHeadConstants connection
+  witness $ printMainHeadContractsCount connection
+  witness $
     printContractManager "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
-  ignoreIO $
+  witness $
     printContractBalance "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
-  ignoreIO $
+  witness $
     printFrozenBalanceCycles "tz1Zhv3RkfU2pHrmaiDyxp7kFZpZrUCu1CiF" connection
-  ignoreIO $
+  witness $
     printDelegatedContracts "tz1Zhv3RkfU2pHrmaiDyxp7kFZpZrUCu1CiF" connection
   printMainHead connection
-  ignoreIO $ printMonitorBlocks connection
+  witness $ printMonitorBlocks connection

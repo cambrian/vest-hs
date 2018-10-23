@@ -104,8 +104,8 @@ instance FromJSONKey ByteString where
   fromJSONKey =
     FromJSONKeyTextParser $ either fail pure . Base64.decode . encodeUtf8
 
--- DO NOT USE unless you really really know what you're doing.
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
+-- ^ DO NOT USE unless you really really know what you're doing.
 evilThrowTo = Evil.throwTo
 
 fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a

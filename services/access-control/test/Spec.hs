@@ -100,7 +100,7 @@ generateSubjects =
           HashMap.fromList
             [ ( publicKey
               , AccessControl.Subject
-                  { AccessControl.name = untag $ namespace @TestClient
+                  { AccessControl.name = namespace @TestClient
                   , AccessControl.permissions = HashSet.fromList [Permission.B]
                   })
             ]

@@ -46,16 +46,16 @@ data AddIntsRequest = AddIntsRequest
 $(deriveTypeScript defaultOptions ''AddIntsRequest)
 
 type AddIntsEndpoint
-   = Endpoint_ 5 "JSON" 'NoAuth T WebSocket.T "addInts" AddIntsRequest ('Direct Int)
+   = Endpoint_ 5 'JSON 'NoAuth T WebSocket.T "addInts" AddIntsRequest ('Direct Int)
 
 type AddIntsBadEndpoint
-   = Endpoint_ 0 "JSON" 'NoAuth T WebSocket.T "addIntsBad" AddIntsRequest ('Direct Int)
+   = Endpoint_ 0 'JSON 'NoAuth T WebSocket.T "addIntsBad" AddIntsRequest ('Direct Int)
 
 type EchoThriceEndpoint
-   = Endpoint_ 5 "JSON" 'NoAuth T WebSocket.T "echoThrice" Int ('Streaming Int)
+   = Endpoint_ 5 'JSON 'NoAuth T WebSocket.T "echoThrice" Int ('Streaming Int)
 
 type EchoThriceBadEndpoint
-   = Endpoint_ 0 "JSON" 'NoAuth T WebSocket.T "echoThriceBad" Int ('Streaming Int)
+   = Endpoint_ 0 'JSON 'NoAuth T WebSocket.T "echoThriceBad" Int ('Streaming Int)
 
 data ConcatTextAuthRequest = ConcatTextAuthRequest
   { a :: Text
@@ -71,10 +71,10 @@ data ConcatTextAuthResponse = ConcatTextAuthResponse
 $(deriveTypeScript defaultOptions ''ConcatTextAuthResponse)
 
 type ConcatTextAuthEndpoint
-   = Endpoint_ 5 "JSON" ('Auth DummyAuth) T WebSocket.T "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
+   = Endpoint_ 5 'JSON ('Auth DummyAuth) T WebSocket.T "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
 
 type EchoThriceAuthEndpoint
-   = Endpoint_ 5 "JSON" ('Auth DummyAuth) T WebSocket.T "echoThriceAuth" Text ('Streaming Text)
+   = Endpoint_ 5 'JSON ('Auth DummyAuth) T WebSocket.T "echoThriceAuth" Text ('Streaming Text)
 
 type Api
    = AddIntsEndpoint
