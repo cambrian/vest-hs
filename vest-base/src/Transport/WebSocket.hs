@@ -141,7 +141,7 @@ serveClient ::
      HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> UUID' "Client"
   -> WS.Connection
-  -> IO ()
+  -> IO () -- Can this be IO Void?
 -- ^ If the message fails to parse or the route is not served, swallows the request.
 serveClient serverRequestHandlers clientId conn =
   forever . runMaybeT $ do
