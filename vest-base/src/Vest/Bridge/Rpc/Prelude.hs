@@ -16,14 +16,14 @@ newtype AlreadyServingException =
 -- | We use callbacks instread of streaming interfaces because Streamly streams
 -- don't have persistence and TB[M]Queues are ugly.
 class RpcTransport t where
-  _consumeRequests ::
+  serveRaw ::
        t
     -> RawRoute
-       -- ^ Called per request, supplied with (headers request respondToClient).
-    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
+    -> ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO (Async ()))
+    -- ^ Called per request, supplied with (respondToClient headers request).
     -> IO ()
     -- ^ Returns a stream of requests, with response function per-request.
-  _issueRequest ::
+  callRaw ::
        t
     -> RawRoute
     -> Headers

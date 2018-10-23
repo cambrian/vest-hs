@@ -11,7 +11,8 @@ import Vest.Redis
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
   SubscriberBindings (Topic_ _ 'Value _ _ _ a) = (Stream a, STM a)
-  -- ^ Returns (stream, read). Read blocks until the value is received.
+  -- ^ Returns (stream, read). Read blocks until the value is received. Consumers of a value stream
+  -- should not count on receiving every value.
   SubscriberBindings (Topic_ _ 'Event _ _ _ a) = Maybe (IndexOf a) -> Stream a
   -- ^ Maybe LastIndexSeen -> events
   -- Event topic subscribes is locked so that only 1 process can subscribe to an event stream at a
@@ -57,7 +58,7 @@ instance ( HasNamespace service
         transport = pubSubTransport @transport t
     initTopic transport rawTopicName Value
     (push, _, stream, peek) <- pushStream
-    subscribe_ transport rawTopicName (push <=< deserializeUnsafe' @fmt)
+    subscribeRaw transport rawTopicName (push <=< deserializeUnsafe' @fmt)
     return (stream, peek)
 
 instance ( HasNamespace service
@@ -82,7 +83,7 @@ instance ( HasNamespace service
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do
         initTopic transport rawTopicName Event
-        subscribe_ transport rawTopicName (push <=< deserializeUnsafe' @fmt)
+        subscribeRaw transport rawTopicName (push <=< deserializeUnsafe' @fmt)
     return $ \case
       Just lastIndexSeen -> Stream.dropWhile ((lastIndexSeen >) . index) stream
       Nothing -> stream

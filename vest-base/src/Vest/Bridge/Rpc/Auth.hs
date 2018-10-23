@@ -15,8 +15,8 @@ data AuthException =
   AuthException
   deriving (Eq, Read, Show, Generic, Exception, ToJSON, FromJSON)
 
--- | Signing and verification are STM operations because they may want to read some state (e.g.
--- the current access token version), but should still be lightweight.
+-- | Signing and verification are STM operations because they should be lightweight but
+-- nevertheless may want to read state (e.g. the current access token version).
 class RequestSigner a where
   signRequest :: a -> Headers -> Text' "Request" -> STM Headers
 

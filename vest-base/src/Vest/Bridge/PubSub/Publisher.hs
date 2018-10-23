@@ -73,7 +73,7 @@ publish_ topicType t stream =
     with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do
       initTopic transport rawTopicName topicType
-      send <- initPublisher transport rawTopicName
+      send <- publishRaw transport rawTopicName
       Stream.mapM_ (send . serialize' @fmt) stream
 
 instance ( HasNamespace t

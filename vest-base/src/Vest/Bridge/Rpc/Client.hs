@@ -85,7 +85,7 @@ callDirect t req = do
             evilThrowTo mainThread $ ServerException eText
           RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
-    _issueRequest
+    callRaw
       (rpcTransport @transport t)
       rawRoute
       headersWithSignature
@@ -134,7 +134,7 @@ callStreaming t req f = do
               Result res -> push res
               EndOfResults -> close
   Tagged doCleanup <-
-    _issueRequest
+    callRaw
       (rpcTransport @transport t)
       rawRoute
       headersWithSignature

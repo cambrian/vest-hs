@@ -82,10 +82,10 @@ serve_ ::
   -> (t -> AuthClaims auth -> req -> IO x)
   -> IO ()
 serve_ sender t handler =
-  _consumeRequests (rpcTransport @transport t) rawRoute asyncHandle
+  serveRaw (rpcTransport @transport t) rawRoute asyncHandle
   where
     rawRoute = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy route)
-    asyncHandle headers reqText respond =
+    asyncHandle respond headers reqText =
       async $
       catches
         (do claims <-

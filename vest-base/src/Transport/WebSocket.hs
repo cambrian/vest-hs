@@ -172,12 +172,12 @@ wsClientApp clientResponseHandlers requestMVar conn =
        WS.sendTextData conn (serialize @'JSON request))
 
 instance RpcTransport T where
-  _consumeRequests ::
+  serveRaw ::
        T
     -> RawRoute
-    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
+    -> ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO (Async ()))
     -> IO ()
-  _consumeRequests T {serverRequestHandlers, serverResponseHandlers} route asyncHandler =
+  serveRaw T {serverRequestHandlers, serverResponseHandlers} route asyncHandler =
     HashTable.lookup serverRequestHandlers route >>= \case
       Just _ -> throw $ AlreadyServingException route
       Nothing -> HashTable.insert serverRequestHandlers route handleMsg
@@ -187,15 +187,15 @@ instance RpcTransport T where
           Nothing -> async $ return ()
           Just handler ->
             let respond resText = handler ResponseMessage {requestId, resText}
-             in asyncHandler headers reqText respond
-  _issueRequest ::
+             in asyncHandler respond headers reqText
+  callRaw ::
        T
     -> RawRoute
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
-  _issueRequest T {clientRequestHandlers, clientResponseHandlers} route headers reqText respond = do
+  callRaw T {clientRequestHandlers, clientResponseHandlers} route headers reqText respond = do
     namespace <-
       deserializeUnsafe' @'Pretty @(Namespaced "Server" Text) route >>-
       getNamespace'

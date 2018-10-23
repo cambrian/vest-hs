@@ -15,16 +15,15 @@ newtype AlreadyPublishingException =
   deriving (Eq, Show, Read, Generic)
   deriving anyclass (Exception, FromJSON, ToJSON)
 
--- TODO: rename methods
 -- TODO: split into event/value transports?
 class PubSubTransport t where
   initTopic :: t -> RawTopicName -> TopicType -> IO ()
-  initPublisher ::
+  publishRaw ::
        t -- ^ Should be mutated to store cleanup details.
     -> RawTopicName
     -> IO (Text' "a" -> IO ())
     -- ^ Returns publish fn for this topic.
-  subscribe_ ::
+  subscribeRaw ::
        t -- ^ Should be mutated to store cleanup details.
     -> RawTopicName
     -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.

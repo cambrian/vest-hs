@@ -128,13 +128,13 @@ instance Resource T where
     HashTable.mapM_ (AMQP.closeChannel . fst . snd) subscribers
 
 instance RpcTransport T where
-  _consumeRequests ::
+  serveRaw ::
        T
     -> RawRoute
-    -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
+    -> ((Text' "Response" -> IO ()) -> Headers -> Text' "Request" -> IO (Async ()))
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
-  _consumeRequests T {conn, publishChan, consumedRoutes} route asyncHandler = do
+  serveRaw T {conn, publishChan, consumedRoutes} route asyncHandler = do
     HashTable.lookup consumedRoutes route >>= \case
       Nothing -> return ()
       Just _ -> throw $ AlreadyServingException route
@@ -153,7 +153,7 @@ instance RpcTransport T where
                   "" -- Default exchange just sends message to queue specified by routing key.
                   (untag responseQueue) -- Exchange routing key.
                   (toAmqpMsg . show $ ResponseMessage {requestId, resText})
-          asyncHandler headers reqText respond
+          asyncHandler respond headers reqText
     consumerTag <-
       AMQP.consumeMsgs
         consumerChan
@@ -163,14 +163,14 @@ instance RpcTransport T where
            forM_ (read $ fromAmqpMsg msg) asyncHandle -- Do nothing if message fails to read.
            AMQP.ackEnv env)
     HashTable.insert consumedRoutes route (consumerChan, consumerTag)
-  _issueRequest ::
+  callRaw ::
        T
     -> RawRoute
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
-  _issueRequest T {publishChan, responseQueue, responseHandlers} route headers reqText respond = do
+  callRaw T {publishChan, responseQueue, responseHandlers} route headers reqText respond = do
     id <- nextUUID'
     HashTable.insert responseHandlers id respond
     AMQP.publishMsg
@@ -209,12 +209,12 @@ instance PubSubTransport T where
       (case topicType of
          Value -> 1
          Event -> 20)
-  initPublisher :: T -> RawTopicName -> IO (Text' "a" -> IO ())
-  initPublisher T {publishChan} (Tagged exchangeName) =
+  publishRaw :: T -> RawTopicName -> IO (Text' "a" -> IO ())
+  publishRaw T {publishChan} (Tagged exchangeName) =
     return $
     void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
-  subscribe_ :: T -> RawTopicName -> (Text' "a" -> IO ()) -> IO ()
-  subscribe_ T {conn, subscribers} (Tagged exchangeName) push = do
+  subscribeRaw :: T -> RawTopicName -> (Text' "a" -> IO ()) -> IO ()
+  subscribeRaw T {conn, subscribers} (Tagged exchangeName) push = do
     consumerChan <- AMQP.openChannel conn
     queueName <- newQueueName
     AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
