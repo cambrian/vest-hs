@@ -133,6 +133,12 @@ blockForever = do
                                              -- to this thread that could conceivably be thrown to.
   atomically retry -- Block forever.
 
+-- | Since we have unused variable warnings, this function helps you trick the compiler into
+-- thinking that an unused variable is used. This is useful for incomplete work that you don't want
+-- to comment out.
+ignoreIO :: t -> IO ()
+ignoreIO _ = return ()
+
 last :: [a] -> Maybe a
 last = lastMay
 

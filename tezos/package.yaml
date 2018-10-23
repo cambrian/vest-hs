@@ -14,6 +14,7 @@ dependencies:
 - aeson             >= 1.4
 - base              >= 4.10
 - bytestring        >= 0.10
+- casing            >= 0.1
 - streamly          >= 0.5
 - vest-base
 
