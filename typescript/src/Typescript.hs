@@ -5,7 +5,7 @@ module Typescript
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import Data.List (nub)
-import DummyManager (DummyAuth)
+import qualified DummyManager.Auth as DummyAuth
 import GHC.TypeLits
 import qualified Transport.WebSocket as WebSocket
 import Vest
@@ -98,7 +98,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
     ]
 
 instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint_ timeout format ('Auth DummyAuth) service transport (route :: Symbol) req ('Direct res)) where
+         Collector (Endpoint_ timeout format ('Auth DummyAuth.T) service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [TSDeclaration]
@@ -120,7 +120,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
     ]
 
 instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint_ timeout format ('Auth DummyAuth) service transport (route :: Symbol) req ('Streaming res)) where
+         Collector (Endpoint_ timeout format ('Auth DummyAuth.T) service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [TSDeclaration]

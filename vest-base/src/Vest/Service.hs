@@ -22,7 +22,10 @@ class ( Data (ServiceArgs a)
   type EventSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
-  -- ^ rename?
+  -- ^ Rename?
+  --
+  -- ^ Minimal complete definition.
+  --
   serviceName :: Text
   serviceName = moduleName @a
   serviceName' :: forall t. Text' t
