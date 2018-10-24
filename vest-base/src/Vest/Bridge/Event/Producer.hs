@@ -50,7 +50,8 @@ instance ( HasUniqueEventNames (a
     produce t (Proxy :: Proxy b) bProducers
 
 instance ( HasNamespace t
-         , HasEventTransport rpcTransport varTransport t
+         , HasRpcTransport rpcTransport t
+         , HasVariableTransport varTransport t
          , HasRedisConnection t
          , Deserializable fmt (IndexOf a)
          , Serializable fmt (RpcResponse a)
