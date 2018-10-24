@@ -2,9 +2,8 @@ module AccessControl
   ( module AccessControl
   ) where
 
-import qualified AccessControl.Auth as Auth
+import AccessControl.Api as AccessControl
 import AccessControl.Internal as AccessControl
-import qualified AccessControl.Permission as Permission
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
@@ -15,15 +14,6 @@ data AccessControl = Args
   { subjectsFile :: FilePath
   , seedFile :: FilePath -- Seed must be exactly 32 bytes, encoded in base64.
   } deriving (Data)
-
-type TokenEndpoint
-   = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct SignedToken)
-
-type InvalidateAllExistingTokensEndpoint
-   = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
-
-type TokenVersionTopic
-   = Topic 'Value T Amqp.T "minValidTokenTimestamp" Timestamp
 
 accessToken :: T -> PublicKey -> IO SignedToken
 accessToken T {subjects, secretKey} publicKey = do
@@ -41,10 +31,6 @@ handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
 makeStreams :: T -> IO (Streams (PublishSpec T))
 makeStreams = return . minTokenTimes
 
-instance Permission.Is p => HasAuthVerifier (Auth.T p) T where
-  authVerifier T {publicKey, getMinTokenTime} =
-    Auth.Verifier publicKey getMinTokenTime
-
 instance Service T where
   type ServiceArgs T = AccessControl
   type RpcSpec T = TokenEndpoint
@@ -55,7 +41,7 @@ instance Service T where
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     let (publicKey, secretKey) = seedKeyPair seed
-    (pushTokenTime, _, minTokenTimes, getMinTokenTime) <- pushStream
+    (pushTokenTime, _, minTokenTimes, readMinTokenTime) <- pushStream
     let bumpMinTokenTime = now >>= pushTokenTime
     bumpMinTokenTime
     with localRedisConfig $ \redis ->
@@ -67,7 +53,7 @@ instance Service T where
           , redis
           , publicKey
           , secretKey
-          , getMinTokenTime
+          , readMinTokenTime
           , minTokenTimes
           , bumpMinTokenTime
           }

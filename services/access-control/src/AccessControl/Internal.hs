@@ -6,13 +6,6 @@ import qualified AccessControl.Permission as Permission
 import qualified Transport.Amqp as Amqp
 import Vest
 
--- We had to put the core types in their own file because the access control auth / client need to
--- import then.
-data Subject = Subject
-  { name :: Text
-  , permissions :: HashSet Permission.T
-  } deriving (Read, Show, Generic, ToJSON, FromJSON)
-
 type SignedToken = SignedText' "AccessToken"
 
 data Token = Token
@@ -22,6 +15,11 @@ data Token = Token
   , time :: Timestamp
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
+data Subject = Subject
+  { name :: Text
+  , permissions :: HashSet Permission.T
+  } deriving (Read, Show, Generic, ToJSON, FromJSON)
+
 data T = T
   { subjects :: HashMap PublicKey Subject
   , amqp :: Amqp.T
@@ -29,7 +27,7 @@ data T = T
   , publicKey :: PublicKey
   , secretKey :: SecretKey
   -- The redundancy here is a bit sad, but necessary bc it's not possible to publish a TVar.
-  , getMinTokenTime :: STM Timestamp
+  , readMinTokenTime :: STM Timestamp
   , minTokenTimes :: Stream Timestamp
   , bumpMinTokenTime :: IO ()
   }

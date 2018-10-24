@@ -17,7 +17,7 @@ import qualified Test.Tasty as Tasty
 import Test.Tasty.ExpectedFailure as Reexports (expectFail, ignoreTest)
 import Test.Tasty.Golden (goldenVsStringDiff)
 
-diffCmd :: FilePath -> FilePath -> [GHC.Base.String]
+diffCmd :: FilePath -> FilePath -> [String]
 diffCmd ref new = ["diff", "-u", ref, new]
 
 testCase :: String -> FilePath -> IO Text -> TestTree
