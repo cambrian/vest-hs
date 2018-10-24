@@ -20,13 +20,6 @@ data Event_ (fmt :: SerializationFormat) service rpcTransport varTransport (name
 
 type Event = Event_ 'Haskell
 
-class (HasRpcTransport rpcTransport t, HasVariableTransport varTransport t) =>
-      HasEventTransport rpcTransport varTransport t
-
-
-instance (HasRpcTransport rpcTransport t, HasVariableTransport varTransport t) =>
-         HasEventTransport rpcTransport varTransport t
-
 class (KnownSymbol s, KnownSymbol (PrefixedEventName s)) =>
       KnownEventName s
 

@@ -41,30 +41,3 @@ instance ( HasNamespace service
       (serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name))
       (push <=< deserializeUnsafe' @fmt)
     return (stream, read)
--- instance ( HasNamespace service
---          , HasVariableTransport transport t
---          , HasRedisConnection t
---          , Deserializable fmt a
---          , KnownSymbol name
---          , Indexable a
---          ) =>
---          Subscriber t (Variable_ fmt service transport name a) where
---   subscribe ::
---        t
---     -> Proxy (Variable_ fmt service transport name a)
---     -> IO (Maybe (IndexOf a) -> Stream a)
---   subscribe t _ = do
---     let variableName =
---           serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name)
---         lockId = retag $ variableName <> "/subscriber"
---     (push, _, stream, _) <- pushStream
---     void . async $
---       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
---       const $
---       subscribeRaw
---         (variableTransport @transport t)
---         variableName
---         (push <=< deserializeUnsafe' @fmt)
---     return $ \case
---       Just lastIndexSeen -> Stream.dropWhile ((lastIndexSeen >) . index) stream
---       Nothing -> stream
