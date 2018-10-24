@@ -23,30 +23,46 @@ data RewardInfo = RewardInfo
   , delegations :: [DelegationInfo]
   } deriving (Show, Generic, FromJSON)
 
+snapshotLag :: Int -> Int
+snapshotLag = subtract 2
+
 toFixedQtyUnsafe :: Text -> IO (FixedQty' t "XTZ")
 toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 
--- TODO: Debug discrepancies between this and TzScan.
--- Change: blockInCycle -> lastBlockInCycle
--- Change: Use cycle - 7 block for correct rewards.
-getCycleRewardInfo ::
-     Http.T -> Text' "TzBlockHash" -> Text' "TzImplicitPkh" -> IO RewardInfo
-getCycleRewardInfo connection (Tagged blockInCycle) (Tagged delegateId) = do
-  delegate <-
+-- | Calculates reward split info.
+-- Assume that the current cycle is X.
+-- rewardBlock: The last block in cycle (X - frozenCycles).
+-- snapshotBlock: The snapshot block in cycle (X - frozenCycles - snapshotLag).
+getRewardInfo ::
+     Http.T
+  -> Text' "TzBlockHash"
+  -> Text' "TzBlockHash"
+  -> Text' "TzImplicitPkh"
+  -> IO RewardInfo
+getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged delegateId) = do
+  frozenBalanceCycles <-
+    Http.direct
+      (Http.request
+         (Proxy :: Proxy ListFrozenBalanceCycles)
+         mainChain
+         rewardBlock
+         delegateId)
+      connection
+  frozenBalance <-
+    fromJustUnsafe UnexpectedResultException (last frozenBalanceCycles)
+  reward <-
+    (+) <$> toFixedQtyUnsafe (rewards frozenBalance) <*>
+    toFixedQtyUnsafe (fees frozenBalance)
+  delegateSnapshot <-
     Http.direct
       (Http.request
          (Proxy :: Proxy GetDelegate)
          mainChain
-         blockInCycle
+         snapshotBlock
          delegateId)
       connection
-  frozenBalance <-
-    fromJustUnsafe
-      UnexpectedResultException
-      (last (frozen_balance_by_cycle delegate))
-  reward <- toFixedQtyUnsafe (rewards frozenBalance)
-  staked <- toFixedQtyUnsafe (staking_balance delegate)
-  let delegators = delegated_contracts delegate
+  staked <- toFixedQtyUnsafe (staking_balance delegateSnapshot)
+  let delegators = delegated_contracts delegateSnapshot
   delegations <-
     mapConcurrently
       (\delegator -> do
@@ -55,7 +71,7 @@ getCycleRewardInfo connection (Tagged blockInCycle) (Tagged delegateId) = do
              (Http.request
                 (Proxy :: Proxy GetContractBalance)
                 mainChain
-                blockInCycle
+                snapshotBlock
                 delegator)
              connection >>=
            toFixedQtyUnsafe

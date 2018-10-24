@@ -77,7 +77,7 @@ printMonitorBlocks connection = do
 main :: IO ()
 main = do
   connection <- make publicTezosConfig
-  ignoreIO $ printMainHeadConstants connection
+  printMainHeadConstants connection
   ignoreIO $ printMainHeadContractsCount connection
   ignoreIO $
     printContractManager "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
@@ -91,9 +91,12 @@ main = do
     printMainBlock
       "BLpySJC2wRULnED2Y8nPkH7nUzASeorvft1iBMC2KhQbD79rw7r"
       connection
-  getCycleRewardInfo
+  -- Compare with https://api1.tzscan.io/v2/rewards_split
+  -- tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv?cycle=20&p=0
+  getRewardInfo
     connection
-    (Tagged "BMA132SHdAJ9jueDF7BazcQoSsU28kV3gvusZsDVi3HvPkUHC4y")
-    (Tagged "tz3VEZ4k6a4Wx42iyev6i2aVAptTRLEAivNN") >>=
+    (Tagged "BLsTCXPM2FyueaAhLVctzSYHDCkSJviRphnynZEAq4bFugLdP8v")
+    (Tagged "BM7AshJjzA9vDNDMbwDiGYfHPdWawy9nZCdabCttuCWZDA72SqL")
+    (Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv") >>=
     print
   ignoreIO $ printMonitorBlocks connection
