@@ -3,12 +3,17 @@ module Vest.Redis
   ) where
 
 import Database.Redis
+import Database.Redis as Vest.Redis (ConnectInfo(..))
+import qualified Network.Socket.Internal as Internal (PortNumber(..))
 import Vest.Prelude
 
 type RedisConnection = Connection
 
-localRedisConfig :: ConnectInfo
-localRedisConfig = defaultConnectInfo
+defaultRedisConfig :: ConnectInfo
+defaultRedisConfig = defaultConnectInfo
+
+toPortId :: (Integral a) => a -> PortID
+toPortId port = PortNumber (fromIntegral port :: Internal.PortNumber)
 
 data RedisTransactionException =
   RedisTransactionException

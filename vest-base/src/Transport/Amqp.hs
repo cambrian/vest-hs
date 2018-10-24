@@ -32,7 +32,7 @@ data Config = Config
   , virtualHost :: Text
   , username :: Text
   , password :: Text
-  }
+  } deriving (Generic, FromJSON)
 
 localConfig :: Config
 localConfig =

@@ -2,9 +2,10 @@ module Vest.Service
   ( module Vest.Service
   ) where
 
+import Data.Text (takeWhile)
 import System.Console.CmdArgs as Vest.Service
 import Vest.Bridge
-import Vest.Prelude
+import Vest.Prelude hiding (takeWhile)
 
 -- | TODO: Can we put shared argument logic here, like reading secret key files?
 -- makeStreams and handlers are not defined on the Service because they cause circular imports :(
@@ -27,7 +28,7 @@ class ( Data (ServiceArgs a)
   -- ^ Minimal complete definition.
   --
   serviceName :: Text
-  serviceName = moduleName @a
+  serviceName = takeWhile (/= '.') (moduleName @a)
   serviceName' :: forall t. Text' t
   serviceName' = Tagged $ serviceName @a
   run ::
@@ -37,7 +38,7 @@ class ( Data (ServiceArgs a)
     -> (a -> IO (Producers (EventSpec a)))
     -> (a -> IO b)
     -> IO Void
-  -- ^ This function runs a service with the provided streams, handlers, and body function
+  -- ^ This function runs a service with the provided streams, handlers, and body function.
   run args handlers makeVariables makeEventProducers f =
     init args $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) handlers

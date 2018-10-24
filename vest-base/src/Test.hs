@@ -44,10 +44,18 @@ instance Service a => Resource (TestService a) where
                          , testServiceEvents = events
                          } = do
     serviceVar <- newEmptyTMVarIO
+    mainThread <- myThreadId
     serviceThread <-
       async' $
       run @a args handlers vars events (atomically . putTMVar serviceVar)
+    exceptionWatcher <-
+      async $ do
+        threadResult <- waitCatch (untag serviceThread)
+        case threadResult of
+          Left exc -> evilThrowTo mainThread exc
+          Right _ -> return ()
     a <- atomically $ takeTMVar serviceVar
+    cancel exceptionWatcher
     return (serviceThread, a)
   cleanup = cancel . untag . fst
 

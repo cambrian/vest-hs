@@ -25,14 +25,14 @@ data SchemeType
 data Config = Config
   { schemeType :: SchemeType
   , host :: Text' "Host"
-  , port :: Int' "Port"
+  , port :: Int16' "Port"
   , path :: Text' "Path"
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 data T = T
   { schemeType :: SchemeType
   , host :: Text' "Host"
-  , port :: Int' "Port"
+  , port :: Int16' "Port"
   , path :: Text' "Path"
   , manager :: Manager
   }
@@ -67,7 +67,11 @@ call requester T { schemeType
     requester
     (mkClientEnv
        manager
-       (BaseUrl (schemeFromType schemeType) (unpack host) port (unpack path)))
+       (BaseUrl
+          (schemeFromType schemeType)
+          (unpack host)
+          (fromIntegral port)
+          (unpack path)))
 
 direct :: ClientM result -> T -> IO result
 direct requester t = do

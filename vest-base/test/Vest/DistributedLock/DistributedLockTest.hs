@@ -14,7 +14,7 @@ simpleConcurrentTest :: TestTree
 simpleConcurrentTest =
   testCase "simpleConcurrent" "test/Vest/DistributedLock/simple-concurrent.gold" $
   with
-    localRedisConfig
+    defaultRedisConfig
     (\connection -> do
        let lockId = "simpleConcurrent"
        result <- newTVarIO ""

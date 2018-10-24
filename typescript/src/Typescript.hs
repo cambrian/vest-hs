@@ -3,18 +3,15 @@ module Typescript
   ) where
 
 import Data.Aeson.TypeScript.TH
-import Data.Aeson.Types
 import Data.List (nub)
 import qualified DummyManager.Auth as DummyAuth
-import GHC.TypeLits
-import qualified Transport.WebSocket as WebSocket
 import Vest
 
 data SpecTsTypes = SpecTsTypes
   { hasAuth :: Bool
   , isStreaming :: Bool
   , timeoutMillis :: Int
-  , route :: Text' "route"
+  , route :: Route
   , req :: Text' "tsReqType"
   , res :: Text' "tsResType"
   } deriving (Show)
@@ -140,36 +137,3 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
     ]
-
--- Symbols will show up in TS as string literals.
-instance (KnownSymbol s) => TypeScript (s :: Symbol) where
-  getTypeScriptType s = "\"" ++ symbolVal s ++ "\""
-
-newtype Text_ (a :: Symbol) =
-  Text_ Text
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
-
-$(deriveTypeScript defaultOptions ''Text_)
-
-instance (KnownSymbol s) => TypeScript (Text' (s :: Symbol)) where
-  getTypeScriptType _ = getTypeScriptType (Proxy :: Proxy (Text_ s))
-  getTypeScriptDeclarations _ =
-    getTypeScriptDeclarations (Proxy :: Proxy (Text_ s))
-
-instance (KnownSymbol (AppendSymbol s "Id")) =>
-         TypeScript (UUID' (s :: Symbol)) where
-  getTypeScriptType _ =
-    getTypeScriptType (Proxy :: Proxy (Text_ (AppendSymbol s "Id")))
-  getTypeScriptDeclarations _ =
-    getTypeScriptDeclarations (Proxy :: Proxy (Text_ (AppendSymbol s "Id")))
-
--- This is repetitive, but since the splicing happens at compile time and certain types depend on
--- other types having instances of TypeScript, we separate out the derivation splices. For the same
--- reason, these instance declarations do not sit next to their types.
-$(deriveTypeScript defaultOptions ''RpcResponse)
-
-$(deriveTypeScript defaultOptions ''StreamingResponse)
-
-$(deriveTypeScript defaultOptions ''WebSocket.RequestMessage)
-
-$(deriveTypeScript defaultOptions ''WebSocket.ResponseMessage)

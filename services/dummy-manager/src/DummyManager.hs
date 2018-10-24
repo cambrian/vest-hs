@@ -10,14 +10,21 @@ import DummyManager.Internal as DummyManager
 import qualified Stream
 import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified Vest as CmdArgs (name)
 
 data Args = Args
-  {
+  { port :: Int16
   } deriving (Eq, Show, Read, Generic, Data)
 
 defaultArgs_ :: Args
 defaultArgs_ =
-  Args {} &= help "External account manager for Vest derivatives (dummy)." &=
+  Args
+    { port =
+        3000 &= help "Port to serve on" &= CmdArgs.name "port" &=
+        CmdArgs.name "p" &=
+        typ "PORT"
+    } &=
+  help "External account manager for Vest derivatives (dummy)." &=
   summary "dummy-manager v0.1.0" &=
   program "dummy-manager"
 
@@ -61,4 +68,5 @@ instance Service T where
   type VariableSpec T = ()
   type EventSpec T = ()
   defaultArgs = defaultArgs_
-  init _ f = with WebSocket.localConfig (\webSocket -> f $ T {webSocket})
+  init Args {port} f =
+    with (WebSocket.localConfigOn port) (\webSocket -> f $ T {webSocket})

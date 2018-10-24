@@ -1,6 +1,5 @@
--- | Crypto primitives
--- Uses ed25519 for public key cryptography
--- and BLAKE2b for hashing.
+-- | Crypto primitives.
+-- Uses ed25519 for public key cryptography and BLAKE2b for hashing.
 module Vest.Prelude.Crypto
   ( module Reexports
   , hash256
@@ -20,7 +19,7 @@ hash256 = BLAKE2b.hash 32 mempty
 
 instance Hashable PublicKey
 
--- TODO: custom instance that doesn't include the unpublickey: thing
+-- TODO: Custom instance that doesn't include the unpublickey: thing.
 deriving instance Read PublicKey
 
 instance ToJSON PublicKey
@@ -33,8 +32,8 @@ instance FromJSONKey PublicKey
 
 deriving instance Read Signature
 
--- | We provide a signed type only for Texts, to avoid promoting extra serialization roundtrips
--- for verifying arbitrary types.
+-- | We provide a signed type only for Texts, to avoid promoting extra serialization roundtrips for
+-- verifying arbitrary types.
 type SignedText' t = (Signature, Text' t)
 
 seedKeyPair :: ByteString -> (PublicKey, SecretKey)

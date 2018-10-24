@@ -5,8 +5,11 @@ module Transport.WebSocket
   , RequestMessage(..)
   , ResponseMessage(..)
   , localConfig
+  , localConfigOn
   ) where
 
+import Data.Aeson.TypeScript.TH
+import Data.Aeson.Types
 import qualified Data.HashTable.IO as HashTable
 import qualified Network.HTTP.Types as Http
 import qualified Network.Wai as Wai
@@ -27,25 +30,33 @@ data RequestMessage = RequestMessage
   , reqText :: Text' "Request"
   } deriving (Generic, FromJSON, ToJSON)
 
+$(deriveTypeScript defaultOptions ''RequestMessage)
+
 data ResponseMessage = ResponseMessage
   { requestId :: UUID' "Request"
   , resText :: Text' "Response"
   } deriving (Generic, FromJSON, ToJSON)
 
+$(deriveTypeScript defaultOptions ''ResponseMessage)
+
 data ServerInfo = ServerInfo
   { uri :: Text' "Uri"
-  , port :: Int' "Port"
+  , port :: Int16' "Port"
   , path :: Text' "Path"
   }
 
 data Config = Config
-  { servePort :: Int' "Port"
+  { servePort :: Int16' "Port"
   , pingInterval :: Int
   , servers :: [(Text' "Server", ServerInfo)]
   }
 
+localConfigOn :: Int16 -> Config
+localConfigOn port =
+  Config {servePort = Tagged port, pingInterval = 30, servers = []}
+
 localConfig :: Config
-localConfig = Config {servePort = Tagged 3000, pingInterval = 30, servers = []}
+localConfig = localConfigOn 3000
 
 -- Note: The "localhost" literal does not work with wsClient.
 isLocalHost :: (Eq a, IsString a) => a -> Bool
@@ -80,7 +91,7 @@ instance Resource T where
     -- Warp.run blocks forever, so we put it in its own thread.
     serverThread <-
       async' $
-      Warp.run (untag servePort) $
+      Warp.run (fromIntegral $ untag servePort) $
       WS.websocketsOr
         WS.defaultConnectionOptions
         (wsServe serverRequestHandlers serverResponseHandlers pingInterval)
@@ -94,7 +105,7 @@ instance Resource T where
              -- ^ If this client is connecting to the local machine, wait for the server to start.
           WS.runClient
             (unpack $ untag uri)
-            (untag port)
+            (fromIntegral $ untag port)
             (unpack $ untag path)
             (wsClientApp clientResponseHandlers requestMVar)
     return

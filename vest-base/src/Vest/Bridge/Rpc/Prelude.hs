@@ -3,6 +3,8 @@ module Vest.Bridge.Rpc.Prelude
   ) where
 
 import qualified Control.Exception as Evil
+import Data.Aeson.TypeScript.TH
+import Data.Aeson.Types
 import Time.Units (KnownUnitName)
 import Vest.Prelude
 
@@ -78,11 +80,15 @@ data RpcResponse a
   | RpcResponse a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
+$(deriveTypeScript defaultOptions ''RpcResponse)
+
 data StreamingResponse a
   = Heartbeat
   | Result a
   | EndOfResults
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''StreamingResponse)
 
 newtype HeartbeatLostException unit =
   HeartbeatLostException (Time unit)

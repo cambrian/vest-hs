@@ -31,7 +31,7 @@ specTsTypesToObject _ SpecTsTypes { hasAuth
     , "streaming" .= isStreaming
     , "timeoutMillis" .= timeoutMillis
     , "route" .= route
-    , "namespacedRoute" .= show (namespaced @service route)
+    , "namespacedRoute" .= serialize' @'Pretty (namespaced @service route)
     , "req" .= req
     , "res" .= res
     ]

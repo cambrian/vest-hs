@@ -9,6 +9,9 @@ import Test
 import qualified Transport.Amqp as Amqp
 import Vest
 
+configFile :: FilePath
+configFile = "access-control/test/config.yaml"
+
 seedFile :: FilePath
 seedFile = "access-control/test/access-control-seed.yaml"
 
@@ -126,7 +129,8 @@ accessControlServiceConfig =
   TestServiceConfig
     { testServiceArgs =
         AccessControl.Args
-          { AccessControl.subjectsFile = subjectsFile
+          { AccessControl.configFile = configFile
+          , AccessControl.subjectsFile = subjectsFile
           , AccessControl.seedFile = seedFile
           }
     , testServiceHandlers = AccessControl.handlers

@@ -24,19 +24,17 @@ version = do
 tagged :: Text
 tagged = "type Tagged<T extends string, K> = { TagDoNotUse: T } | K\n\n"
 
+textAlias :: Text
+textAlias = "type Text<T extends string> = Tagged<T, string>\n\n"
+
 -- Hard-coded substitutions.
 replaceRules :: [Replace]
 replaceRules =
-  [ Replace
-      "type Text_<T> = IText_<T>"
-      "export type Text<T extends string> = Tagged<T, string>"
-  , Replace "\n\ntype IText_<T> = string" ""
-  , Replace "IEndOfResults<T>" "IEndOfResults"
+  [ Replace "IEndOfResults<T>" "IEndOfResults"
   , Replace "IHeartbeat<T>" "IHeartbeat"
   , Replace "IRpcResponseClientException<T>" "IRpcResponseClientException"
   , Replace "IRpcResponseServerException<T>" "IRpcResponseServerException"
-  , Replace "Text_<\"Header\">" "string"
-  , Replace "Text_" "Text"
+  , Replace "Tagged<\"Header\", string>" "string"
   , Replace "\"" "\'"
   , Replace ";" ""
   , Replace "type" "export type"
@@ -59,10 +57,9 @@ main = do
   versionText <- version
   putText . pack . replaceWithList replaceRules $
     unpack
-      (versionText <> tagged <>
+      (versionText <> tagged <> textAlias <>
        (pack . formatTSDeclarations . concat $
-        [ getTypeScriptDeclarations (Proxy :: Proxy Text_)
-        , getTypeScriptDeclarations (Proxy :: Proxy RpcResponse)
+        [ getTypeScriptDeclarations (Proxy :: Proxy RpcResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)

@@ -11,6 +11,8 @@ import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
 import Control.Monad.Trans.Maybe as Vest.Prelude.Core
+import Data.Aeson.TypeScript.TH
+import Data.Aeson.Types
 import Data.HashMap.Strict as Vest.Prelude.Core (HashMap)
 import Data.HashSet as Vest.Prelude.Core (HashSet)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
@@ -68,7 +70,11 @@ import System.Random as Vest.Prelude.Core
 
 type Int' t = Tagged t Int
 
+type Int16' t = Tagged t Int16
+
 type Int64' t = Tagged t Int64
+
+type Integer' t = Tagged t Integer
 
 type Text' t = Tagged t Text
 
@@ -103,6 +109,12 @@ instance ToJSONKey ByteString where
 instance FromJSONKey ByteString where
   fromJSONKey =
     FromJSONKeyTextParser $ either fail pure . Base64.decode . encodeUtf8
+
+-- Symbols will show up in TS as string literals.
+instance (KnownSymbol s) => TypeScript (s :: Symbol) where
+  getTypeScriptType s = "\"" ++ symbolVal s ++ "\""
+
+$(deriveTypeScript defaultOptions ''Tagged)
 
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
 -- ^ DO NOT USE unless you really really know what you're doing.

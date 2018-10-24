@@ -74,7 +74,7 @@ makeWebSocketConfig = do
 withT :: (T -> IO a) -> IO a
 withT f = do
   webSocketConfig <- makeWebSocketConfig
-  with localRedisConfig $ \redis ->
+  with defaultRedisConfig $ \redis ->
     with webSocketConfig $ \webSocket ->
       with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket, redis})
 

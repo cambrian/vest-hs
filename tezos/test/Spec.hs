@@ -1,4 +1,4 @@
 import Vest
 
 main :: IO ()
-main = putText "unimplemented"
+main = putText "Tezos test unimplemented"
