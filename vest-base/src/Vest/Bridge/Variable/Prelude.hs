@@ -16,7 +16,7 @@ class VariableTransport t where
        t -- ^ Should be mutated to store cleanup details.
     -> VariableName
     -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
-    -> IO () -- ^ Expects message history to be delivered on subscription.
+    -> IO () -- ^ Expects the most recent value to be delivered on subscription.
 
 class (VariableTransport transport) =>
       HasVariableTransport transport t

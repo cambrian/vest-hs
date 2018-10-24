@@ -46,9 +46,8 @@ instance ( Serializable fmt (IndexOf a)
          Consumer t (Event_ fmt server rpcTransport varTransport name a) where
   consume t _ = do
     let lockId =
-          serialize' @'Pretty $
-          namespaced @t @"service" $
-          symbolText (Proxy :: Proxy name) <> "/consumer"
+          Tagged $
+          symbolText (Proxy :: Proxy name) <> "/consumer/" <> namespace @t
     return $ \callback consumeFrom ->
       async $
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
