@@ -85,6 +85,7 @@ library:
   - access-control/src
   - dummy-manager/src
   # - fiat-payment-server/src
+  # - tezos-client/src
   # - tezos-delegation-core/src
   # - tezos-dispatcher/src
 
@@ -99,6 +100,16 @@ executables:
     source-dirs:          dummy-manager/bin
     dependencies:
     - services
+  # fiat-payment-server:
+  #   main:                 Main.hs
+  #   source-dirs:          fiat-payment-server/bin
+  #   dependencies:
+  #   - services
+  # tezos-client:
+  #   main:                 Main.hs
+  #   source-dirs:          tezos-client/bin
+  #   dependencies:
+  #   - services
   # tezos-delegation-core:
   #   main:                 Main.hs
   #   source-dirs:          tezos-delegation-core/bin
