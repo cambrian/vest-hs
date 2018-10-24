@@ -55,7 +55,8 @@ argsConfig :: Args
 argsConfig =
   Args {templateFile = "" &= typ "TEMPLATE" &= argPos 0} &=
   help "Generates TypeScript callers for the dummy-manager API." &=
-  summary "ts-callers v0.1.0"
+  summary "ts-callers v0.1.0" &=
+  program "ts-callers"
 
 main :: IO ()
 main = do

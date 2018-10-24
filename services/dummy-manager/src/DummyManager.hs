@@ -11,9 +11,15 @@ import qualified Stream
 import qualified Transport.WebSocket as WebSocket
 import Vest
 
-data DummyManager = Args
+data Args = Args
   {
   } deriving (Eq, Show, Read, Generic, Data)
+
+_defaultArgs :: Args
+_defaultArgs =
+  Args {} &= help "External account manager for Vest derivatives (dummy)." &=
+  summary "dummy-manager v0.1.0" &=
+  program "dummy-manager"
 
 type Api
    = AddIntsEndpoint
@@ -50,8 +56,8 @@ handlers =
   echoThriceAuth
 
 instance Service T where
-  type ServiceArgs T = DummyManager
+  type ServiceArgs T = Args
   type PublishSpec T = ()
   type RpcSpec T = Api
-  defaultArgs = Args {}
-  init _ f = with WebSocket.localConfig (\webSocket -> f $ T {webSocket})
+  defaultArgs = _defaultArgs
+  setup _ f = with WebSocket.localConfig (\webSocket -> f $ T {webSocket})

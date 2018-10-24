@@ -50,7 +50,7 @@ instance Service TestServer where
                             :<|> ForbiddenEndpoint
   type PublishSpec TestServer = ()
   defaultArgs = ()
-  init () f = do
+  setup () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
     with Amqp.localConfig $ \amqp ->
       with
@@ -75,7 +75,7 @@ instance Service TestClient where
   type RpcSpec TestClient = ()
   type PublishSpec TestClient = ()
   defaultArgs = ()
-  init () f = do
+  setup () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
     with Amqp.localConfig $ \amqp ->
       with

@@ -9,11 +9,29 @@ import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
 import qualified Transport.Amqp as Amqp
 import Vest
+import qualified Vest as CmdArgs (name)
 
-data AccessControl = Args
+data Args = Args
   { subjectsFile :: FilePath
   , seedFile :: FilePath -- Seed must be exactly 32 bytes, encoded in base64.
   } deriving (Data)
+
+_defaultArgs :: Args
+_defaultArgs =
+  Args
+    { subjectsFile =
+        "subjects.yaml" &= help "Subjects file" &= explicit &=
+        CmdArgs.name "subjects" &=
+        CmdArgs.name "S" &=
+        typFile
+    , seedFile =
+        "seed.yaml" &= help "Seed file" &= explicit &= CmdArgs.name "seed" &=
+        CmdArgs.name "D" &=
+        typFile
+    } &=
+  help "Our internal access control server." &=
+  summary "access-control v0.1.0" &=
+  program "access-control"
 
 accessToken :: T -> PublicKey -> IO SignedToken
 accessToken T {subjects, secretKey} publicKey = do
@@ -32,12 +50,12 @@ makeStreams :: T -> IO (Streams (PublishSpec T))
 makeStreams = return . minTokenTimes
 
 instance Service T where
-  type ServiceArgs T = AccessControl
+  type ServiceArgs T = Args
   type RpcSpec T = TokenEndpoint
                    :<|> InvalidateAllExistingTokensEndpoint
   type PublishSpec T = TokenVersionTopic
-  defaultArgs = Args {subjectsFile = "subjects.yaml", seedFile = "seed.yaml"}
-  init Args {subjectsFile, seedFile} f = do
+  defaultArgs = _defaultArgs
+  setup Args {subjectsFile, seedFile} f = do
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     let (publicKey, secretKey) = seedKeyPair seed

@@ -50,7 +50,8 @@ data Args = Args
 argsConfig :: Args
 argsConfig =
   Args {} &= help "Generates TypeScript types for the dummy-manager API." &=
-  summary "ts-types v0.1.0"
+  summary "ts-types v0.1.0" &=
+  program "ts-types"
 
 main :: IO ()
 main = do

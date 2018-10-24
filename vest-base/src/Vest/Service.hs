@@ -19,8 +19,11 @@ class ( Data (ServiceArgs a)
   type PublishSpec a
   type RpcSpec a
   defaultArgs :: ServiceArgs a
-  init :: ServiceArgs a -> (a -> IO b) -> IO b
-  -- ^ rename?
+  setup :: ServiceArgs a -> (a -> IO b) -> IO b
+  -- ^ Rename?
+  --
+  -- ^ Minimal complete definition.
+  --
   serviceName :: Text
   serviceName = moduleName @a
   serviceName' :: forall t. Text' t
@@ -31,9 +34,9 @@ class ( Data (ServiceArgs a)
     -> Handlers (RpcSpec a)
     -> (a -> IO b)
     -> IO Void
-  -- ^ This function runs a service with the provided streams, handlers, and body function
+  -- ^ This function runs a service with the provided streams, handlers, and body function.
   run args makeStreams handlers f =
-    init args $ \a -> do
+    setup args $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) handlers
       streams <- makeStreams a
       publish a (Proxy :: Proxy (PublishSpec a)) streams
@@ -42,8 +45,8 @@ class ( Data (ServiceArgs a)
   start ::
        (a -> IO (Streams (PublishSpec a))) -> Handlers (RpcSpec a) -> IO Void
   start makeStreams handlers = do
-    args_ <- cmdArgs $ defaultArgs @a
-    run @a args_ makeStreams handlers return
+    args <- cmdArgs $ defaultArgs @a
+    run @a args makeStreams handlers return
 
 instance Service a => HasNamespace a where
   namespace = serviceName @a

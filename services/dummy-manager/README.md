@@ -1,3 +1,3 @@
-# manager
+# dummy-manager
 
-External account manager for Vest derivatives.
+External account manager for Vest derivatives (dummy).
