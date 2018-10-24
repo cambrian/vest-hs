@@ -50,7 +50,7 @@ data T = T
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerChan :: AMQP.Channel
   , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: HashTable RawRoute (AMQP.Channel, AMQP.ConsumerTag)
+  , consumedRoutes :: HashTable Route (AMQP.Channel, AMQP.ConsumerTag)
   , responseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
   , subscribers :: HashTable (Text' "SubscriberId") ( AMQP.Channel
                                                     , AMQP.ConsumerTag)
@@ -131,7 +131,7 @@ instance Resource T where
 instance RpcTransport T where
   serveRaw ::
        T
-    -> RawRoute
+    -> Route
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
@@ -163,7 +163,7 @@ instance RpcTransport T where
     HashTable.insert consumedRoutes route (consumerChan, consumerTag)
   callRaw ::
        T
-    -> RawRoute
+    -> Route
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ())
@@ -178,8 +178,8 @@ instance RpcTransport T where
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
     return $ Tagged $ HashTable.delete responseHandlers id
 
-declarePubSubExchange :: AMQP.Channel -> Text -> Word32 -> IO ()
-declarePubSubExchange chan exchangeName historySize =
+declareVariableExchange :: AMQP.Channel -> Text -> IO ()
+declareVariableExchange chan exchangeName =
   AMQP.declareExchange
     chan
     AMQP.newExchange
@@ -187,10 +187,7 @@ declarePubSubExchange chan exchangeName historySize =
       , AMQP.exchangeType = "x-recent-history"
       , AMQP.exchangeArguments =
           AMQP.Types.FieldTable $
-          Map.fromList
-            [ ( "x-recent-history-length"
-              , AMQP.Types.FVInt32 $ fromIntegral historySize)
-            ]
+          Map.fromList [("x-recent-history-length", AMQP.Types.FVInt32 1)]
       }
 
 unsubscribe :: Text' "SubscriberId" -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
@@ -198,22 +195,16 @@ unsubscribe subscriberId (consumerChan, consumerTag) = do
   AMQP.cancelConsumer consumerChan consumerTag
   AMQP.deleteQueue consumerChan (untag subscriberId) & void
 
-instance PubSubTransport T where
-  initTopic :: T -> RawTopicName -> TopicType -> IO ()
-  initTopic T {publishChan} (Tagged exchangeName) topicType =
-    declarePubSubExchange
-      publishChan
-      exchangeName
-      (case topicType of
-         Value -> 1
-         Event -> 20)
-  publishRaw :: T -> RawTopicName -> IO (Text' "a" -> IO ())
-  publishRaw T {publishChan} (Tagged exchangeName) =
+instance VariableTransport T where
+  publishRaw :: T -> VariableName -> IO (Text' "a" -> IO ())
+  publishRaw T {publishChan} (Tagged exchangeName) = do
+    declareVariableExchange publishChan exchangeName
     return $
-    void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
-  subscribeRaw :: T -> RawTopicName -> (Text' "a" -> IO ()) -> IO ()
+      void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
+  subscribeRaw :: T -> VariableName -> (Text' "a" -> IO ()) -> IO ()
   subscribeRaw T {conn, subscribers} (Tagged exchangeName) push = do
     consumerChan <- AMQP.openChannel conn
+    declareVariableExchange consumerChan exchangeName
     queueName <- newQueueName
     AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
     AMQP.bindQueue consumerChan queueName exchangeName "" -- Routing key blank.
@@ -229,5 +220,5 @@ instance PubSubTransport T where
 instance HasRpcTransport T T where
   rpcTransport = identity
 
-instance HasPubSubTransport T T where
-  pubSubTransport = identity
+instance HasVariableTransport T T where
+  variableTransport = identity

@@ -23,7 +23,7 @@ type HashTable k v = HashTable.BasicHashTable k v
 data RequestMessage = RequestMessage
   { id :: UUID' "Request"
   , headers :: Headers
-  , route :: RawRoute
+  , route :: Route
   , reqText :: Text' "Request"
   } deriving (Generic, FromJSON, ToJSON)
 
@@ -57,7 +57,7 @@ newtype NoServerForNamespaceException =
   deriving anyclass (Exception)
 
 data T = T
-  { serverRequestHandlers :: HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
+  { serverRequestHandlers :: HashTable Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -- ^ For a server, requests need to be aggregated by route.
   , serverResponseHandlers :: HashTable (UUID' "Client") (ResponseMessage -> IO ())
   -- ^ For a server, stores each client's response queue.
@@ -121,7 +121,7 @@ noHttpApp _ respond =
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
-     HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
+     HashTable Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> HashTable (UUID' "Client") (ResponseMessage -> IO ())
   -> Int
   -> WS.ServerApp
@@ -138,7 +138,7 @@ wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = 
     (HashTable.delete serverResponseHandlers clientId)
 
 serveClient ::
-     HashTable RawRoute (UUID' "Client" -> RequestMessage -> IO (Async ()))
+     HashTable Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> UUID' "Client"
   -> WS.Connection
   -> IO () -- Can this be IO Void?
@@ -167,7 +167,7 @@ wsClientApp clientResponseHandlers requestMVar conn =
 instance RpcTransport T where
   serveRaw ::
        T
-    -> RawRoute
+    -> Route
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   serveRaw T {serverRequestHandlers, serverResponseHandlers} route asyncHandler =
@@ -185,7 +185,7 @@ instance RpcTransport T where
               (\resText -> handler ResponseMessage {requestId, resText})
   callRaw ::
        T
-    -> RawRoute
+    -> Route
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ())

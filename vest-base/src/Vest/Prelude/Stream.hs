@@ -51,11 +51,11 @@ pushStream = do
 
 -- | Prepends historical values to an indexable stream and runs an action for each value.
 observeFromIndex ::
-     (Indexable res)
-  => Stream res
-  -> (IndexOf res -> IO res)
-  -> (res -> IO ())
-  -> IndexOf res
+     (Indexable a)
+  => Stream a
+  -> (IndexOf a -> IO a)
+  -> (a -> IO ())
+  -> IndexOf a
   -> IO ()
 observeFromIndex original materialize pushResult startIndex = do
   resultQueueVar <- newTVarIO PQueue.empty
@@ -64,10 +64,10 @@ observeFromIndex original materialize pushResult startIndex = do
   originalThread <-
     async $
     Stream.mapM_
-      (\res ->
+      (\a ->
          atomically $ do
-           modifyTVar resultQueueVar (PQueue.insert (index res) res)
-           tryPutTMVar firstResultSeen (index res))
+           modifyTVar resultQueueVar (PQueue.insert (index a) a)
+           tryPutTMVar firstResultSeen (index a))
       original
   -- Queue materialize elements.
   materializeThread <-
@@ -75,10 +75,9 @@ observeFromIndex original materialize pushResult startIndex = do
       firstSeenIndex <- atomically $ readTMVar firstResultSeen
       mapM_
         (\backIndex -> do
-           res <- materialize backIndex
+           a <- materialize backIndex
            -- ^ TODO: Retry on failure?
-           atomically $
-             modifyTVar resultQueueVar (PQueue.insert (index res) res))
+           atomically $ modifyTVar resultQueueVar (PQueue.insert (index a) a))
         [startIndex .. pred firstSeenIndex]
   -- Push output from queue monotonically.
   let pushFrom index = do
@@ -89,13 +88,13 @@ observeFromIndex original materialize pushResult startIndex = do
             let minKeyValue = PQueue.getMin resultQueue
             lift $ check (isJust minKeyValue)
             -- ^ Retry until the queue is non-empty.
-            (minIndex, res) <- MaybeT . return $ minKeyValue
+            (minIndex, a) <- MaybeT . return $ minKeyValue
             lift $ check (minIndex == index)
             -- ^ Retry until the next index is what we expect.
             lift $ modifyTVar resultQueueVar PQueue.deleteMin
-            return res
+            return a
         nextRes <- fromJustUnsafe BugException nextResMaybe
-        -- ^ STM retries ensure that res should never be Nothing.
+        -- ^ STM retries ensure that a should never be Nothing.
         pushResult nextRes
         pushFrom (succ index)
   pushThread <- async $ pushFrom startIndex

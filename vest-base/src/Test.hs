@@ -31,19 +31,22 @@ type TestService a = (Async' "ServiceThread" Void, a)
 
 data TestServiceConfig a = TestServiceConfig
   { testServiceArgs :: ServiceArgs a
-  , testServiceStreams :: a -> IO (Streams (PublishSpec a))
   , testServiceHandlers :: Handlers (RpcSpec a)
+  , testServiceVariables :: a -> IO (Variables (VariableSpec a))
+  , testServiceEvents :: a -> IO (Producers (EventSpec a))
   }
 
 instance Service a => Resource (TestService a) where
   type ResourceConfig (TestService a) = TestServiceConfig a
   make TestServiceConfig { testServiceArgs = args
-                         , testServiceStreams = streams
                          , testServiceHandlers = handlers
+                         , testServiceVariables = vars
+                         , testServiceEvents = events
                          } = do
     serviceVar <- newEmptyTMVarIO
     serviceThread <-
-      async' $ run @a args streams handlers (atomically . putTMVar serviceVar)
+      async' $
+      run @a args handlers vars events (atomically . putTMVar serviceVar)
     a <- atomically $ takeTMVar serviceVar
     return (serviceThread, a)
   cleanup = cancel . untag . fst

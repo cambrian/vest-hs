@@ -31,4 +31,4 @@ handlers =
   echoThriceAuth
 
 main :: IO Void
-main = start @T (const . return $ ()) handlers
+main = start @T handlers (const . return $ ()) (const . return $ ())

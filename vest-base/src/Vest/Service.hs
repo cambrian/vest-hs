@@ -11,13 +11,15 @@ import Vest.Prelude
 class ( Data (ServiceArgs a)
       , Typeable a
       , Server a (RpcSpec a)
-      , Publisher a (PublishSpec a)
+      , Publisher a (VariableSpec a)
+      , Producer a (EventSpec a)
       ) =>
       Service a
   where
   type ServiceArgs a -- Can't be data because cmdArgs has to get the type name.
-  type PublishSpec a
   type RpcSpec a
+  type VariableSpec a
+  type EventSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   -- ^ rename?
@@ -27,23 +29,29 @@ class ( Data (ServiceArgs a)
   serviceName' = Tagged $ serviceName @a
   run ::
        ServiceArgs a
-    -> (a -> IO (Streams (PublishSpec a)))
     -> Handlers (RpcSpec a)
+    -> (a -> IO (Variables (VariableSpec a)))
+    -> (a -> IO (Producers (EventSpec a)))
     -> (a -> IO b)
     -> IO Void
   -- ^ This function runs a service with the provided streams, handlers, and body function
-  run args makeStreams handlers f =
+  run args handlers makeVariables makeEventProducers f =
     init args $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) handlers
-      streams <- makeStreams a
-      publish a (Proxy :: Proxy (PublishSpec a)) streams
+      variables <- makeVariables a
+      publish a (Proxy :: Proxy (VariableSpec a)) variables
+      eventProducers <- makeEventProducers a
+      produce a (Proxy :: Proxy (EventSpec a)) eventProducers
       f a
       blockForever
   start ::
-       (a -> IO (Streams (PublishSpec a))) -> Handlers (RpcSpec a) -> IO Void
-  start makeStreams handlers = do
+       Handlers (RpcSpec a)
+    -> (a -> IO (Variables (VariableSpec a)))
+    -> (a -> IO (Producers (EventSpec a)))
+    -> IO Void
+  start handlers makeVariables makeEventProducers = do
     args_ <- cmdArgs $ defaultArgs @a
-    run @a args_ makeStreams handlers return
+    run @a args_ handlers makeVariables makeEventProducers return
 
 instance Service a => HasNamespace a where
   namespace = serviceName @a

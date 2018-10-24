@@ -10,6 +10,7 @@ import Vest
 
 -- TODO: Add test for HeartbeatLostExceptions.
 -- TODO: Add test for server exceptions.
+-- TODO: Add test for Event bridge
 data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T
@@ -26,8 +27,8 @@ instance HasRpcTransport Amqp.T T where
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket
 
-instance HasPubSubTransport Amqp.T T where
-  pubSubTransport = amqp
+instance HasVariableTransport Amqp.T T where
+  variableTransport = amqp
 
 instance HasRedisConnection T where
   redisConnection = redis
@@ -109,26 +110,25 @@ increment =
             else Nothing
    in Stream.unfoldrM f 0
 
-type IncrementValueTopic transport
-   = Topic 'Value T transport "incrementValue" Int
+type IncrementVariable transport = Variable T transport "incrementValue" Int
 
--- type IncrementEventTopic transport
---    = Topic T transport "incrementEvent" ('Event Int)
-type TestPubSubApi transport = IncrementValueTopic transport --  :<|> IncrementEventTopic transport
+-- type IncrementEventVariable transport
+--    = Variable T transport "incrementEvent" ('Event Int)
+type TestVariableApi transport = IncrementVariable transport --  :<|> IncrementEventVariable transport
 
-streams :: Streams (TestPubSubApi Amqp.T)
+streams :: Variables (TestVariableApi Amqp.T)
 streams = increment -- :<|> increment
 
 withSubscribed ::
      forall transport spec a.
-     (HasPubSubTransport transport T, Subscriber T spec)
+     (HasVariableTransport transport T, Subscriber T spec)
   => Proxy spec
   -> (SubscriberBindings spec -> IO a)
   -> IO a
 withSubscribed _ f =
   withT $ \t -> do
     subscribed <- subscribe t (Proxy :: Proxy spec)
-    publish t (Proxy :: Proxy (TestPubSubApi transport)) streams
+    publish t (Proxy :: Proxy (TestVariableApi transport)) streams
     f subscribed
 
 emptyRpcTest :: TestTree
@@ -138,9 +138,9 @@ emptyRpcTest =
     () <- return $ makeClient t (Proxy :: Proxy ())
     return ""
 
-emptyPubSubTest :: TestTree
-emptyPubSubTest =
-  testCase "PubSub" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
+emptyVariableTest :: TestTree
+emptyVariableTest =
+  testCase "Variable" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
     () <- subscribe t (Proxy :: Proxy ())
     publish t (Proxy :: Proxy ()) ()
     return ""
@@ -210,21 +210,21 @@ multipleStreamingTest =
           atomically $ writeTVar result (show (lastInt1, lastInt2, lastText))
     readTVarIO result
 
--- eventPubSubTest ::
---      forall transport. HasPubSubTransport transport T
+-- eventVariableTest ::
+--      forall transport. HasVariableTransport transport T
 --   => TestTree
--- eventPubSubTest =
+-- eventVariableTest =
 --   testCase "Event" "test/Vest/Bridge/pubsub-event.gold" $
---   withSubscribed @transport (Proxy :: Proxy (IncrementEventTopic transport)) $ \getEvents -> do
+--   withSubscribed @transport (Proxy :: Proxy (IncrementEventVariable transport)) $ \getEvents -> do
 --     getEvents
 --     value <- atomically getValue
 --     return $ show value
-valuePubSubTest ::
-     forall transport. HasPubSubTransport transport T
+valueVariableTest ::
+     forall transport. HasVariableTransport transport T
   => TestTree
-valuePubSubTest =
+valueVariableTest =
   testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
-  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \(_, peekValue) -> do
+  withSubscribed @transport (Proxy :: Proxy (IncrementVariable transport)) $ \(_, peekValue) -> do
     threadDelay $ sec 0.1
     value <- atomically peekValue
     return $ show value
@@ -248,19 +248,19 @@ streamingTests =
     "Streaming RPC"
     [singleStreamingTest @transport, multipleStreamingTest @transport]
 
-pubSubTests ::
-     forall transport. HasPubSubTransport transport T
+variableTests ::
+     forall transport. HasVariableTransport transport T
   => TestTree
-pubSubTests = testGroup "PubSub" [valuePubSubTest @transport]
+variableTests = testGroup "Variable" [valueVariableTest @transport]
 
 test_bridge :: TestTree
 test_bridge =
   testGroup
     "Bridge"
-    [ testGroup "Empty API" [emptyRpcTest, emptyPubSubTest]
+    [ testGroup "Empty API" [emptyRpcTest, emptyVariableTest]
     , testGroup
         "Full Bridge API over AMQP Transport"
-        [directTests @Amqp.T, streamingTests @Amqp.T, pubSubTests @Amqp.T]
+        [directTests @Amqp.T, streamingTests @Amqp.T, variableTests @Amqp.T]
     , testGroup
         "WebSocket Transport"
         [directTests @WebSocket.T, streamingTests @WebSocket.T]

@@ -1,5 +1,5 @@
-import AccessControl (T, handlers, makeStreams)
+import AccessControl (T, handlers, makeVariables)
 import Vest
 
 main :: IO Void
-main = start @T makeStreams handlers
+main = start @T handlers makeVariables (const $ return ())

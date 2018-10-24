@@ -141,3 +141,4 @@ class (Ord (IndexOf a), Enum (IndexOf a)) =>
   where
   type IndexOf a
   index :: a -> IndexOf a
+  minIndex :: IndexOf a -- ^ kind of like Bounded (IndexOf a), but we decided this is better

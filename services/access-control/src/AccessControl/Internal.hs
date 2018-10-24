@@ -35,8 +35,8 @@ data T = T
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
 
-instance HasPubSubTransport Amqp.T T where
-  pubSubTransport = amqp
+instance HasVariableTransport Amqp.T T where
+  variableTransport = amqp
 
 instance HasRedisConnection T where
   redisConnection = redis

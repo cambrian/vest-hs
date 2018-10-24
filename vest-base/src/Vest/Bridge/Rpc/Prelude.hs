@@ -6,10 +6,10 @@ import qualified Control.Exception as Evil
 import Time.Units (KnownUnitName)
 import Vest.Prelude
 
-type RawRoute = Text' "RawRoute"
+type Route = Text' "Route"
 
 newtype AlreadyServingException =
-  AlreadyServingException RawRoute
+  AlreadyServingException Route
   deriving (Eq, Show, Read, Generic)
   deriving anyclass (Exception, FromJSON, ToJSON)
 
@@ -18,17 +18,17 @@ newtype AlreadyServingException =
 class RpcTransport t where
   serveRaw ::
        t
-    -> RawRoute
+    -> Route
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -- ^ Called per request, supplied with (headers request respondFn).
     -> IO ()
   callRaw ::
        t
-    -> RawRoute
+    -> Route
     -> Headers
     -> Text' "Request"
     -> (Text' "Response" -> IO ()) -- ^ Called per response.
-    -> IO (IO' "Cleanup" ())
+    -> IO (IO' "Cleanup" ()) -- ^ TODO: refactor to take a callback that is passed a nextResponse Fn, so that cleanup is handled automatically.
 
 -- | A descriptive reimplementation of Maybe.
 data AuthOrNoAuth a

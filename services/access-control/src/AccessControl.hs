@@ -28,14 +28,15 @@ accessToken T {subjects, secretKey} publicKey = do
 handlers :: Handlers (RpcSpec T)
 handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
 
-makeStreams :: T -> IO (Streams (PublishSpec T))
-makeStreams = return . minTokenTimes
+makeVariables :: T -> IO (Variables (VariableSpec T))
+makeVariables = return . minTokenTimes
 
 instance Service T where
   type ServiceArgs T = AccessControl
   type RpcSpec T = TokenEndpoint
                    :<|> InvalidateAllExistingTokensEndpoint
-  type PublishSpec T = TokenVersionTopic
+  type VariableSpec T = TokenVersionVariable
+  type EventSpec T = ()
   defaultArgs = Args {subjectsFile = "subjects.yaml", seedFile = "seed.yaml"}
   init Args {subjectsFile, seedFile} f = do
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile

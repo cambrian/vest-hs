@@ -14,5 +14,4 @@ type TokenEndpoint
 type InvalidateAllExistingTokensEndpoint
    = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
 
-type TokenVersionTopic
-   = Topic 'Value T Amqp.T "minValidTokenTimestamp" Timestamp
+type TokenVersionVariable = Variable T Amqp.T "minValidTokenTimestamp" Timestamp

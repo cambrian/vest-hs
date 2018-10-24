@@ -63,7 +63,8 @@ instance (Permission.Is p) => Auth (T p) where
   type AuthSigner (T p) = Signer
   type AuthVerifier (T p) = Verifier p
 
--- Could also add a signer instance, by creating an access token for itself, but not necessary yet
+-- Could also add a signer instance, which would require creating an access token for
+-- AccessControl.T
 instance Permission.Is p => HasAuthVerifier (T p) AccessControl.T where
   authVerifier AccessControl.T {publicKey, readMinTokenTime} =
     Verifier publicKey readMinTokenTime

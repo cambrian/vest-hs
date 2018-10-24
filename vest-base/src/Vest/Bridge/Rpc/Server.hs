@@ -112,11 +112,6 @@ instance ( HasNamespace t
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res)) where
-  serve ::
-       t
-    -> Proxy (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res))
-    -> (t -> req -> IO res)
-    -> IO ()
   serve t _ handler =
     serve_
       @fmt
@@ -135,11 +130,6 @@ instance ( HasNamespace t
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res)) where
-  serve ::
-       t
-    -> Proxy (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res))
-    -> (t -> req -> IO (Stream res))
-    -> IO ()
   serve t _ handler =
     serve_
       @fmt
@@ -158,11 +148,6 @@ instance ( HasNamespace t
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res)) where
-  serve ::
-       t
-    -> Proxy (Endpoint_ _timeout fmt ('Auth auth) t transport route req ('Direct res))
-    -> (t -> AuthClaims auth -> req -> IO res)
-    -> IO ()
   serve t _ = serve_ @fmt @auth @transport @route directSender t
 
 instance ( HasNamespace t
@@ -174,11 +159,6 @@ instance ( HasNamespace t
          , KnownSymbol route
          ) =>
          Server t (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res)) where
-  serve ::
-       t
-    -> Proxy (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res))
-    -> (t -> AuthClaims auth -> req -> IO (Stream res))
-    -> IO ()
   serve t _ =
     serve_
       @fmt

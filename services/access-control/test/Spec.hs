@@ -48,7 +48,8 @@ instance Service TestServer where
   type ServiceArgs TestServer = ()
   type RpcSpec TestServer = PermittedEndpoint
                             :<|> ForbiddenEndpoint
-  type PublishSpec TestServer = ()
+  type VariableSpec TestServer = ()
+  type EventSpec TestServer = ()
   defaultArgs = ()
   init () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
@@ -73,7 +74,8 @@ instance AccessControl.Client.Has TestClient where
 instance Service TestClient where
   type ServiceArgs TestClient = ()
   type RpcSpec TestClient = ()
-  type PublishSpec TestClient = ()
+  type VariableSpec TestClient = ()
+  type EventSpec TestClient = ()
   defaultArgs = ()
   init () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
@@ -127,8 +129,9 @@ accessControlServiceConfig =
           { AccessControl.subjectsFile = subjectsFile
           , AccessControl.seedFile = seedFile
           }
-    , testServiceStreams = AccessControl.makeStreams
     , testServiceHandlers = AccessControl.handlers
+    , testServiceVariables = AccessControl.makeVariables
+    , testServiceEvents = const $ return ()
     }
 
 handler :: TestServer -> AccessControl.Auth.Claims -> () -> IO ()
@@ -138,16 +141,18 @@ testServerConfig :: TestServiceConfig TestServer
 testServerConfig =
   TestServiceConfig
     { testServiceArgs = ()
-    , testServiceStreams = const $ return ()
     , testServiceHandlers = handler :<|> handler
+    , testServiceVariables = const $ return ()
+    , testServiceEvents = const $ return ()
     }
 
 testClientConfig :: TestServiceConfig TestClient
 testClientConfig =
   TestServiceConfig
     { testServiceArgs = ()
-    , testServiceStreams = const $ return ()
     , testServiceHandlers = ()
+    , testServiceVariables = const $ return ()
+    , testServiceEvents = const $ return ()
     }
 
 generateDataFiles :: TestTree

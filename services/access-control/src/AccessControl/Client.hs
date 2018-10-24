@@ -34,7 +34,7 @@ instance Resource T where
         getToken =
           makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
     (minTokenTimeUpdates, readMinTokenTime) <-
-      subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionTopic)
+      subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionVariable)
     tokenVar <- getToken >>= newTVarIO
     tokenFetcherThread <-
       async $

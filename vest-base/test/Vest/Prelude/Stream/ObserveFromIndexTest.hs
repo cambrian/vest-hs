@@ -6,24 +6,18 @@ import qualified Stream
 import Test
 import Vest
 
-data WrappedInt = WrappedInt
-  { wrapped :: Int
-  } deriving (Show)
+instance Indexable Word where
+  type IndexOf Word = Word
+  index = identity
+  minIndex = 0
 
-instance Indexable WrappedInt where
-  type IndexOf WrappedInt = Int
-  index = wrapped
-
-wrap :: Int -> WrappedInt
-wrap x = WrappedInt {wrapped = x}
-
-materialize :: Int -> IO WrappedInt
-materialize x = threadDelay (ms 20) >> return (WrappedInt {wrapped = x})
+materialize :: Word -> IO Word
+materialize x = threadDelay (ms 20) >> return x
 
 observeFromIndexTest :: TestTree
 observeFromIndexTest =
   testCase "ObserveFromIndex" "test/Vest/Prelude/Stream/observe-from-index.gold" $ do
-    let original = Stream.fromList [wrap 4, wrap 5]
+    let original = Stream.fromList [4, 5]
     result <- newTVarIO []
     observeFromIndex
       original
