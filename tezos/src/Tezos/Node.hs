@@ -3,6 +3,7 @@ module Tezos.Node
   ) where
 
 import Data.Aeson
+import Data.Aeson.TypeScript.TH
 import qualified Data.HashMap.Strict as HashMap
 import Http
 import Vest
@@ -38,7 +39,7 @@ data NotifyBlock = NotifyBlock
   , fitness :: [Text]
   , context :: Text
   , protocol_data :: Text
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type MonitorBlocks = "monitor" :> "heads" :> "main" :> Streaming NotifyBlock
 
@@ -67,7 +68,7 @@ data Constants = Constants
   , endorsement_reward :: Text
   , cost_per_byte :: Text
   , hard_storage_limit_per_operation :: Text
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type GetConstants
    = WithChainBlock ("context" :> "constants" :> Direct Constants)
@@ -82,7 +83,7 @@ data LevelInfo = LevelInfo
   , voting_period :: Int
   , voting_period_position :: Int
   , expected_commitment :: Bool
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type GetBlockLevelInfo
    = WithChainBlock ("helpers" :> "current_level" :> Direct LevelInfo)
@@ -104,7 +105,7 @@ data BlockMetadata = BlockMetadata
   , consumed_gas :: Text
   , deactivated :: Array
   , balance_updates :: Array
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 type GetBlockMetadata = WithChainBlock ("metadata" :> Direct [BlockMetadata])
 
@@ -116,7 +117,9 @@ data DelegationOp = DelegationOp
   , gas_limit :: Text
   , storage_limit :: Text
   , delegate :: Maybe Text
-  } deriving (Show, Generic, FromJSON, ToJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''DelegationOp)
 
 data OriginationOp = OriginationOp
   { kind :: Text
@@ -131,7 +134,9 @@ data OriginationOp = OriginationOp
   , delegatable :: Maybe Bool
   , delegate :: Maybe Text
   , script :: Maybe Value
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''OriginationOp)
 
 data TransactionOp = TransactionOp
   { kind :: Text
@@ -143,11 +148,15 @@ data TransactionOp = TransactionOp
   , amount :: Text
   , destination :: Text
   , parameters :: Maybe Value
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''TransactionOp)
 
 data UndefinedOp = UndefinedOp
   { kind :: Text
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''UndefinedOp)
 
 data Operation
   = Delegation DelegationOp
@@ -160,7 +169,7 @@ data Operation
   | ActivateAccount UndefinedOp
   | DoubleBakingEvidence UndefinedOp
   | DoubleEndorsementEvidence UndefinedOp
-  deriving (Show, Generic)
+  deriving (Eq, Show, Read, Generic, Hashable, ToJSON)
 
 -- This manual dispatch is absolute shit but (after much effort and a question on GitHub) remains
 -- the best way to actually parse an Operation.
@@ -185,6 +194,8 @@ instance FromJSON Operation where
           _ -> fail "unexpected operation kind"
       _ -> fail "unexpected JSON shape"
 
+$(deriveTypeScript defaultOptions ''Operation)
+
 data OperationGroup = OperationGroup
   { protocol :: Text
   , chain_id :: Text
@@ -192,7 +203,7 @@ data OperationGroup = OperationGroup
   , branch :: Text
   , contents :: [Operation]
   , signature :: Text
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type GetBlockOperations
    = WithChainBlock ("operations" :> Direct [[OperationGroup]])
@@ -209,7 +220,7 @@ data BlockHeader = BlockHeader
   , priority :: Int
   , proof_of_work_nonce :: Text
   , signature :: Text
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 data Block = Block
   { protocol :: Text
@@ -218,7 +229,7 @@ data Block = Block
   , header :: BlockHeader
   , metadata :: BlockMetadata
   , operations :: [[OperationGroup]]
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 type GetBlock = WithChainBlock (Direct Block)
 
@@ -231,7 +242,7 @@ data FrozenBalance = FrozenBalance
   , deposit :: Text
   , fees :: Text
   , rewards :: Text
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type ListFrozenBalanceCycles
    = WithChainBlockDelegate ("frozen_balance_by_cycle" :> Direct [FrozenBalance])
@@ -251,6 +262,6 @@ data Delegate = Delegate
   , delegated_balance :: Text
   , deactivated :: Bool
   , grace_period :: Int
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 type GetDelegate = WithChainBlockDelegate (Direct Delegate)

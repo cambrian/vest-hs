@@ -78,6 +78,8 @@ type Integer' t = Tagged t Integer
 
 type Text' t = Tagged t Text
 
+type ByteString' t = Tagged t ByteString
+
 type IO' t a = Tagged t (IO a)
 
 type STM' t a = Tagged t (STM a)
@@ -102,6 +104,10 @@ instance ToJSON ByteString where
 instance FromJSON ByteString where
   parseJSON =
     withText "ByteString" $ either fail pure . Base64.decode . encodeUtf8
+
+instance TypeScript ByteString where
+  getTypeScriptType _ = getTypeScriptType (Proxy :: Proxy Text)
+  getTypeScriptDeclarations _ = getTypeScriptDeclarations (Proxy :: Proxy Text)
 
 instance ToJSONKey ByteString where
   toJSONKey = toJSONKeyText (decodeLatin1 . Base64.encode)

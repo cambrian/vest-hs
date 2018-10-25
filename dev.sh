@@ -3,9 +3,7 @@ rm -f rabbit.log
 /usr/local/bin/redis-cli shutdown > /dev/null 2>&1
 /usr/local/bin/redis-server /usr/local/etc/redis.conf > ~/.vest-hs/redis-run.log &
 
-# /usr/local/sbin/rabbitmqctl shutdown
-
-# to completely clear RabbitMQ
+# To completely clear RabbitMQ:
 # rabbitmqctl stop_app
 # rabbitmqctl reset
 # rabbitmqctl shutdown

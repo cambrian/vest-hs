@@ -22,8 +22,8 @@ data Args = Args
 
 -- Normally these would go in a YAML file, but since the front-end will be testing directly with
 -- this executable, the config is exposed as command-line arguments.
-_defaultArgs :: Args
-_defaultArgs =
+defaultArgs_ :: Args
+defaultArgs_ =
   Args
     { port =
         3000 &= help "Port to serve on" &= CmdArgs.name "port" &=
@@ -64,7 +64,7 @@ instance Service T where
   type VariableSpec T = ()
   type EventSpec T = ()
   type RpcSpec T = Api
-  defaultArgs = _defaultArgs
+  defaultArgs = defaultArgs_
   init Args {port, seedFile, tezosHost, tezosPort, tezosPath, secure} f = do
     (seed :: ByteString) <- ByteString.readFile $ unpack seedFile
     let (publicKey, secretKey) = seedKeyPair seed
