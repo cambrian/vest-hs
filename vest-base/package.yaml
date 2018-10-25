@@ -17,7 +17,6 @@ dependencies:
 - async                   >= 2.2
 - base                    >= 4.10
 - base64-bytestring       >= 1
-- base64-bytestring-type  >= 1
 - beam-core               >= 0.7
 - beam-postgres           >= 0.3
 - blake2                  >= 0.2
@@ -37,7 +36,6 @@ dependencies:
 - network                 >= 2.6
 - postgresql-simple       >= 0.5
 - protolude               >= 0.2
-- pqueue                  >= 1.4
 - random                  >= 1.1
 - resource-pool           >= 0.2
 - safe-exceptions         >= 0.1

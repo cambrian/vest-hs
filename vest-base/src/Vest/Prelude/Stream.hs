@@ -2,7 +2,6 @@ module Vest.Prelude.Stream
   ( module Vest.Prelude.Stream
   ) where
 
-import qualified Data.PQueue.Prio.Min as PQueue
 import qualified Streamly
 import qualified Streamly.Prelude as Stream
 import Vest.Prelude.Core
@@ -48,63 +47,3 @@ pushStream = do
           (Nothing, _, _) -> retry
           (Just v, _, _) -> return v
   return (push, close, stream, readStream)
-
--- | Prepends historical values to an indexable stream and runs an action for each value.
-observeFromIndex ::
-     (Indexable a)
-  => Stream a
-  -> (IndexOf a -> IO a)
-  -> (a -> IO ())
-  -> IndexOf a
-  -> IO ()
-observeFromIndex original materialize pushResult startIndex = do
-  resultQueueVar <- newTVarIO PQueue.empty
-  firstResultSeen <- newEmptyTMVarIO
-  -- Queue original elements.
-  originalThread <-
-    async $
-    Stream.mapM_
-      (\a ->
-         atomically $ do
-           modifyTVar resultQueueVar (PQueue.insert (index a) a)
-           tryPutTMVar firstResultSeen (index a))
-      original
-  -- Queue materialize elements.
-  materializeThread <-
-    async $ do
-      firstSeenIndex <- atomically $ readTMVar firstResultSeen
-      mapM_
-        (\backIndex -> do
-           a <- materialize backIndex
-           -- ^ TODO: Retry on failure?
-           atomically $ modifyTVar resultQueueVar (PQueue.insert (index a) a))
-        [startIndex .. pred firstSeenIndex]
-  -- Push output from queue monotonically.
-  let pushFrom index = do
-        nextResMaybe <-
-          atomically $
-          runMaybeT $ do
-            resultQueue <- lift $ readTVar resultQueueVar
-            let minKeyValue = PQueue.getMin resultQueue
-            lift $ check (isJust minKeyValue)
-            -- ^ Retry until the queue is non-empty.
-            (minIndex, a) <- MaybeT . return $ minKeyValue
-            lift $ check (minIndex == index)
-            -- ^ Retry until the next index is what we expect.
-            lift $ modifyTVar resultQueueVar PQueue.deleteMin
-            return a
-        nextRes <- fromJustUnsafe BugException nextResMaybe
-        -- ^ STM retries ensure that a should never be Nothing.
-        pushResult nextRes
-        pushFrom (succ index)
-  pushThread <- async $ pushFrom startIndex
-  -- Kill pushThread when producers are done and there is nothing left to push.
-  void . async $ do
-    wait originalThread
-    wait materializeThread
-    atomically $ do
-      resultQueue <- readTVar resultQueueVar
-      check (PQueue.size resultQueue == 0)
-    cancel pushThread
-  -- Block on pushThread so clients can manually make this async.
-  void $ waitCatch pushThread

@@ -3,6 +3,7 @@ module Vest.Bridge.Event.Consumer
   , Consumer(..)
   ) where
 
+import qualified Stream
 import Vest.Bridge.Event.Prelude
 import Vest.Bridge.Rpc
 import Vest.Bridge.Variable
@@ -13,7 +14,7 @@ import Vest.Redis
 -- TODO: return IO Void. Requires observeFromIndex to be IO Void
 type family Consumers spec where
   Consumers () = ()
-  Consumers (Event_ _ _ _ _ _ a) = (a -> IO ()) -> IndexOf a -> IO (Async ())
+  Consumers (Event_ _ _ _ _ _ a) = IO (IndexOf a) -> (a -> IO ()) -> IO (Async ())
   Consumers (a
              :<|> b) = (Consumers a
                         :<|> Consumers b)
@@ -47,8 +48,9 @@ instance ( Serializable fmt (IndexOf a)
   consume t _ = do
     let lockId =
           Tagged $
-          symbolText (Proxy :: Proxy name) <> "/consumer/" <> namespace @t
-    return $ \callback consumeFrom ->
+          symbolText (Proxy :: Proxy (PrefixedEventName name)) <> "/consumer/" <>
+          namespace @t
+    return $ \getStartIndex callback ->
       async $
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do
@@ -60,4 +62,23 @@ instance ( Serializable fmt (IndexOf a)
           subscribe
             t
             (Proxy :: Proxy (EventVariable (Event_ fmt server rpcTransport varTransport name a)))
-        observeFromIndex stream materialize callback consumeFrom
+        getStartIndex >>= gapFilledStream stream materialize callback
+
+gapFilledStream ::
+     (Indexable a)
+  => Stream a
+  -> (IndexOf a -> IO a)
+  -> (a -> IO ())
+  -> IndexOf a
+  -> IO ()
+gapFilledStream stream materializer f startIndex = do
+  let process a startIdx =
+        if startIdx < index a
+          then do
+            a' <- materializer startIdx
+            f a'
+            process a $ succ startIdx
+          else do
+            f a
+            return $ succ $ index a
+  void $ Stream.foldrM process startIndex stream
