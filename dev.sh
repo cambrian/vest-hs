@@ -14,6 +14,7 @@ rm -f rabbit.log
 # Enable recent history for RabbitMQ.
 /usr/local/sbin/rabbitmq-plugins enable rabbitmq_recent_history_exchange
 
+# TODO: Figure out how compile/re-run tests more selectively.
 stack test --fast --file-watch --no-rerun-tests
 
 # Append this for hspec only:
