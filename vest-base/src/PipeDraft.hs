@@ -32,9 +32,9 @@ fanout readEnd consumersVar = do
 -- | Creates a new pipe consisting of (push, close, pipe).
 -- Values pushed to the pipe will remain in the pipe until at least one consumer is bound to the
 -- pipe. When multiple consumers are bound, pushed values will fan out to all consumers.
-newPipe :: Buffer a -> IO (a -> IO (), IO (), Pipe a)
-newPipe bufferType = do
-  (writeEnd, readEnd, close) <- spawn' bufferType
+newPipe :: IO (a -> IO (), IO (), Pipe a)
+newPipe = do
+  (writeEnd, readEnd, close) <- spawn' unbounded
   consumers <- newTVarIO []
   async $ fanout readEnd consumers
   return (void . atomically . send writeEnd, atomically close, Pipe consumers)

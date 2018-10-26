@@ -32,7 +32,7 @@ toListAsync pipe =
 pipeTest :: TestTree
 pipeTest =
   testCase "pipeTest" "test/PipeDraft/pipe-test.gold" $ do
-    (push, close, startPipe) <- newPipe @Int unbounded
+    (push, close, startPipe) <- newPipe @Int
     startList <- toListAsync startPipe
     timesTwo <- mapPipe (return . (* 2)) startPipe
     timesTwoList <- toListAsync timesTwo
