@@ -7,20 +7,13 @@ import AccessControl.Internal as AccessControl
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
-import qualified GHC.Base
 import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
 
-data RedisConfig = RedisConfig
-  { host :: GHC.Base.String
-  , port :: Int16
-  , auth :: Maybe ByteString
-  } deriving (Generic, FromJSON)
-
 data Config = Config
   { amqpConfig :: Amqp.Config
-  , redisConfig :: RedisConfig
+  , redisConfig :: RedisJsonConfig
   } deriving (Generic, FromJSON)
 
 data Args = Args
@@ -82,14 +75,7 @@ instance Service T where
     (pushTokenTime, _, minTokenTimes, readMinTokenTime) <- pushStream
     let bumpMinTokenTime = now >>= pushTokenTime
     bumpMinTokenTime
-    -- If we could somehow derive Read for ConnectInfo, we could use that directly as the Redis
-    -- config type that gets read. Alas...
-    let redisConfig_ =
-          defaultRedisConfig
-            { connectHost = host redisConfig
-            , connectPort = toPortId $ port redisConfig
-            , connectAuth = auth redisConfig
-            }
+    let redisConfig_ = toRedisConfig redisConfig
     with2 redisConfig_ amqpConfig $ \(redis, amqp) ->
       f $
       T

@@ -1,6 +1,6 @@
 module Db
   ( module Reexports
-  , toConfigUnsafe
+  , toConfig
   , JsonConfig(..)
   ) where
 
@@ -11,6 +11,7 @@ import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
+import qualified GHC.Base
 import qualified Money
 import Vest
 
@@ -51,12 +52,19 @@ instance Resource Connection where
   cleanup = close
 
 data JsonConfig = JsonConfig
-  { connectHost :: Text
+  { connectHost :: GHC.Base.String
   , connectPort :: Word16
-  , connectUser :: Text
-  , connectPassword :: Text
-  , connectDatabase :: Text
+  , connectUser :: GHC.Base.String
+  , connectPassword :: GHC.Base.String
+  , connectDatabase :: GHC.Base.String
   } deriving (Generic, FromJSON, Show)
 
-toConfigUnsafe :: JsonConfig -> IO Postgres.ConnectInfo
-toConfigUnsafe = deserializeUnsafe @'Haskell . serialize @'Haskell
+toConfig :: JsonConfig -> Postgres.ConnectInfo
+toConfig JsonConfig { connectHost
+                    , connectPort
+                    , connectUser
+                    , connectPassword
+                    , connectDatabase
+                    } =
+  Postgres.ConnectInfo
+    {connectHost, connectPort, connectUser, connectPassword, connectDatabase}

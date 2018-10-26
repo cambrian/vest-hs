@@ -38,6 +38,7 @@ pipeTest =
     timesTwoList <- toListAsync timesTwo
     timesTwoNegative <- mapPipe (return . (-) 0) timesTwo
     timesTwoNegativeList <- toListAsync timesTwoNegative
+    threadDelay (ms 30)
     mapM_ push [1, 2, 3]
     threadDelay (ms 30)
     startListLateBind <- toListAsync startPipe

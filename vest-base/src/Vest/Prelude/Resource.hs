@@ -48,4 +48,15 @@ with3 ::
   -> ((a, b, c) -> IO t)
   -> IO t
 with3 ra rb rc f = with ra (\a -> with rb (\b -> with rc (\c -> f (a, b, c))))
+
+with4 ::
+     (Resource a, Resource b, Resource c, Resource d)
+  => ResourceConfig a
+  -> ResourceConfig b
+  -> ResourceConfig c
+  -> ResourceConfig d
+  -> ((a, b, c, d) -> IO t)
+  -> IO t
+with4 ra rb rc rd f =
+  with ra (\a -> with rb (\b -> with rc (\c -> with rd (\d -> f (a, b, c, d)))))
 -- ^ TODO: If you know a more generalized way to make these...

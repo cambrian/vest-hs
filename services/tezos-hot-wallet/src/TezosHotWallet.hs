@@ -1,12 +1,13 @@
-module TezosDelegationCore
-  ( module TezosDelegationCore
+module TezosHotWallet
+  ( module TezosHotWallet
   ) where
 
--- import TezosDelegationCore.Api as TezosDelegationCore
+-- import TezosHotWallet.Api as TezosHotWallet
 import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
 import qualified Db
-import TezosDelegationCore.Internal as TezosDelegationCore
+import qualified Http
+import TezosHotWallet.Internal as TezosHotWallet
 import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
@@ -15,6 +16,7 @@ data Config = Config
   { amqpConfig :: Amqp.Config
   , dbConfig :: Db.JsonConfig
   , redisConfig :: RedisJsonConfig
+  , tezosConfig :: Http.Config
   } deriving (Generic, FromJSON)
 
 data Args = Args
@@ -43,9 +45,9 @@ defaultArgs_ =
         CmdArgs.name "k" &=
         typFile
     } &=
-  help "Payout and refund server for the delegation marketplace." &=
-  summary "tezos-delegation-core v0.1.0" &=
-  program "tezos-delegation-core"
+  help "Server to transact Tezos on behalf of Vest." &=
+  summary "tezos-hot-wallet v0.1.0" &=
+  program "tezos-hot-wallet"
 
 type Api = ()
 
@@ -59,17 +61,19 @@ instance Service T where
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
-    Config {amqpConfig, dbConfig, redisConfig} <-
+    Config {amqpConfig, dbConfig, redisConfig, tezosConfig} <-
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
     let dbConfig_ = Db.toConfig dbConfig
     let redisConfig_ = toRedisConfig redisConfig
-    with3
+    with4
       dbConfig_
       amqpConfig
       redisConfig_
-      (\(db, amqp, redis) ->
+      tezosConfig
+      (\(db, amqp, redis, tezos) ->
          with
            AccessControlClient.Config {accessControlPublicKey, seed, amqp}
-           (\accessControlClient -> f $ T {db, amqp, redis, accessControlClient}))
+           (\accessControlClient ->
+              f $ T {db, amqp, redis, tezos, accessControlClient}))

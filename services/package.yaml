@@ -86,7 +86,9 @@ library:
   source-dirs:
   - access-control/src
   - dummy-manager/src
+  - tezos-chain-watcher/src
   - tezos-delegation-core/src
+  - tezos-hot-wallet/src
 
 executables:
   access-control:
@@ -99,9 +101,19 @@ executables:
     source-dirs:          dummy-manager/bin
     dependencies:
     - services
+  tezos-chain-watcher:
+    main:                 Main.hs
+    source-dirs:          tezos-chain-watcher/bin
+    dependencies:
+    - services
   tezos-delegation-core:
     main:                 Main.hs
     source-dirs:          tezos-delegation-core/bin
+    dependencies:
+    - services
+  tezos-hot-wallet:
+    main:                 Main.hs
+    source-dirs:          tezos-hot-wallet/bin
     dependencies:
     - services
 
@@ -126,9 +138,29 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
+  tezos-chain-watcher-test:
+    main:                       Spec.hs
+    source-dirs:                tezos-chain-watcher/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fprint-potential-instances
+    dependencies:
+    - services
   tezos-delegation-core-test:
     main:                       Spec.hs
     source-dirs:                tezos-delegation-core/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fprint-potential-instances
+    dependencies:
+    - services
+  tezos-hot-wallet-test:
+    main:                       Spec.hs
+    source-dirs:                tezos-hot-wallet/test
     ghc-options:
     - -threaded
     - -rtsopts
