@@ -13,8 +13,8 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { amqpConfig :: Amqp.Config
-  , dbConfig :: Db.JsonConfig
+  { dbConfig :: Db.JsonConfig
+  , amqpConfig :: Amqp.Config
   , redisConfig :: RedisJsonConfig
   , tezosConfig :: Http.Config
   } deriving (Generic, FromJSON)
@@ -61,7 +61,7 @@ instance Service T where
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
-    Config {amqpConfig, dbConfig, redisConfig, tezosConfig} <-
+    Config {dbConfig, amqpConfig, redisConfig, tezosConfig} <-
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile

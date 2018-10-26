@@ -13,7 +13,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Args = Args
-  { port :: Int16
+  { port :: Word16
   } deriving (Eq, Show, Read, Generic, Data)
 
 defaultArgs_ :: Args

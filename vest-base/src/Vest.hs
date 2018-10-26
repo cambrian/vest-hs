@@ -1,4 +1,4 @@
--- | Module for all standard unqualified imports
+-- | Module for all standard unqualified imports.
 module Vest
   ( module Reexports
   ) where

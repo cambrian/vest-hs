@@ -41,17 +41,17 @@ $(deriveTypeScript defaultOptions ''ResponseMessage)
 
 data ServerInfo = ServerInfo
   { uri :: Text' "Uri"
-  , port :: Int16' "Port"
+  , port :: Word16' "Port"
   , path :: Text' "Path"
-  }
+  } deriving (Generic, FromJSON)
 
 data Config = Config
-  { servePort :: Int16' "Port"
+  { servePort :: Word16' "Port"
   , pingInterval :: Int
   , servers :: [(Text' "Server", ServerInfo)]
-  }
+  } deriving (Generic, FromJSON)
 
-localConfigOn :: Int16 -> Config
+localConfigOn :: Word16 -> Config
 localConfigOn port =
   Config {servePort = Tagged port, pingInterval = 30, servers = []}
 

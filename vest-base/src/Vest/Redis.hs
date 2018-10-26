@@ -35,7 +35,7 @@ instance Resource Connection where
 
 data RedisJsonConfig = RedisJsonConfig
   { host :: GHC.Base.String
-  , port :: Int16
+  , port :: Word16
   , auth :: Maybe ByteString
   } deriving (Generic, FromJSON)
 

@@ -70,7 +70,7 @@ import System.Random as Vest.Prelude.Core
 
 type Int' t = Tagged t Int
 
-type Int16' t = Tagged t Int16
+type Word16' t = Tagged t Word16
 
 type Int64' t = Tagged t Int64
 

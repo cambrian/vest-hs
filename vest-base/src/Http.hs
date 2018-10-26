@@ -25,14 +25,14 @@ data SchemeType
 data Config = Config
   { schemeType :: SchemeType
   , host :: Text' "Host"
-  , port :: Int16' "Port"
+  , port :: Word16' "Port"
   , path :: Text' "Path"
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
 data T = T
   { schemeType :: SchemeType
   , host :: Text' "Host"
-  , port :: Int16' "Port"
+  , port :: Word16' "Port"
   , path :: Text' "Path"
   , manager :: Manager
   }
