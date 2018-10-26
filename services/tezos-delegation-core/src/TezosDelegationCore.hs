@@ -2,7 +2,7 @@ module TezosDelegationCore
   ( module TezosDelegationCore
   ) where
 
--- import TezosClient.Api as TezosClient
+-- import TezosDelegationCore.Api as TezosDelegationCore
 import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
 import qualified Db
