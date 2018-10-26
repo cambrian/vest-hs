@@ -24,9 +24,9 @@ data Config = Config
   } deriving (Generic, FromJSON)
 
 data Args = Args
-  { subjectsFile :: FilePath
+  { configFile :: FilePath
+  , subjectsFile :: FilePath
   , seedFile :: FilePath
-  , configFile :: FilePath
   } deriving (Data)
 
 defaultArgs_ :: Args
@@ -47,7 +47,7 @@ defaultArgs_ =
         CmdArgs.name "d" &=
         typFile
     } &=
-  help "Our internal access control server." &=
+  help "Internal access control server." &=
   summary "access-control v0.1.0" &=
   program "access-control"
 
@@ -74,7 +74,7 @@ instance Service T where
   type VariableSpec T = TokenVersionVariable
   type EventSpec T = ()
   defaultArgs = defaultArgs_
-  init Args {subjectsFile, seedFile, configFile} f = do
+  init Args {configFile, subjectsFile, seedFile} f = do
     Config {amqpConfig, redisConfig} <- Yaml.decodeFileThrow configFile
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
@@ -90,16 +90,15 @@ instance Service T where
             , connectPort = toPortId $ port redisConfig
             , connectAuth = auth redisConfig
             }
-    with redisConfig_ $ \redis ->
-      with amqpConfig $ \amqp ->
-        f $
-        T
-          { subjects
-          , amqp
-          , redis
-          , publicKey
-          , secretKey
-          , readMinTokenTime
-          , minTokenTimes
-          , bumpMinTokenTime
-          }
+    with2 redisConfig_ amqpConfig $ \(redis, amqp) ->
+      f $
+      T
+        { subjects
+        , amqp
+        , redis
+        , publicKey
+        , secretKey
+        , readMinTokenTime
+        , minTokenTimes
+        , bumpMinTokenTime
+        }

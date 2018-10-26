@@ -86,10 +86,7 @@ library:
   source-dirs:
   - access-control/src
   - dummy-manager/src
-  # - fiat-payment-server/src
-  # - tezos-client/src
-  # - tezos-delegation-core/src
-  # - tezos-dispatcher/src
+  - tezos-delegation-core/src
 
 executables:
   access-control:
@@ -102,26 +99,11 @@ executables:
     source-dirs:          dummy-manager/bin
     dependencies:
     - services
-  # fiat-payment-server:
-  #   main:                 Main.hs
-  #   source-dirs:          fiat-payment-server/bin
-  #   dependencies:
-  #   - services
-  # tezos-client:
-  #   main:                 Main.hs
-  #   source-dirs:          tezos-client/bin
-  #   dependencies:
-  #   - services
-  # tezos-delegation-core:
-  #   main:                 Main.hs
-  #   source-dirs:          tezos-delegation-core/bin
-  #   dependencies:
-  #   - services
-  # tezos-dispatcher:
-  #   main:                 Main.hs
-  #   source-dirs:          tezos-dispatcher/bin
-  #   dependencies:
-  #   - services
+  tezos-delegation-core:
+    main:                 Main.hs
+    source-dirs:          tezos-delegation-core/bin
+    dependencies:
+    - services
 
 tests:
   access-control-test:
@@ -144,43 +126,13 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  # fiat-payment-server-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                fiat-payment-server/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
-  # tezos-client-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                tezos-client/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
-  # tezos-delegation-core-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                tezos-delegation-core/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
-  # tezos-dispatcher-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                tezos-dispatcher/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
+  tezos-delegation-core-test:
+    main:                       Spec.hs
+    source-dirs:                tezos-delegation-core/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fprint-potential-instances
+    dependencies:
+    - services

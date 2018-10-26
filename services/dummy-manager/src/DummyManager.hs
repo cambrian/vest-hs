@@ -24,7 +24,7 @@ defaultArgs_ =
         CmdArgs.name "p" &=
         typ "PORT"
     } &=
-  help "External account manager for Vest derivatives (dummy)." &=
+  help "Dummy manager service." &=
   summary "dummy-manager v0.1.0" &=
   program "dummy-manager"
 

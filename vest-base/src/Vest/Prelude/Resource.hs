@@ -31,3 +31,21 @@ class Resource a where
          (nominalDiffTimeFromTime idleTime)
          (fromIntegral numResources))
       destroyAllResources
+
+with2 ::
+     (Resource a, Resource b)
+  => ResourceConfig a
+  -> ResourceConfig b
+  -> ((a, b) -> IO t)
+  -> IO t
+with2 ra rb f = with ra (\a -> with rb (\b -> f (a, b)))
+
+with3 ::
+     (Resource a, Resource b, Resource c)
+  => ResourceConfig a
+  -> ResourceConfig b
+  -> ResourceConfig c
+  -> ((a, b, c) -> IO t)
+  -> IO t
+with3 ra rb rc f = with ra (\a -> with rb (\b -> with rc (\c -> f (a, b, c))))
+-- ^ TODO: If you know a more generalized way to make these...

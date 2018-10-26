@@ -1,10 +1,13 @@
 module Db
   ( module Reexports
+  , toConfigUnsafe
+  , JsonConfig(..)
   ) where
 
 import Database.Beam as Reexports hiding (insert)
 import Database.Beam.Backend.SQL
 import Database.Beam.Postgres as Reexports
+import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
@@ -41,3 +44,19 @@ instance (Money.GoodScale scale) => FromField (Money.Discrete' a scale) where
 
 instance (Money.GoodScale scale) =>
          FromBackendRow Postgres (Money.Discrete' a scale)
+
+instance Resource Connection where
+  type ResourceConfig Connection = Postgres.ConnectInfo
+  make = connect
+  cleanup = close
+
+data JsonConfig = JsonConfig
+  { connectHost :: Text
+  , connectPort :: Word16
+  , connectUser :: Text
+  , connectPassword :: Text
+  , connectDatabase :: Text
+  } deriving (Generic, FromJSON, Show)
+
+toConfigUnsafe :: JsonConfig -> IO Postgres.ConnectInfo
+toConfigUnsafe = deserializeUnsafe @'Haskell . serialize @'Haskell
