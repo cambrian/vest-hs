@@ -18,8 +18,6 @@ import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
 import Vest
 
-type HashTable k v = HashTable.BasicHashTable k v
-
 -- WebSockets don't exactly fit into the Vest.Bridge model, since WebSocket connections are per
 -- client/server and not via a messaging service. That said, we provide a WebSocket transport so
 -- that components can serve public WebSocket endpoints to e.g. browsers.

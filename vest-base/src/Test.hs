@@ -32,7 +32,7 @@ type TestService a = (Async' "ServiceThread" Void, a)
 data TestServiceConfig a = TestServiceConfig
   { testServiceArgs :: ServiceArgs a
   , testServiceHandlers :: Handlers (RpcSpec a)
-  , testServiceVariables :: a -> IO (Variables (VariableSpec a))
+  , testServiceValues :: a -> IO (Values (ValueSpec a))
   , testServiceEvents :: a -> IO (Producers (EventSpec a))
   }
 
@@ -40,7 +40,7 @@ instance Service a => Resource (TestService a) where
   type ResourceConfig (TestService a) = TestServiceConfig a
   make TestServiceConfig { testServiceArgs = args
                          , testServiceHandlers = handlers
-                         , testServiceVariables = vars
+                         , testServiceValues = vars
                          , testServiceEvents = events
                          } = do
     serviceVar <- newEmptyTMVarIO

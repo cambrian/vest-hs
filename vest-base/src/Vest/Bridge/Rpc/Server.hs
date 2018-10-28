@@ -5,7 +5,6 @@ module Vest.Bridge.Rpc.Server
   , serve
   ) where
 
-import qualified Stream
 import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
 import Vest.Prelude
@@ -27,9 +26,9 @@ type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 type family Handlers spec where
   Handlers () = ()
   Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
-  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream res)
+  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream QueueBuffer res)
   Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream res)
+  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream QueueBuffer res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -57,12 +56,15 @@ directSender :: (res -> IO ()) -> IO res -> IO ()
 directSender send = (>>= send)
 
 streamingSender ::
-     Time Second -> (StreamingResponse res -> IO ()) -> IO (Stream res) -> IO ()
+     Time Second
+  -> (StreamingResponse res -> IO ())
+  -> IO (Stream QueueBuffer res)
+  -> IO ()
 streamingSender timeout send xs = do
   send Heartbeat
   (Tagged postponeHeartbeat, Tagged cancelHeartbeats) <-
     intervalRenewable (timeoutsPerHeartbeat *:* timeout) (send Heartbeat)
-  xs >>= Stream.mapM_ (\x -> postponeHeartbeat >> send (Result x))
+  xs >>= consumeStream (\x -> postponeHeartbeat >> send (Result x))
   cancelHeartbeats
   send EndOfResults
 

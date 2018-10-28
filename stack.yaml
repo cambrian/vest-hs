@@ -9,10 +9,12 @@ packages:
 extra-deps:
 - aeson-1.4.1.0
 - beam-postgres-0.3.2.2
+- contravariant-1.5
 - ede-0.2.9
 - req-1.2.1
 - safe-money-0.7
 - safe-money-aeson-0.1
+- stm-containers-1.1.0.2
 - streamly-0.5.1
 - text-format-0.3.2
 - text-replace-0.0.0.3
@@ -20,6 +22,12 @@ extra-deps:
 # Remove this when hindent > 5.2.7 is published to hackage (for configurable extensions).
 - github: commercialhaskell/hindent
   commit: ffe03701050d159387c06103ecaf8147716d5cb8
+# Not used directly but required by other packages here.
+- deferred-folds-0.9.9
+- focus-1.0.1.2
+- stm-hamt-1.2.0.2
+- primitive-0.6.4.0
+- primitive-extras-0.7.1
 
 flags:
   o-clock:

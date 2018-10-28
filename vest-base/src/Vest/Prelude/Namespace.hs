@@ -3,28 +3,13 @@ module Vest.Prelude.Namespace
   ) where
 
 import Data.List (span)
-import Data.Text (breakOn, stripPrefix)
-import Data.Typeable (tyConModule, typeRepTyCon)
-import Vest.Prelude.Core hiding (moduleName)
-import Vest.Prelude.Serialize
+import Vest.Prelude.Core
 
 -- TODO: doctests for pretty serialization roundtrip, isstring
 newtype Namespaced (ns :: k) a =
   Namespaced (Text' ns, a)
   deriving (Eq, Read, Show, Generic)
   deriving anyclass (Hashable, ToJSON, FromJSON)
-
-instance (Serializable 'Pretty a) =>
-         Serializable 'Pretty (Namespaced ns a) where
-  serialize (Namespaced (ns, a)) =
-    serialize @'Pretty ns <> "/" <> serialize @'Pretty a
-
-instance (Deserializable 'Pretty a) =>
-         Deserializable 'Pretty (Namespaced ns a) where
-  deserialize text = do
-    let (ns, slasha) = breakOn "/" text
-    a <- stripPrefix "/" slasha >>= deserialize @'Pretty
-    return $ Namespaced (Tagged ns, a)
 
 instance (IsString a) => IsString (Namespaced ns a) where
   fromString s =
@@ -43,8 +28,3 @@ class HasNamespace t where
   namespace' = Tagged $ namespace @t
   namespaced :: forall ns a. a -> Namespaced ns a
   namespaced a = Namespaced (namespace' @t @ns, a)
-
-moduleName ::
-     forall t. Typeable t
-  => Text
-moduleName = pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy t)

@@ -2,7 +2,6 @@ module Vest.Bridge.BridgeTest
   ( test_bridge
   ) where
 
-import qualified Stream
 import Test
 import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
@@ -27,8 +26,11 @@ instance HasRpcTransport Amqp.T T where
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket
 
-instance HasVariableTransport Amqp.T T where
-  variableTransport = amqp
+instance HasValueTransport Amqp.T T where
+  valueTransport = amqp
+
+instance HasEventTransport Amqp.T T where
+  eventTransport = amqp
 
 instance HasRedisConnection T where
   redisConnection = redis
@@ -81,9 +83,9 @@ withT f = do
 echoDirect :: T -> a -> IO a
 echoDirect _ = return
 
-echoStreaming :: T -> [a] -> IO (Stream a)
+echoStreaming :: T -> [a] -> IO (Stream QueueBuffer a)
 echoStreaming _ xs =
-  return $ Stream.fromList xs & Stream.mapM (<$ threadDelay (sec 0.01))
+  streamFromList xs >>= mapMStream (<$ threadDelay (sec 0.01))
 
 handlers :: Handlers (TestRpcApi Amqp.T)
 handlers =
@@ -100,35 +102,36 @@ withRpcClient _ f =
     serve t (Proxy :: Proxy (TestRpcApi transport)) handlers
     f $ makeClient t (Proxy :: Proxy spec)
 
-increment :: Stream Int
-increment =
-  let f s = do
-        threadDelay (sec 0.01)
-        return $
-          if s < 5
-            then Just (s, s + 1 :: Int)
-            else Nothing
-   in Stream.unfoldrM f 0
+makeIncrementValue :: IO (Stream ValueBuffer Int)
+makeIncrementValue = do
+  (pusher, stream) <- newStream
+  let loop stop n =
+        when (n < stop) $ do
+          pushStream pusher n
+          threadDelay (sec 0.01)
+          loop stop (n + 1)
+  async $ loop 5 0
+  return stream
 
-type IncrementVariable transport = Variable T transport "incrementValue" Int
+type IncrementValue transport = Value T transport "incrementValue" Int
 
--- type IncrementEventVariable transport
---    = Variable T transport "incrementEvent" ('Event Int)
-type TestVariableApi transport = IncrementVariable transport --  :<|> IncrementEventVariable transport
+-- type IncrementEventValue transport
+--    = Value T transport "incrementEvent" ('Event Int)
+type TestValueApi transport = IncrementValue transport --  :<|> IncrementEventValue transport
 
-streams :: Variables (TestVariableApi Amqp.T)
-streams = increment -- :<|> increment
+makeValues :: IO (Values (TestValueApi Amqp.T))
+makeValues = makeIncrementValue
 
 withSubscribed ::
-     forall transport spec a.
-     (HasVariableTransport transport T, Subscriber T spec)
+     forall transport spec a. (HasValueTransport transport T, Subscriber T spec)
   => Proxy spec
   -> (SubscriberBindings spec -> IO a)
   -> IO a
 withSubscribed _ f =
   withT $ \t -> do
     subscribed <- subscribe t (Proxy :: Proxy spec)
-    publish t (Proxy :: Proxy (TestVariableApi transport)) streams
+    values <- makeValues
+    publish t (Proxy :: Proxy (TestValueApi transport)) values
     f subscribed
 
 emptyRpcTest :: TestTree
@@ -138,9 +141,9 @@ emptyRpcTest =
     () <- return $ makeClient t (Proxy :: Proxy ())
     return ""
 
-emptyVariableTest :: TestTree
-emptyVariableTest =
-  testCase "Variable" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
+emptyValueTest :: TestTree
+emptyValueTest =
+  testCase "Value" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
     () <- subscribe t (Proxy :: Proxy ())
     publish t (Proxy :: Proxy ()) ()
     return ""
@@ -186,9 +189,8 @@ singleStreamingTest =
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport)) $ \call -> do
     result <- newTVarIO ""
     call [1, 2, 3] $ \results -> do
-      last1 <- Stream.toList results >>- last
-      last2 <- Stream.toList results >>- last
-      atomically $ writeTVar result (show (last1, last2))
+      results <- listFromStream results
+      atomically $ writeTVar result $ show results
     readTVarIO result
 
 multipleStreamingTest ::
@@ -204,29 +206,29 @@ multipleStreamingTest =
     echoInts (replicate 3 4) $ \resultInts1 ->
       echoInts (replicate 3 5) $ \resultInts2 ->
         echoTexts (replicate 3 "a") $ \resultTexts -> do
-          lastInt1 <- Stream.toList resultInts1 >>- last
-          lastInt2 <- Stream.toList resultInts2 >>- last
-          lastText <- Stream.toList resultTexts >>- last
+          lastInt1 <- last <$> listFromStream resultInts1
+          lastInt2 <- last <$> listFromStream resultInts2
+          lastText <- last <$> listFromStream resultTexts
           atomically $ writeTVar result (show (lastInt1, lastInt2, lastText))
     readTVarIO result
 
--- eventVariableTest ::
---      forall transport. HasVariableTransport transport T
+-- eventValueTest ::
+--      forall transport. HasValueTransport transport T
 --   => TestTree
--- eventVariableTest =
+-- eventValueTest =
 --   testCase "Event" "test/Vest/Bridge/pubsub-event.gold" $
---   withSubscribed @transport (Proxy :: Proxy (IncrementEventVariable transport)) $ \getEvents -> do
+--   withSubscribed @transport (Proxy :: Proxy (IncrementEventValue transport)) $ \getEvents -> do
 --     getEvents
 --     value <- atomically getValue
 --     return $ show value
-valueVariableTest ::
-     forall transport. HasVariableTransport transport T
+valueTest ::
+     forall transport. HasValueTransport transport T
   => TestTree
-valueVariableTest =
+valueTest =
   testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
-  withSubscribed @transport (Proxy :: Proxy (IncrementVariable transport)) $ \(_, peekValue) -> do
+  withSubscribed @transport (Proxy :: Proxy (IncrementValue transport)) $ \stream -> do
     threadDelay $ sec 0.1
-    value <- atomically peekValue
+    value <- readLatestValue stream
     return $ show value
 
 directTests ::
@@ -248,19 +250,19 @@ streamingTests =
     "Streaming RPC"
     [singleStreamingTest @transport, multipleStreamingTest @transport]
 
-variableTests ::
-     forall transport. HasVariableTransport transport T
+valueTests ::
+     forall transport. HasValueTransport transport T
   => TestTree
-variableTests = testGroup "Variable" [valueVariableTest @transport]
+valueTests = testGroup "Value" [valueTest @transport]
 
 test_bridge :: TestTree
 test_bridge =
   testGroup
     "Bridge"
-    [ testGroup "Empty API" [emptyRpcTest, emptyVariableTest]
+    [ testGroup "Empty API" [emptyRpcTest, emptyValueTest]
     , testGroup
         "Full Bridge API over AMQP Transport"
-        [directTests @Amqp.T, streamingTests @Amqp.T, variableTests @Amqp.T]
+        [directTests @Amqp.T, streamingTests @Amqp.T, valueTests @Amqp.T]
     , testGroup
         "WebSocket Transport"
         [directTests @WebSocket.T, streamingTests @WebSocket.T]

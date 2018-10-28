@@ -12,8 +12,6 @@ import qualified Network.AMQP.Types as AMQP.Types
 import qualified Network.HostName
 import Vest
 
-type HashTable k v = HashTable.BasicHashTable k v
-
 data RequestMessage = RequestMessage
   { id :: UUID' "Request"
   , responseQueue :: Text' "ResponseQueue"
@@ -178,8 +176,8 @@ instance RpcTransport T where
       (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
     return $ Tagged $ HashTable.delete responseHandlers id
 
-declareVariableExchange :: AMQP.Channel -> Text -> IO ()
-declareVariableExchange chan exchangeName =
+declareValueExchange :: AMQP.Channel -> ValueName -> IO ()
+declareValueExchange chan (Tagged exchangeName) =
   AMQP.declareExchange
     chan
     AMQP.newExchange
@@ -190,35 +188,61 @@ declareVariableExchange chan exchangeName =
           Map.fromList [("x-recent-history-length", AMQP.Types.FVInt32 1)]
       }
 
+declareEventExchange :: AMQP.Channel -> EventName -> IO ()
+declareEventExchange chan (Tagged exchangeName) =
+  AMQP.declareExchange
+    chan
+    AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
+
 unsubscribe :: Text' "SubscriberId" -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
 unsubscribe subscriberId (consumerChan, consumerTag) = do
   AMQP.cancelConsumer consumerChan consumerTag
   AMQP.deleteQueue consumerChan (untag subscriberId) & void
 
-instance VariableTransport T where
-  publishRaw :: T -> VariableName -> IO (Text' "a" -> IO ())
-  publishRaw T {publishChan} (Tagged exchangeName) = do
-    declareVariableExchange publishChan exchangeName
-    return $
-      void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
-  subscribeRaw :: T -> VariableName -> (Text' "a" -> IO ()) -> IO ()
-  subscribeRaw T {conn, subscribers} (Tagged exchangeName) push = do
-    consumerChan <- AMQP.openChannel conn
-    declareVariableExchange consumerChan exchangeName
-    queueName <- newQueueName
-    AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
-    AMQP.bindQueue consumerChan queueName exchangeName "" -- Routing key blank.
-    consumerTag <-
-      AMQP.consumeMsgs
-        consumerChan
-        queueName
-        AMQP.NoAck
-        (push . Tagged . fromAmqpMsg . fst)
-    let subscriberId = Tagged queueName
-    HashTable.insert subscribers subscriberId (consumerChan, consumerTag)
+publish_ :: T -> Text' t -> Text' "a" -> IO ()
+publish_ T {publishChan} (Tagged exchangeName) =
+  void . AMQP.publishMsg publishChan exchangeName "" . toAmqpMsg . untag
+
+subscribe_ :: T -> Text' t -> (Text' "a" -> IO ()) -> IO ()
+subscribe_ T {conn, subscribers} (Tagged exchangeName) push = do
+  consumerChan <- AMQP.openChannel conn
+  queueName <- newQueueName
+  AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
+  AMQP.bindQueue consumerChan queueName exchangeName "" -- Routing key blank.
+  consumerTag <-
+    AMQP.consumeMsgs
+      consumerChan
+      queueName
+      AMQP.NoAck
+      (push . Tagged . fromAmqpMsg . fst)
+  let subscriberId = Tagged queueName
+  HashTable.insert subscribers subscriberId (consumerChan, consumerTag)
+
+instance ValueTransport T where
+  publishValue :: T -> ValueName -> IO (Text' "a" -> IO ())
+  publishValue t valueName = do
+    declareValueExchange (publishChan t) valueName
+    return $ publish_ t valueName
+  subscribeValue :: T -> ValueName -> (Text' "a" -> IO ()) -> IO ()
+  subscribeValue t valueName f = do
+    declareValueExchange (publishChan t) valueName
+    subscribe_ t valueName f
+
+instance EventTransport T where
+  publishEvents :: T -> EventName -> IO (Text' "a" -> IO ())
+  publishEvents t eventName = do
+    declareEventExchange (publishChan t) eventName
+    return $ publish_ t eventName
+  subscribeEvents :: T -> EventName -> (Text' "a" -> IO ()) -> IO ()
+  subscribeEvents t eventName f = do
+    declareEventExchange (publishChan t) eventName
+    subscribe_ t eventName f
 
 instance HasRpcTransport T T where
   rpcTransport = identity
 
-instance HasVariableTransport T T where
-  variableTransport = identity
+instance HasValueTransport T T where
+  valueTransport = identity
+
+instance HasEventTransport T T where
+  eventTransport = identity

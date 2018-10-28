@@ -12,9 +12,10 @@ import Control.Exception.Safe as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
 import Control.Monad.Trans.Maybe as Vest.Prelude.Core
 import Data.Aeson.TypeScript.TH
-import Data.Aeson.Types
 import Data.HashMap.Strict as Vest.Prelude.Core (HashMap)
 import Data.HashSet as Vest.Prelude.Core (HashSet)
+import qualified Data.HashTable.IO as HashTable
+import Data.HashTable.IO as Vest.Prelude.Core (CuckooHashTable, LinearHashTable)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
 import Data.Proxy as Vest.Prelude.Core
 import Numeric.Natural as Vest.Prelude.Core
@@ -30,6 +31,7 @@ import Protolude as Vest.Prelude.Core hiding
   , handleJust
   , mask
   , mask_
+  , moduleName
   , onException
   , threadDelay
   , throwIO
@@ -40,9 +42,11 @@ import Protolude as Vest.Prelude.Core hiding
   , uninterruptibleMask
   , uninterruptibleMask_
   )
+import qualified TMap
 
 -- import qualified Control.Monad.Fail
 import Control.Monad.Fail as Vest.Prelude.Core
+import Control.Monad.ST as Vest.Prelude.Core
 import Control.Monad.State as Vest.Prelude.Core hiding (fail)
 import Data.Aeson as Vest.Prelude.Core
   ( FromJSON(..)
@@ -51,9 +55,10 @@ import Data.Aeson as Vest.Prelude.Core
   , ToJSONKey(..)
   )
 import Data.Aeson (withText)
-import Data.Aeson.Types (FromJSONKeyFunction(..), toJSONKeyText)
+import Data.Aeson.Types (FromJSONKeyFunction(..), defaultOptions, toJSONKeyText)
 import qualified Data.ByteString.Base64 as Base64
 import Data.Data as Vest.Prelude.Core (Data(..))
+import Data.STRef as Vest.Prelude.Core
 import Data.String as Vest.Prelude.Core (IsString(..))
 import Data.String.Conversions as Vest.Prelude.Core hiding
   ( LBS
@@ -65,6 +70,7 @@ import Data.String.Conversions as Vest.Prelude.Core hiding
 import Data.Tagged as Vest.Prelude.Core hiding (witness)
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
+import Data.Typeable (tyConModule, typeRepTyCon)
 import qualified Foreign.StablePtr as StablePtr
 import System.Random as Vest.Prelude.Core
 
@@ -88,6 +94,10 @@ async' :: IO a -> IO (Async' t a)
 async' x = Tagged <$> async x
 
 instance Hashable a => Hashable (Tagged s a)
+
+type HashTable k v = HashTable.BasicHashTable k v
+
+type TMap = TMap.TMap
 
 data BugException =
   BugException
@@ -153,3 +163,8 @@ class (Ord (IndexOf a), Enum (IndexOf a)) =>
   where
   type IndexOf a
   index :: a -> IndexOf a
+
+moduleName ::
+     forall t. Typeable t
+  => Text
+moduleName = pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy t)

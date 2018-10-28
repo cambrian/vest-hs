@@ -4,4 +4,4 @@ module Vest.Bridge
 
 import Vest.Bridge.Event as Reexports
 import Vest.Bridge.Rpc as Reexports
-import Vest.Bridge.Variable as Reexports
+import Vest.Bridge.Value as Reexports

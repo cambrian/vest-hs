@@ -5,7 +5,6 @@ module Vest.Bridge.Rpc.Client
   ) where
 
 import qualified Data.HashMap.Strict as HashMap
-import qualified Stream
 import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
 import Vest.Prelude
@@ -22,7 +21,7 @@ import Vest.Prelude
 type family ClientBindings spec where
   ClientBindings () = ()
   ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Direct res)) = req -> IO res
-  ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Streaming res)) = req -> (Stream res -> IO ()) -> IO ()
+  ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Streaming res)) = req -> (Stream QueueBuffer res -> IO ()) -> IO ()
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -107,15 +106,15 @@ callStreaming ::
      )
   => t
   -> req
-  -> (Stream res -> IO a)
+  -> (Stream QueueBuffer res -> IO a)
   -> IO a
 callStreaming t req f = do
   let timeout_ = natSeconds @timeout
       twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
       rawRoute = serialize' @'Pretty $ namespaced @server (Proxy :: Proxy route)
-  (push, close, results, _) <- pushStream
+  (resultPusher, results) <- newStream
   (renewHeartbeatTimer, heartbeatLostOrDone) <-
-    timeoutRenewable twoHeartbeats (Stream.mapM_ return results)
+    timeoutRenewable twoHeartbeats $ waitStream results
   gotFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
   (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
@@ -131,8 +130,8 @@ callStreaming t req f = do
           RpcResponse response ->
             case response of
               Heartbeat -> return ()
-              Result res -> push res
-              EndOfResults -> close
+              Result res -> pushStream_ resultPusher res
+              EndOfResults -> closeStream resultPusher
   Tagged doCleanup <-
     callRaw
       (rpcTransport @transport t)
@@ -142,13 +141,13 @@ callStreaming t req f = do
       handleResponse
   timeout timeout_ (takeMVar gotFirstResponse) >>= \case
     Left exn -> do
-      close
+      closeStream resultPusher
       doCleanup
       throw exn
     Right () ->
       void . async $ do
         heartbeatLostOrDone_ <- heartbeatLostOrDone
-        close
+        closeStream resultPusher
         doCleanup
         case heartbeatLostOrDone_ of
           Left (TimeoutException time) ->

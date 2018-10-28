@@ -3,18 +3,15 @@ module Vest.Bridge.Event.Consumer
   , Consumer(..)
   ) where
 
-import qualified Stream
 import Vest.Bridge.Event.Prelude
 import Vest.Bridge.Rpc
-import Vest.Bridge.Variable
 import Vest.DistributedLock
 import Vest.Prelude
 import Vest.Redis
 
--- TODO: return IO Void. Requires observeFromIndex to be IO Void
 type family Consumers spec where
   Consumers () = ()
-  Consumers (Event_ _ _ _ _ _ a) = IO (IndexOf a) -> (a -> IO ()) -> IO (Async ())
+  Consumers (Event_ _ _ _ _ a) = IO (IndexOf a) -> (Stream QueueBuffer a -> IO ()) -> IO (Async ())
   Consumers (a
              :<|> b) = (Consumers a
                         :<|> Consumers b)
@@ -38,47 +35,47 @@ instance ( Serializable fmt (IndexOf a)
          , Deserializable fmt a
          , HasNamespace server
          , HasNamespace t
-         , HasRpcTransport rpcTransport t
-         , HasVariableTransport varTransport t
+         , HasRpcTransport transport t
+         , HasEventTransport transport t
          , HasRedisConnection t
          , KnownEventName name
          , Indexable a
          ) =>
-         Consumer t (Event_ fmt server rpcTransport varTransport name a) where
+         Consumer t (Event_ fmt server transport name a) where
   consume t _ = do
-    let lockId =
-          Tagged $
-          symbolText (Proxy :: Proxy (PrefixedEventName name)) <> "/consumer/" <>
-          namespace @t
-    return $ \getStartIndex callback ->
+    let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
+        lockId = retag $ eventName <> "/consumer/" <> Tagged (namespace @t)
+    return $ \getStartIndex f ->
       async $
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do
+        (pusher, stream) <- newStream
         let materialize =
               makeClient
                 t
-                (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt server rpcTransport varTransport name a)))
-        (stream, _) <-
-          subscribe
-            t
-            (Proxy :: Proxy (EventVariable (Event_ fmt server rpcTransport varTransport name a)))
-        getStartIndex >>= gapFilledStream stream materialize callback
+                (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt server transport name a)))
+        subscribeEvents
+          (eventTransport @transport t)
+          eventName
+          (void <$> pushStream pusher <=< deserializeUnsafe' @fmt)
+        getStartIndex >>= gapFilledStream stream materialize >>= f
 
 gapFilledStream ::
-     (Indexable a)
-  => Stream a
+     Indexable a
+  => Stream QueueBuffer a
   -> (IndexOf a -> IO a)
-  -> (a -> IO ())
   -> IndexOf a
-  -> IO ()
-gapFilledStream stream materializer f startIndex = do
-  let process a startIdx =
-        if startIdx < index a
+  -> IO (Stream QueueBuffer a)
+gapFilledStream stream materializer startIndex = do
+  (StreamPusher push close, masterStream) <- newStream
+  let f idx a =
+        if idx < index a
           then do
-            a' <- materializer startIdx
-            f a'
-            process a $ succ startIdx
+            a' <- materializer idx
+            void $ push a'
+            f (succ idx) a
           else do
-            f a
+            void $ push a
             return $ succ $ index a
-  void $ Stream.foldrM process startIndex stream
+  void . async $ foldMStream f startIndex stream >> atomically close
+  return masterStream

@@ -1,15 +1,15 @@
-module Vest.Bridge.Variable.Subscriber
-  ( module Vest.Bridge.Variable.Subscriber
+module Vest.Bridge.Value.Subscriber
+  ( module Vest.Bridge.Value.Subscriber
   ) where
 
-import Vest.Bridge.Variable.Prelude
+import Vest.Bridge.Value.Prelude
 import Vest.Prelude
 
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Variable_ _ _ _ _ a) = (Stream a, STM a)
+  SubscriberBindings (Value_ _ _ _ _ a) = Stream ValueBuffer a
   -- ^ Returns (stream, read). Read blocks until the first value is received. Consumers of a
-  -- variable stream should not count on receiving every update.
+  -- value stream should not count on receiving every update.
   SubscriberBindings (a
                       :<|> b) = (SubscriberBindings a
                                  :<|> SubscriberBindings b)
@@ -29,15 +29,16 @@ instance (Subscriber t a, Subscriber t b) =>
     return $ aStreams :<|> bStreams
 
 instance ( HasNamespace service
-         , HasVariableTransport transport t
+         , HasValueTransport transport t
          , Deserializable fmt a
          , KnownSymbol name
+         , Eq a
          ) =>
-         Subscriber t (Variable_ fmt service transport name a) where
+         Subscriber t (Value_ fmt service transport name a) where
   subscribe t _ = do
-    (push, _, stream, read) <- pushStream
-    subscribeRaw
-      (variableTransport @transport t)
+    (pusher, stream) <- newStream @ValueBuffer
+    subscribeValue
+      (valueTransport @transport t)
       (serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name))
-      (push <=< deserializeUnsafe' @fmt)
-    return (stream, read)
+      (void <$> pushStream pusher <=< deserializeUnsafe' @fmt)
+    return stream
