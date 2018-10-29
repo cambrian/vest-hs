@@ -125,8 +125,7 @@ instance Eq a => Bufferable ValueBuffer a where
   isEmptyBuf = isEmptyTMVar . val
   bufHistory = fmap maybeToList . readTVar . latest
 
--- | Stream pusher type.
--- Also used internally to represent non-stream fanouts, like a tapStream.
+-- | Write end of a stream.
 data StreamPusher a = StreamPusher
   { pushSTM :: a -> STM Bool
   , closeSTM :: STM ()
@@ -147,8 +146,6 @@ instance Data.Semigroup.Semigroup (StreamPusher a) where
 instance Monoid (StreamPusher a) where
   mempty = StreamPusher (const $ return False) (return ())
 
--- | This instance is useful for creating new tagged address, similar to elm's
--- Signal.forwardTo. In fact elm's forwardTo is just 'flip contramap'
 instance Contravariant StreamPusher where
   contramap f (StreamPusher push close) = StreamPusher (push . f) close
 
@@ -171,7 +168,7 @@ instance Decidable StreamPusher where
            Right c -> pushSTM i2 c)
       (closeSTM i1 >> closeSTM i2)
 
--- | Stream reader type.
+-- | Read end of a stream.
 -- TODO: generalize to monad transformer?
 data Stream b a = Stream
   { buf :: b a -- exposed so you can implement specialized functions by buffer type

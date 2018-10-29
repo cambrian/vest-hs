@@ -11,14 +11,14 @@ import StmContainers.Map
 
 type TMap = Map
 
-foldlM' :: (accum -> (k, v) -> STM accum) -> accum -> TMap k v -> STM accum
-foldlM' f accum0 = UnfoldlM.foldlM' f accum0 . unfoldlM
+foldlM' :: ((k, v) -> accum -> STM accum) -> accum -> TMap k v -> STM accum
+foldlM' f accum0 = UnfoldlM.foldlM' (flip f) accum0 . unfoldlM
 
-foldl' :: (accum -> (k, v) -> accum) -> accum -> TMap k v -> STM accum
-foldl' f = foldlM' (\accum a -> return $ f accum a)
+foldl' :: ((k, v) -> accum -> accum) -> accum -> TMap k v -> STM accum
+foldl' f = foldlM' (\a accum -> return $ f a accum)
 
 toList :: TMap k v -> STM [(k, v)]
-toList = foldl' (flip (:)) []
+toList = foldl' (:) []
 
 values :: TMap k v -> STM [v]
 values t = fmap snd <$> toList t
