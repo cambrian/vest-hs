@@ -1,0 +1,30 @@
+{
+  "BeamTable": {
+    "prefix": "beamTable",
+    "body": [
+      "data ${1:Table}T f = ${1}",
+      "  { ${2:primaryKey} :: C f ${3:Type}",
+      "  , createdAt :: C f Timestamp",
+      "  } deriving (Generic, Beamable)",
+      "",
+      "type ${1} = ${1}T Identity",
+      "",
+      "deriving instance Eq ${1}",
+      "",
+      "deriving instance Read ${1}",
+      "",
+      "deriving instance Show ${1}",
+      "",
+      "instance Table ${1}T where",
+      "  data PrimaryKey ${1}T f = ${1}${2/(.*)/${1:/capitalize}/} (C f ${3}) deriving (Generic, Beamable)",
+      "  primaryKey ${1} {${2}} = ${1}${2/(.*)/${1:/capitalize}/} ${2}",
+      "",
+      "deriving instance Eq (PrimaryKey ${1}T Identity)",
+      "",
+      "deriving instance Read (PrimaryKey ${1}T Identity)",
+      "",
+      "deriving instance Show (PrimaryKey ${1}T Identity)"
+    ],
+    "description": "Beam Table"
+  }
+}
