@@ -219,21 +219,17 @@ subscribe_ T {conn, subscribers} (Tagged exchangeName) push = do
   HashTable.insert subscribers subscriberId (consumerChan, consumerTag)
 
 instance ValueTransport T where
-  publishValue :: T -> ValueName -> IO (Text' "a" -> IO ())
   publishValue t valueName = do
     declareValueExchange (publishChan t) valueName
     return $ publish_ t valueName
-  subscribeValue :: T -> ValueName -> (Text' "a" -> IO ()) -> IO ()
   subscribeValue t valueName f = do
     declareValueExchange (publishChan t) valueName
     subscribe_ t valueName f
 
 instance EventTransport T where
-  publishEvents :: T -> EventName -> IO (Text' "a" -> IO ())
   publishEvents t eventName = do
     declareEventExchange (publishChan t) eventName
     return $ publish_ t eventName
-  subscribeEvents :: T -> EventName -> (Text' "a" -> IO ()) -> IO ()
   subscribeEvents t eventName f = do
     declareEventExchange (publishChan t) eventName
     subscribe_ t eventName f

@@ -18,10 +18,10 @@ simpleConcurrentTest =
     (\connection -> do
        let lockId = "simpleConcurrent"
        result <- newTVarIO ""
-       -- Wait 30 ms then try to acquire lock.
+       -- Wait 50 ms then try to acquire lock.
        threadA <-
          async $ do
-           threadDelay (ms 30)
+           threadDelay (ms 50)
            with @DistributedLock (testLock connection lockId) $
              const $ atomically $ modifyTVar result (<> "A")
       -- Wait 0 ms, acquire lock, then sleep for 20 ms.

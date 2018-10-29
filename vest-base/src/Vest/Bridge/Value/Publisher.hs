@@ -9,13 +9,13 @@ import Vest.Redis
 
 type family ValueNames spec where
   ValueNames () = '[]
-  ValueNames (Value_ _ _ _ (name :: Symbol) _) = '[ name]
+  ValueNames (ValueTopic_ _ _ _ (name :: Symbol) _) = '[ name]
   ValueNames (a
               :<|> b) = ValueNames a :++ ValueNames b
 
 type family NubValueNames spec where
   NubValueNames () = '[]
-  NubValueNames (Value_ _ _ _ (name :: Symbol) _) = '[ name]
+  NubValueNames (ValueTopic_ _ _ _ (name :: Symbol) _) = '[ name]
   NubValueNames (a
                  :<|> b) = Nub (NubValueNames a :++ NubValueNames b)
 
@@ -23,13 +23,13 @@ type HasUniqueValueNames spec = ValueNames spec ~ NubValueNames spec
 
 type family Values spec where
   Values () = ()
-  Values (Value_ _ _ _ _ a) = Stream ValueBuffer a
+  Values (ValueTopic_ _ _ _ _ a) = Stream ValueBuffer a
   Values (a
           :<|> b) = (Values a
                      :<|> Values b)
   -- Would be better to declare like this, but type-level lists cannot be used as argument types:
   -- Values '[] = '[]
-  -- Values (Value_ _ _ _ _ a ': values) = ('[ Streamly.Serial a] :++ Values values)
+  -- Values (ValueTopic_ _ _ _ _ a ': values) = ('[ Streamly.Serial a] :++ Values values)
   -- Watch here: https://www.reddit.com/r/haskell/comments/9n0qan/typefamily_monoid/.
 
 class (HasNamespace t) =>
@@ -58,7 +58,7 @@ instance ( HasNamespace t
          , KnownSymbol name
          , Eq a
          ) =>
-         Publisher t (Value_ fmt t transport name a) where
+         Publisher t (ValueTopic_ fmt t transport name a) where
   publish t _ stream =
     void . async $ do
       let valueName = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy name)

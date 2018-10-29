@@ -21,7 +21,7 @@ import Vest.Prelude
 type family ClientBindings spec where
   ClientBindings () = ()
   ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Direct res)) = req -> IO res
-  ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Streaming res)) = req -> (Stream QueueBuffer res -> IO ()) -> IO ()
+  ClientBindings (Endpoint_ _ _ _ _ _ _ req ('Streaming res)) = req -> (Stream ValueBuffer res -> IO ()) -> IO ()
   ClientBindings (a
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
@@ -58,6 +58,7 @@ packRequest signer req = do
   headers <- atomically $ signRequest signer HashMap.empty reqText
   return (headers, reqText)
 
+-- TODO: refactor with ExceptT
 callDirect ::
      forall timeout fmt auth transport server route t req res.
      ( KnownNat timeout
@@ -103,10 +104,11 @@ callStreaming ::
      , HasAuthSigner auth t
      , HasRpcTransport transport t
      , KnownSymbol route
+     , Eq res
      )
   => t
   -> req
-  -> (Stream QueueBuffer res -> IO a)
+  -> (Stream ValueBuffer res -> IO a)
   -> IO a
 callStreaming t req f = do
   let timeout_ = natSeconds @timeout
@@ -130,7 +132,7 @@ callStreaming t req f = do
           RpcResponse response ->
             case response of
               Heartbeat -> return ()
-              Result res -> pushStream_ resultPusher res
+              Result res -> pushStream resultPusher res
               EndOfResults -> closeStream resultPusher
   Tagged doCleanup <-
     callRaw
@@ -147,7 +149,6 @@ callStreaming t req f = do
     Right () ->
       void . async $ do
         heartbeatLostOrDone_ <- heartbeatLostOrDone
-        closeStream resultPusher
         doCleanup
         case heartbeatLostOrDone_ of
           Left (TimeoutException time) ->
@@ -171,6 +172,7 @@ instance ( KnownNat timeout
          , HasNamespace server
          , HasRpcTransport transport t
          , KnownSymbol route
+         , Eq res
          ) =>
          Client t (Endpoint_ timeout fmt 'NoAuth server transport route req ('Streaming res)) where
   makeClient t _ = callStreaming @timeout @fmt @() @transport @server @route t
@@ -193,6 +195,7 @@ instance ( KnownNat timeout
          , HasAuthSigner auth t
          , HasRpcTransport transport t
          , KnownSymbol route
+         , Eq res
          ) =>
          Client t (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Streaming res)) where
   makeClient t _ = callStreaming @timeout @fmt @auth @transport @server @route t

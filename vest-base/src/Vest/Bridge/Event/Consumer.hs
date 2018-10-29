@@ -57,7 +57,7 @@ instance ( Serializable fmt (IndexOf a)
         subscribeEvents
           (eventTransport @transport t)
           eventName
-          (void <$> pushStream pusher <=< deserializeUnsafe' @fmt)
+          (pushStream pusher <=< deserializeUnsafe' @fmt)
         getStartIndex >>= gapFilledStream stream materialize >>= f
 
 gapFilledStream ::
@@ -67,15 +67,15 @@ gapFilledStream ::
   -> IndexOf a
   -> IO (Stream QueueBuffer a)
 gapFilledStream stream materializer startIndex = do
-  (StreamPusher push close, masterStream) <- newStream
-  let f idx a =
+  (pusher, masterStream) <- newStream
+  let f a idx =
         if idx < index a
           then do
             a' <- materializer idx
-            void $ push a'
-            f (succ idx) a
+            void $ pushStream pusher a'
+            f a $ succ idx
           else do
-            void $ push a
+            void $ pushStream pusher a
             return $ succ $ index a
-  void . async $ foldMStream f startIndex stream >> atomically close
+  void . async $ foldMStream f startIndex stream >> closeStream pusher
   return masterStream

@@ -4,6 +4,7 @@ module Vest.Redis
 
 import Database.Redis
 import Database.Redis as Vest.Redis (ConnectInfo(..))
+import qualified GHC.Base
 import qualified Network.Socket.Internal as Internal (PortNumber(..))
 import Vest.Prelude
 
@@ -31,3 +32,15 @@ instance Resource Connection where
   make = checkedConnect
   cleanup :: Connection -> IO ()
   cleanup = disconnect
+
+-- TODO: this is gross, pls rewrite
+data RedisJsonConfig = RedisJsonConfig
+  { host :: GHC.Base.String
+  , port :: Word16
+  , auth :: Maybe ByteString
+  } deriving (Generic, FromJSON)
+
+toRedisConfig :: RedisJsonConfig -> ConnectInfo
+toRedisConfig RedisJsonConfig {host, port, auth} =
+  defaultRedisConfig
+    {connectHost = host, connectPort = toPortId port, connectAuth = auth}

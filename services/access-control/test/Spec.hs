@@ -51,7 +51,7 @@ instance Service TestServer where
   type ServiceArgs TestServer = ()
   type RpcSpec TestServer = PermittedEndpoint
                             :<|> ForbiddenEndpoint
-  type VariableSpec TestServer = ()
+  type ValueSpec TestServer = ()
   type EventSpec TestServer = ()
   defaultArgs = ()
   init () f = do
@@ -77,7 +77,7 @@ instance AccessControl.Client.Has TestClient where
 instance Service TestClient where
   type ServiceArgs TestClient = ()
   type RpcSpec TestClient = ()
-  type VariableSpec TestClient = ()
+  type ValueSpec TestClient = ()
   type EventSpec TestClient = ()
   defaultArgs = ()
   init () f = do
@@ -134,7 +134,7 @@ accessControlServiceConfig =
           , AccessControl.seedFile = seedFile
           }
     , testServiceHandlers = AccessControl.handlers
-    , testServiceVariables = AccessControl.makeVariables
+    , testServiceValues = AccessControl.makeValues
     , testServiceEvents = const $ return ()
     }
 
@@ -146,7 +146,7 @@ testServerConfig =
   TestServiceConfig
     { testServiceArgs = ()
     , testServiceHandlers = handler :<|> handler
-    , testServiceVariables = const $ return ()
+    , testServiceValues = const $ return ()
     , testServiceEvents = const $ return ()
     }
 
@@ -155,7 +155,7 @@ testClientConfig =
   TestServiceConfig
     { testServiceArgs = ()
     , testServiceHandlers = ()
-    , testServiceVariables = const $ return ()
+    , testServiceValues = const $ return ()
     , testServiceEvents = const $ return ()
     }
 

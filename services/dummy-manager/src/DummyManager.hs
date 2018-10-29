@@ -7,13 +7,12 @@ module DummyManager
 import DummyManager.Api as DummyManager
 import qualified DummyManager.Auth as DummyAuth
 import DummyManager.Internal as DummyManager
-import qualified Stream
 import qualified Transport.WebSocket as WebSocket
 import Vest
 import qualified Vest as CmdArgs (name)
 
 data Args = Args
-  { port :: Int16
+  { port :: Word16
   } deriving (Eq, Show, Read, Generic, Data)
 
 defaultArgs_ :: Args
@@ -24,7 +23,7 @@ defaultArgs_ =
         CmdArgs.name "p" &=
         typ "PORT"
     } &=
-  help "External account manager for Vest derivatives (dummy)." &=
+  help "Dummy manager service." &=
   summary "dummy-manager v0.1.0" &=
   program "dummy-manager"
 
@@ -41,10 +40,10 @@ addInts _ AddIntsRequest {a, b} = do
   threadDelay (sec 0.25)
   return (a + b)
 
-echoThrice :: T -> Int -> IO (Stream Int)
+echoThrice :: T -> Int -> IO (Stream ValueBuffer Int)
 echoThrice _ x = do
   threadDelay (sec 0.25)
-  return . Stream.fromList . replicate 3 $ x
+  streamFromList $ replicate 3 x
 
 concatTextAuth ::
      T
@@ -54,8 +53,9 @@ concatTextAuth ::
 concatTextAuth _ _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
-echoThriceAuth :: T -> VerifierClaims DummyAuth.T -> Text -> IO (Stream Text)
-echoThriceAuth _ _ = return . Stream.fromList . replicate 3
+echoThriceAuth ::
+     T -> VerifierClaims DummyAuth.T -> Text -> IO (Stream ValueBuffer Text)
+echoThriceAuth _ _ = streamFromList . replicate 3
 
 handlers :: Handlers Api
 handlers =
@@ -65,7 +65,7 @@ handlers =
 instance Service T where
   type ServiceArgs T = Args
   type RpcSpec T = Api
-  type VariableSpec T = ()
+  type ValueSpec T = ()
   type EventSpec T = ()
   defaultArgs = defaultArgs_
   init Args {port} f =

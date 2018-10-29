@@ -23,6 +23,6 @@ class (ValueTransport transport) =>
   where
   valueTransport :: t -> transport
 
-data Value_ (fmt :: SerializationFormat) service transport (name :: k) a
+data ValueTopic_ (fmt :: SerializationFormat) service transport (name :: k) a
 
-type Value = Value_ 'Haskell
+type ValueTopic = ValueTopic_ 'Haskell

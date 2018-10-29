@@ -6,7 +6,6 @@ module AccessControl.Client
 import qualified AccessControl
 import qualified AccessControl.Auth as Auth
 import qualified AccessControl.Permission as Permission
-import qualified Stream
 import qualified Transport.Amqp as Amqp
 import Vest
 
@@ -18,7 +17,6 @@ data T = T
   , secretKey :: SecretKey
   , readToken :: STM AccessControl.SignedToken
   , readMinTokenTime :: STM Timestamp
-  , tokenFetcherThread :: Async ()
   }
 
 data Config = Config
@@ -33,26 +31,20 @@ instance Resource T where
     let (publicKey, secretKey) = seedKeyPair seed
         getToken =
           makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
-    (minTokenTimeUpdates, readMinTokenTime) <-
-      subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionVariable)
-    tokenVar <- getToken >>= newTVarIO
-    tokenFetcherThread <-
-      async $
-      Stream.mapM_
-        (\_ -> do
-           token <- getToken
-           atomically $ writeTVar tokenVar token)
-        minTokenTimeUpdates
+    minTokenTimes <-
+      subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionValue)
+    tokens <- mapMStream (const getToken) minTokenTimes
+    void $ readLatestValue tokens
+    -- ^ Wait for first token to be received. For some reason this is necessary. Is that a bug?
     return $
       T
         { accessControlPublicKey
         , publicKey
         , secretKey
-        , readToken = readTVar tokenVar
-        , readMinTokenTime
-        , tokenFetcherThread
+        , readToken = readLatestValueSTM tokens
+        , readMinTokenTime = readLatestValueSTM minTokenTimes
         }
-  cleanup T {tokenFetcherThread} = cancel tokenFetcherThread
+  cleanup _ = return ()
 
 -- These instances overlap with the definitions below when t == T.
 -- TODO: There's probably a way to remove the overlap?

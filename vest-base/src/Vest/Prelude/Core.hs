@@ -76,13 +76,15 @@ import System.Random as Vest.Prelude.Core
 
 type Int' t = Tagged t Int
 
-type Int16' t = Tagged t Int16
+type Word16' t = Tagged t Word16
 
 type Int64' t = Tagged t Int64
 
 type Integer' t = Tagged t Integer
 
 type Text' t = Tagged t Text
+
+type ByteString' t = Tagged t ByteString
 
 type IO' t a = Tagged t (IO a)
 
@@ -112,6 +114,10 @@ instance ToJSON ByteString where
 instance FromJSON ByteString where
   parseJSON =
     withText "ByteString" $ either fail pure . Base64.decode . encodeUtf8
+
+instance TypeScript ByteString where
+  getTypeScriptType _ = getTypeScriptType (Proxy :: Proxy Text)
+  getTypeScriptDeclarations _ = getTypeScriptDeclarations (Proxy :: Proxy Text)
 
 instance ToJSONKey ByteString where
   toJSONKey = toJSONKeyText (decodeLatin1 . Base64.encode)

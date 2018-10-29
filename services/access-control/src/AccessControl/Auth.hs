@@ -66,5 +66,5 @@ instance (Permission.Is p) => Auth (T p) where
 -- Could also add a signer instance, which would require creating an access token for
 -- AccessControl.T
 instance Permission.Is p => HasAuthVerifier (T p) AccessControl.T where
-  authVerifier AccessControl.T {publicKey, readMinTokenTime} =
-    Verifier publicKey readMinTokenTime
+  authVerifier AccessControl.T {publicKey, minTokenTime} =
+    Verifier publicKey (readLatestValueSTM minTokenTime)

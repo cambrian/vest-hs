@@ -12,9 +12,9 @@ description:        See README.md.
 
 dependencies:
 - aeson                 >= 1.4
+- aeson-typescript      >= 0.1
 - base                  >= 4.10
 - bytestring            >= 0.10
-- streamly              >= 0.5
 - unordered-containers  >= 0.2
 - vest-base
 

@@ -7,7 +7,7 @@ import Vest.Prelude
 
 type family SubscriberBindings spec where
   SubscriberBindings () = ()
-  SubscriberBindings (Value_ _ _ _ _ a) = Stream ValueBuffer a
+  SubscriberBindings (ValueTopic_ _ _ _ _ a) = Stream ValueBuffer a
   -- ^ Returns (stream, read). Read blocks until the first value is received. Consumers of a
   -- value stream should not count on receiving every update.
   SubscriberBindings (a
@@ -34,11 +34,11 @@ instance ( HasNamespace service
          , KnownSymbol name
          , Eq a
          ) =>
-         Subscriber t (Value_ fmt service transport name a) where
+         Subscriber t (ValueTopic_ fmt service transport name a) where
   subscribe t _ = do
     (pusher, stream) <- newStream @ValueBuffer
     subscribeValue
       (valueTransport @transport t)
       (serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name))
-      (void <$> pushStream pusher <=< deserializeUnsafe' @fmt)
+      (pushStream pusher <=< deserializeUnsafe' @fmt)
     return stream

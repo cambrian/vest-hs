@@ -14,10 +14,10 @@ dependencies:
 - aeson-typescript      >= 0.1
 - base                  >= 4.10
 - bytestring            >= 0.10
-- streamly              >= 0.5
+- tezos
 - unordered-containers  >= 0.2
-- yaml                  >= 0.10
 - vest-base
+- yaml                  >= 0.10
 
 # The default-extensions and ghc-options were inspired by this post (and modified for convenience):
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/
@@ -85,10 +85,10 @@ library:
   source-dirs:
   - access-control/src
   - dummy-manager/src
-  # - fiat-payment-server/src
-  - tezos-client/src
-  # - tezos-delegation-core/src
-  # - tezos-dispatcher/src
+  - tezos-chain-watcher/src
+  - tezos-delegation-core/src
+  - tezos-hot-wallet/src
+  - tezos-stats-manager/src
 
 executables:
   access-control:
@@ -101,26 +101,26 @@ executables:
     source-dirs:          dummy-manager/bin
     dependencies:
     - services
-  # fiat-payment-server:
-  #   main:                 Main.hs
-  #   source-dirs:          fiat-payment-server/bin
-  #   dependencies:
-  #   - services
-  tezos-client:
+  tezos-chain-watcher:
     main:                 Main.hs
-    source-dirs:          tezos-client/bin
+    source-dirs:          tezos-chain-watcher/bin
     dependencies:
     - services
-  # tezos-delegation-core:
-  #   main:                 Main.hs
-  #   source-dirs:          tezos-delegation-core/bin
-  #   dependencies:
-  #   - services
-  # tezos-dispatcher:
-  #   main:                 Main.hs
-  #   source-dirs:          tezos-dispatcher/bin
-  #   dependencies:
-  #   - services
+  tezos-delegation-core:
+    main:                 Main.hs
+    source-dirs:          tezos-delegation-core/bin
+    dependencies:
+    - services
+  tezos-hot-wallet:
+    main:                 Main.hs
+    source-dirs:          tezos-hot-wallet/bin
+    dependencies:
+    - services
+  tezos-stats-manager:
+    main:                 Main.hs
+    source-dirs:          tezos-stats-manager/bin
+    dependencies:
+    - services
 
 tests:
   access-control-test:
@@ -143,19 +143,9 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  # fiat-payment-server-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                fiat-payment-server/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
-  tezos-client-test:
+  tezos-chain-watcher-test:
     main:                       Spec.hs
-    source-dirs:                tezos-client/test
+    source-dirs:                tezos-chain-watcher/test
     ghc-options:
     - -threaded
     - -rtsopts
@@ -163,23 +153,33 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  # tezos-delegation-core-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                tezos-delegation-core/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
-  # tezos-dispatcher-test:
-  #   main:                       Spec.hs
-  #   source-dirs:                tezos-dispatcher/test
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
-  #   - -fprint-potential-instances
-  #   dependencies:
-  #   - services
+  tezos-delegation-core-test:
+    main:                       Spec.hs
+    source-dirs:                tezos-delegation-core/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fprint-potential-instances
+    dependencies:
+    - services
+  tezos-hot-wallet-test:
+    main:                       Spec.hs
+    source-dirs:                tezos-hot-wallet/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fprint-potential-instances
+    dependencies:
+    - services
+  tezos-stats-manager-test:
+    main:                       Spec.hs
+    source-dirs:                tezos-stats-manager/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fprint-potential-instances
+    dependencies:
+    - services

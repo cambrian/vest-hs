@@ -3,9 +3,7 @@ rm -f rabbit.log
 /usr/local/bin/redis-cli shutdown > /dev/null 2>&1
 /usr/local/bin/redis-server /usr/local/etc/redis.conf > ~/.vest-hs/redis-run.log &
 
-# /usr/local/sbin/rabbitmqctl shutdown
-
-# to completely clear RabbitMQ
+# To completely clear RabbitMQ:
 # rabbitmqctl stop_app
 # rabbitmqctl reset
 # rabbitmqctl shutdown
@@ -16,6 +14,7 @@ rm -f rabbit.log
 # Enable recent history for RabbitMQ.
 /usr/local/sbin/rabbitmq-plugins enable rabbitmq_recent_history_exchange
 
+# TODO: Figure out how compile/re-run tests more selectively.
 stack test --fast --file-watch --no-rerun-tests
 
 # Append this for hspec only:

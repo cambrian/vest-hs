@@ -1,5 +1,4 @@
 import Http
-import qualified Stream
 import Test
 import Tezos
 import Tezos.Node
@@ -72,7 +71,7 @@ printMainBlock block connection =
 printMonitorBlocks :: T -> IO ()
 printMonitorBlocks connection = do
   monitorStream <- streaming (request (Proxy :: Proxy MonitorBlocks)) connection
-  Stream.mapM_ print monitorStream
+  tapStream_ print monitorStream
 
 main :: IO ()
 main = do

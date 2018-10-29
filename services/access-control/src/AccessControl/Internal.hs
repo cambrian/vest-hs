@@ -26,17 +26,15 @@ data T = T
   , redis :: RedisConnection
   , publicKey :: PublicKey
   , secretKey :: SecretKey
-  -- The redundancy here is a bit sad, but necessary bc it's not possible to publish a TVar.
-  , readMinTokenTime :: STM Timestamp
-  , minTokenTimes :: Stream Timestamp
+  , minTokenTime :: Stream ValueBuffer Timestamp
   , bumpMinTokenTime :: IO ()
   }
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
 
-instance HasVariableTransport Amqp.T T where
-  variableTransport = amqp
+instance HasValueTransport Amqp.T T where
+  valueTransport = amqp
 
 instance HasRedisConnection T where
   redisConnection = redis

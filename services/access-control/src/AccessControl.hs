@@ -7,26 +7,19 @@ import AccessControl.Internal as AccessControl
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
-import qualified GHC.Base
 import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
 
-data RedisConfig = RedisConfig
-  { host :: GHC.Base.String
-  , port :: Int16
-  , auth :: Maybe ByteString
-  } deriving (Generic, FromJSON)
-
 data Config = Config
   { amqpConfig :: Amqp.Config
-  , redisConfig :: RedisConfig
+  , redisConfig :: RedisJsonConfig
   } deriving (Generic, FromJSON)
 
 data Args = Args
-  { subjectsFile :: FilePath
+  { configFile :: FilePath
+  , subjectsFile :: FilePath
   , seedFile :: FilePath
-  , configFile :: FilePath
   } deriving (Data)
 
 defaultArgs_ :: Args
@@ -47,7 +40,7 @@ defaultArgs_ =
         CmdArgs.name "d" &=
         typFile
     } &=
-  help "Our internal access control server." &=
+  help "Internal access control server." &=
   summary "access-control v0.1.0" &=
   program "access-control"
 
@@ -64,42 +57,33 @@ accessToken T {subjects, secretKey} publicKey = do
 handlers :: Handlers (RpcSpec T)
 handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
 
-makeVariables :: T -> IO (Variables (VariableSpec T))
-makeVariables = return . minTokenTimes
+makeValues :: T -> IO (Values (ValueSpec T))
+makeValues = return . minTokenTime
 
 instance Service T where
   type ServiceArgs T = Args
   type RpcSpec T = TokenEndpoint
                    :<|> InvalidateAllExistingTokensEndpoint
-  type VariableSpec T = TokenVersionVariable
+  type ValueSpec T = TokenVersionValue
   type EventSpec T = ()
   defaultArgs = defaultArgs_
-  init Args {subjectsFile, seedFile, configFile} f = do
+  init Args {configFile, subjectsFile, seedFile} f = do
     Config {amqpConfig, redisConfig} <- Yaml.decodeFileThrow configFile
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     let (publicKey, secretKey) = seedKeyPair seed
-    (pushTokenTime, _, minTokenTimes, readMinTokenTime) <- pushStream
-    let bumpMinTokenTime = now >>= pushTokenTime
+    (minTokenTimePusher, minTokenTime) <- newStream
+    let bumpMinTokenTime = now >>= pushStream minTokenTimePusher
     bumpMinTokenTime
-    -- If we could somehow derive Read for ConnectInfo, we could use that directly as the Redis
-    -- config type that gets read. Alas...
-    let redisConfig_ =
-          defaultRedisConfig
-            { connectHost = host redisConfig
-            , connectPort = toPortId $ port redisConfig
-            , connectAuth = auth redisConfig
-            }
-    with redisConfig_ $ \redis ->
-      with amqpConfig $ \amqp ->
-        f $
-        T
-          { subjects
-          , amqp
-          , redis
-          , publicKey
-          , secretKey
-          , readMinTokenTime
-          , minTokenTimes
-          , bumpMinTokenTime
-          }
+    let redisConfig_ = toRedisConfig redisConfig
+    with2 redisConfig_ amqpConfig $ \(redis, amqp) ->
+      f $
+      T
+        { subjects
+        , amqp
+        , redis
+        , publicKey
+        , secretKey
+        , minTokenTime
+        , bumpMinTokenTime
+        }

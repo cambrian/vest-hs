@@ -83,7 +83,7 @@ withT f = do
 echoDirect :: T -> a -> IO a
 echoDirect _ = return
 
-echoStreaming :: T -> [a] -> IO (Stream QueueBuffer a)
+echoStreaming :: (Eq a) => T -> [a] -> IO (Stream ValueBuffer a)
 echoStreaming _ xs =
   streamFromList xs >>= mapMStream (<$ threadDelay (sec 0.01))
 
@@ -113,11 +113,11 @@ makeIncrementValue = do
   async $ loop 5 0
   return stream
 
-type IncrementValue transport = Value T transport "incrementValue" Int
+type IncrementValueTopic transport = ValueTopic T transport "incrementValue" Int
 
 -- type IncrementEventValue transport
 --    = Value T transport "incrementEvent" ('Event Int)
-type TestValueApi transport = IncrementValue transport --  :<|> IncrementEventValue transport
+type TestValueApi transport = IncrementValueTopic transport --  :<|> IncrementEventValue transport
 
 makeValues :: IO (Values (TestValueApi Amqp.T))
 makeValues = makeIncrementValue
@@ -189,8 +189,8 @@ singleStreamingTest =
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport)) $ \call -> do
     result <- newTVarIO ""
     call [1, 2, 3] $ \results -> do
-      results <- listFromStream results
-      atomically $ writeTVar result $ show results
+      v <- readFinalValue results
+      atomically $ writeTVar result $ show v
     readTVarIO result
 
 multipleStreamingTest ::
@@ -206,10 +206,10 @@ multipleStreamingTest =
     echoInts (replicate 3 4) $ \resultInts1 ->
       echoInts (replicate 3 5) $ \resultInts2 ->
         echoTexts (replicate 3 "a") $ \resultTexts -> do
-          lastInt1 <- last <$> listFromStream resultInts1
-          lastInt2 <- last <$> listFromStream resultInts2
-          lastText <- last <$> listFromStream resultTexts
-          atomically $ writeTVar result (show (lastInt1, lastInt2, lastText))
+          int1 <- readFinalValue resultInts1
+          int2 <- readFinalValue resultInts2
+          text <- readFinalValue resultTexts
+          atomically $ writeTVar result (show (int1, int2, text))
     readTVarIO result
 
 -- eventValueTest ::
@@ -226,7 +226,7 @@ valueTest ::
   => TestTree
 valueTest =
   testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
-  withSubscribed @transport (Proxy :: Proxy (IncrementValue transport)) $ \stream -> do
+  withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \stream -> do
     threadDelay $ sec 0.1
     value <- readLatestValue stream
     return $ show value

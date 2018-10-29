@@ -26,9 +26,9 @@ type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 type family Handlers spec where
   Handlers () = ()
   Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
-  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream QueueBuffer res)
+  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream ValueBuffer res)
   Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream QueueBuffer res)
+  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream ValueBuffer res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -56,9 +56,10 @@ directSender :: (res -> IO ()) -> IO res -> IO ()
 directSender send = (>>= send)
 
 streamingSender ::
-     Time Second
+     Eq res
+  => Time Second
   -> (StreamingResponse res -> IO ())
-  -> IO (Stream QueueBuffer res)
+  -> IO (Stream ValueBuffer res)
   -> IO ()
 streamingSender timeout send xs = do
   send Heartbeat
@@ -130,6 +131,7 @@ instance ( HasNamespace t
          , Deserializable fmt req
          , Serializable fmt (RpcResponse (StreamingResponse res))
          , KnownSymbol route
+         , Eq res
          ) =>
          Server t (Endpoint_ timeout fmt 'NoAuth t transport route req ('Streaming res)) where
   serve t _ handler =
@@ -159,6 +161,7 @@ instance ( HasNamespace t
          , Deserializable fmt req
          , Serializable fmt (RpcResponse (StreamingResponse res))
          , KnownSymbol route
+         , Eq res
          ) =>
          Server t (Endpoint_ timeout fmt ('Auth auth) t transport route req ('Streaming res)) where
   serve t _ =
