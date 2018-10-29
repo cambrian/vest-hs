@@ -33,6 +33,7 @@ import Protolude as Vest.Prelude.Core hiding
   , mask_
   , moduleName
   , onException
+  , show -- redefine Text-specialized show
   , threadDelay
   , throwIO
   , throwTo
@@ -152,7 +153,7 @@ fromRightOrThrowLeft (Right a) = return a
 infixl 1 >>-
 
 (>>-) :: (Functor f) => f a -> (a -> b) -> f b
-(>>-) ma f = map f ma
+(>>-) = flip map
 
 blockForever :: IO Void
 blockForever = do

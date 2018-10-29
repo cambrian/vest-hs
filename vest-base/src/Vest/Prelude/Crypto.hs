@@ -40,7 +40,7 @@ seedKeyPair :: ByteString -> (PublicKey, SecretKey)
 seedKeyPair = fromMaybe (panic "impossible") . createKeypairFromSeed_ . hash256
 
 sign' :: SecretKey -> Text' t -> SignedText' t
-sign' secret text' = (dsign secret (encodeUtf8 $ untag text'), text')
+sign' secret text' = (dsign secret $ encodeUtf8 $ untag text', text')
 
 verify' :: PublicKey -> SignedText' t -> Maybe (Text' t)
 verify' pubKey (sig, text') =

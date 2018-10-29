@@ -4,8 +4,8 @@ module Vest.Prelude.Serialize
 
 import Data.Aeson
 import GHC.Base (String)
-import Vest.Prelude.Core hiding (show) -- we redefine a non-polymorphic show in this module
-import qualified Vest.Prelude.Core
+import qualified Protolude
+import Vest.Prelude.Core
 import Vest.Prelude.TypeLevel (symbolText)
 
 data SerializationFormat
@@ -25,7 +25,7 @@ class Serializable (fmt :: SerializationFormat) a where
   serialize' = Tagged . serialize @fmt
 
 instance Show a => Serializable 'Haskell a where
-  serialize = Vest.Prelude.Core.show
+  serialize = Protolude.show
 
 instance ToJSON a => Serializable 'JSON a where
   serialize = convertString . encode
