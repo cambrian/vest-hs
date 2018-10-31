@@ -17,7 +17,7 @@ class EventTransport t where
        t -- ^ Should be mutated to store cleanup details.
     -> EventName
     -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
-    -> IO () -- ^ Does not expect message history
+    -> IO () -- ^ Does not expect message history.
 
 class (EventTransport transport) =>
       HasEventTransport transport t

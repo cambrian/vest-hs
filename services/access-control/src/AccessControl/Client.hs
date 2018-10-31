@@ -2,7 +2,7 @@ module AccessControl.Client
   ( module AccessControl.Client
   ) where
 
--- Use (import unqualified): import AccessControl.Client
+-- Use: import qualified AccessControl.Client as AccessControlClient
 import qualified AccessControl
 import qualified AccessControl.Auth as Auth
 import qualified AccessControl.Permission as Permission

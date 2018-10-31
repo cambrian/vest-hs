@@ -5,7 +5,7 @@ module TezosStatsManager
 -- import TezosStatsManager.Api as TezosStatsManager
 import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
-import qualified Db
+import Db
 import TezosStatsManager.Internal as TezosStatsManager
 import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
@@ -13,10 +13,10 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: Db.JsonConfig
+  { dbConfig :: PostgresConfig
   , webSocketConfig :: WebSocket.Config
   , amqpConfig :: Amqp.Config
-  , redisConfig :: RedisJsonConfig
+  , redisConfig :: RedisConfig
   } deriving (Generic, FromJSON)
 
 data Args = Args
@@ -65,13 +65,11 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    let dbConfig_ = Db.toConfig dbConfig
-    let redisConfig_ = toRedisConfig redisConfig
     with4
-      dbConfig_
+      dbConfig
       amqpConfig
       webSocketConfig
-      redisConfig_
+      redisConfig
       (\(db, amqp, webSocket, redis) ->
          with
            AccessControlClient.Config {accessControlPublicKey, seed, amqp}

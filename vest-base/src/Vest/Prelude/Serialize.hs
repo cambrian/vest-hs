@@ -73,18 +73,18 @@ show' = serialize' @'Haskell
 -- Pretty printing. This might be good to break out into a submodule.
 --
 -- Summary of differences from read/show for base types:
--- - Strings (and string-like types) serialized without surrounding quotes
--- - Tagged serialized without (Tagged ...) wrapping
--- - (KnownSymbol s) => Proxy s serialized as s, instead of Proxy
+-- * Strings (and string-like types) serialized without surrounding quotes.
+-- * Tagged serialized without (Tagged ...) wrapping.
+-- * (KnownSymbol s) => Proxy s serialized as s, instead of Proxy.
 --
--- Add instances as needed
+-- Add instances as needed.
 instance {-# OVERLAPPABLE #-} Show a => Serializable 'Pretty a where
   serialize = show
 
 instance {-# OVERLAPPABLE #-} Read a => Deserializable 'Pretty a where
   deserialize = read
 
--- Gives duplicate instance error for some reason
+-- Gives duplicate instance error for some reason:
 -- instance {-# OVERLAPS #-} ConvertibleStrings a Text =>
 --                           Serializable 'Pretty a where
 --   serialize = convertString

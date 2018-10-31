@@ -5,7 +5,7 @@ module Vest.Prelude.Namespace
 import Data.List (span)
 import Vest.Prelude.Core
 
--- TODO: doctests for pretty serialization roundtrip, isstring
+-- TODO: Make doctests for pretty serialization roundtrip, isstring.
 newtype Namespaced (ns :: k) a =
   Namespaced (Text' ns, a)
   deriving (Eq, Read, Show, Generic)

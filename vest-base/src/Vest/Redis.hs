@@ -1,5 +1,9 @@
 module Vest.Redis
-  ( module Vest.Redis
+  ( defaultRedisConfig
+  , RedisConfig(..)
+  , RedisConnection
+  , HasRedisConnection(..)
+  , RedisTransactionException(..)
   ) where
 
 import Database.Redis
@@ -8,17 +12,11 @@ import qualified GHC.Base
 import qualified Network.Socket.Internal as Internal (PortNumber(..))
 import Vest.Prelude
 
-type RedisConnection = Connection
-
-defaultRedisConfig :: ConnectInfo
-defaultRedisConfig = defaultConnectInfo
-
-toPortId :: (Integral a) => a -> PortID
-toPortId port = PortNumber (fromIntegral port :: Internal.PortNumber)
-
 data RedisTransactionException =
   RedisTransactionException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
+type RedisConnection = Connection
 
 class HasRedisConnection t where
   redisConnection :: t -> Connection
@@ -26,21 +24,27 @@ class HasRedisConnection t where
 instance HasRedisConnection RedisConnection where
   redisConnection = identity
 
-instance Resource Connection where
-  type ResourceConfig Connection = ConnectInfo
-  make :: ConnectInfo -> IO Connection
-  make = checkedConnect
-  cleanup :: Connection -> IO ()
-  cleanup = disconnect
-
--- TODO: this is gross, pls rewrite
-data RedisJsonConfig = RedisJsonConfig
+data RedisConfig = RedisConfig
   { host :: GHC.Base.String
   , port :: Word16
   , auth :: Maybe ByteString
   } deriving (Generic, FromJSON)
 
-toRedisConfig :: RedisJsonConfig -> ConnectInfo
-toRedisConfig RedisJsonConfig {host, port, auth} =
-  defaultRedisConfig
+defaultRedisConfig :: RedisConfig
+defaultRedisConfig =
+  RedisConfig {host = "localhost", port = 6379, auth = Nothing}
+
+toPortId :: (Integral a) => a -> PortID
+toPortId port = PortNumber (fromIntegral port :: Internal.PortNumber)
+
+toConnectInfo :: RedisConfig -> ConnectInfo
+toConnectInfo RedisConfig {host, port, auth} =
+  defaultConnectInfo
     {connectHost = host, connectPort = toPortId port, connectAuth = auth}
+
+instance Resource Connection where
+  type ResourceConfig Connection = RedisConfig
+  make :: RedisConfig -> IO Connection
+  make = checkedConnect . toConnectInfo
+  cleanup :: Connection -> IO ()
+  cleanup = disconnect

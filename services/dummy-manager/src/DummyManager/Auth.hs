@@ -1,5 +1,5 @@
 module DummyManager.Auth
-  ( module DummyManager.Auth
+  ( T
   ) where
 
 import qualified DummyManager.Internal as DummyManager

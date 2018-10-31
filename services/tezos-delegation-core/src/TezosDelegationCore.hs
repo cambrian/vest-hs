@@ -5,16 +5,16 @@ module TezosDelegationCore
 -- import TezosDelegationCore.Api as TezosDelegationCore
 import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
-import qualified Db
+import Db
 import TezosDelegationCore.Internal as TezosDelegationCore
 import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: Db.JsonConfig
+  { dbConfig :: PostgresConfig
   , amqpConfig :: Amqp.Config
-  , redisConfig :: RedisJsonConfig
+  , redisConfig :: RedisConfig
   } deriving (Generic, FromJSON)
 
 data Args = Args
@@ -63,12 +63,10 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    let dbConfig_ = Db.toConfig dbConfig
-    let redisConfig_ = toRedisConfig redisConfig
     with3
-      dbConfig_
+      dbConfig
       amqpConfig
-      redisConfig_
+      redisConfig
       (\(db, amqp, redis) ->
          with
            AccessControlClient.Config {accessControlPublicKey, seed, amqp}

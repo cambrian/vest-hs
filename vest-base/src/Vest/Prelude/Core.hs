@@ -1,4 +1,4 @@
--- Module for super base things. This file should be mostly reexports
+-- Module for super base things. This file should be mostly reexports.
 module Vest.Prelude.Core
   ( module Vest.Prelude.Core
   ) where
@@ -33,7 +33,7 @@ import Protolude as Vest.Prelude.Core hiding
   , mask_
   , moduleName
   , onException
-  , show -- redefine Text-specialized show
+  , show -- Redefine text-specialized show.
   , threadDelay
   , throwIO
   , throwTo

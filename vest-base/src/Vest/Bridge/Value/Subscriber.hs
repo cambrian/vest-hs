@@ -1,5 +1,6 @@
 module Vest.Bridge.Value.Subscriber
-  ( module Vest.Bridge.Value.Subscriber
+  ( SubscriberBindings
+  , Subscriber(..)
   ) where
 
 import Vest.Bridge.Value.Prelude

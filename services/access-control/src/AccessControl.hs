@@ -13,7 +13,7 @@ import qualified Vest as CmdArgs (name)
 
 data Config = Config
   { amqpConfig :: Amqp.Config
-  , redisConfig :: RedisJsonConfig
+  , redisConfig :: RedisConfig
   } deriving (Generic, FromJSON)
 
 data Args = Args
@@ -75,8 +75,7 @@ instance Service T where
     (minTokenTimePusher, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= pushStream minTokenTimePusher
     bumpMinTokenTime
-    let redisConfig_ = toRedisConfig redisConfig
-    with2 redisConfig_ amqpConfig $ \(redis, amqp) ->
+    with2 redisConfig amqpConfig $ \(redis, amqp) ->
       f $
       T
         { subjects
