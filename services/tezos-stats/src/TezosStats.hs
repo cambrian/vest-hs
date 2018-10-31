@@ -1,13 +1,13 @@
 -- Currently intended as an executable for mocked testing data.
-module TezosStatsManager
-  ( module TezosStatsManager
+module TezosStats
+  ( module TezosStats
   ) where
 
--- import TezosStatsManager.Api as TezosStatsManager
+-- import TezosStats.Api as TezosStats
 -- import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
 import Db
-import TezosStatsManager.Internal as TezosStatsManager
+import TezosStats.Internal as TezosStats
 
 -- import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
@@ -48,8 +48,8 @@ defaultArgs_ =
     --     typFile
     } &=
   help "Front-end stats server for Tezos." &=
-  summary "tezos-stats-manager v0.1.0" &=
-  program "tezos-stats-manager"
+  summary "tezos-stats v0.1.0" &=
+  program "tezos-stats"
 
 type Api = ()
 

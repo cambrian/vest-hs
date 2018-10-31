@@ -1,5 +1,5 @@
-module TezosStatsManager.Internal
-  ( module TezosStatsManager.Internal
+module TezosStats.Internal
+  ( module TezosStats.Internal
   ) where
 
 -- import qualified AccessControl.Client as AccessControlClient
