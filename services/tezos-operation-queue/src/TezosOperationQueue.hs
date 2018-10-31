@@ -1,12 +1,12 @@
-module TezosInjectionQueue
-  ( module TezosInjectionQueue
+module TezosOperationQueue
+  ( module TezosOperationQueue
   ) where
 
--- import TezosInjectionQueue.Api as TezosInjectionQueue
+-- import TezosOperationQueue.Api as TezosOperationQueue
 import qualified Data.Yaml as Yaml
 import Db
 import qualified Http
-import TezosInjectionQueue.Internal as TezosInjectionQueue
+import TezosOperationQueue.Internal as TezosOperationQueue
 import qualified Transport.WebSocket as WebSocket
 import Vest
 import qualified Vest as CmdArgs (name)
@@ -31,8 +31,8 @@ defaultArgs_ =
         typFile
     } &=
   help "RPC queue for Tezos operations signed on the front-end." &=
-  summary "tezos-injection-queue v0.1.0" &=
-  program "tezos-injection-queue"
+  summary "tezos-operation-queue v0.1.0" &=
+  program "tezos-operation-queue"
 
 type Api = ()
 

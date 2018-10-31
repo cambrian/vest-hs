@@ -1,5 +1,5 @@
-module TezosInjectionQueue.Internal
-  ( module TezosInjectionQueue.Internal
+module TezosOperationQueue.Internal
+  ( module TezosOperationQueue.Internal
   ) where
 
 import qualified Db
