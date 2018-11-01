@@ -34,16 +34,21 @@ type Api
      :<|> EchoThriceBadEndpoint
      :<|> ConcatTextAuthEndpoint
      :<|> EchoThriceAuthEndpoint
+     :<|> VoidEndpoint
+     :<|> VoidStreamEndpoint
 
 addInts :: T -> AddIntsRequest -> IO Int
 addInts _ AddIntsRequest {a, b} = do
-  threadDelay (sec 0.25)
+  threadDelay (ms 30)
   return (a + b)
 
 echoThrice :: T -> Int -> IO (Stream ValueBuffer Int)
 echoThrice _ x = do
-  threadDelay (sec 0.25)
-  streamFromList $ replicate 3 x
+  (pusher, stream) <- newStream
+  async $
+    mapM_ (\n -> threadDelay (ms 30) >> pushStream pusher n) [x .. x + 2] >>
+    closeStream pusher
+  return stream
 
 concatTextAuth ::
      T
@@ -57,10 +62,18 @@ echoThriceAuth ::
      T -> VerifierClaims DummyAuth.T -> Text -> IO (Stream ValueBuffer Text)
 echoThriceAuth _ _ = streamFromList . replicate 3
 
+unit :: T -> () -> IO ()
+unit _ _ = return ()
+
+unitStream :: T -> () -> IO (Stream ValueBuffer ())
+unitStream _ _ = streamFromList $ replicate 3 ()
+
 handlers :: Handlers Api
 handlers =
   addInts :<|> addInts :<|> echoThrice :<|> echoThrice :<|> concatTextAuth :<|>
-  echoThriceAuth
+  echoThriceAuth :<|>
+  unit :<|>
+  unitStream
 
 instance Service T where
   type ServiceArgs T = Args
