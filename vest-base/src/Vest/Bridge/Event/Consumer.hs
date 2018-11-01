@@ -49,7 +49,7 @@ instance ( Serializable fmt (IndexOf a)
       async $
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
       const $ do
-        (pusher, stream) <- newStream
+        (writer, stream) <- newStream
         let materialize =
               makeClient
                 t
@@ -57,7 +57,7 @@ instance ( Serializable fmt (IndexOf a)
         subscribeEvents
           (eventTransport @transport t)
           eventName
-          (pushStream pusher <=< deserializeUnsafe' @fmt)
+          (writeStream writer <=< deserializeUnsafe' @fmt)
         getStartIndex >>= gapFilledStream stream materialize >>= f
 
 gapFilledStream ::
@@ -67,15 +67,15 @@ gapFilledStream ::
   -> IndexOf a
   -> IO (Stream QueueBuffer a)
 gapFilledStream stream materializer startIndex = do
-  (pusher, masterStream) <- newStream
+  (writer, masterStream) <- newStream
   let f a idx =
         if idx < index a
           then do
             a' <- materializer idx
-            void $ pushStream pusher a'
+            void $ writeStream writer a'
             f a $ succ idx
           else do
-            void $ pushStream pusher a
+            void $ writeStream writer a
             return $ succ $ index a
-  void . async $ foldMStream f startIndex stream >> closeStream pusher
+  void . async $ foldMStream f startIndex stream >> closeStream writer
   return masterStream

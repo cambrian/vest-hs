@@ -18,7 +18,7 @@ import Test.Tasty.ExpectedFailure as Reexports (expectFail, ignoreTest)
 import Test.Tasty.Golden (goldenVsStringDiff)
 
 diffCmd :: FilePath -> FilePath -> [String]
-diffCmd ref new = ["diff", "-u", ref, new]
+diffCmd ref new = ["diff", "-u", "--color", ref, new]
 
 testCase :: String -> FilePath -> IO Text -> TestTree
 testCase name path = testCaseRaw name path . fmap convertString

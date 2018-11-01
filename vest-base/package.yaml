@@ -21,6 +21,7 @@ dependencies:
 - beam-postgres           >= 0.3
 - blake2                  >= 0.2
 - bytestring              >= 0.10
+- concurrent-extra        >= 0.7
 - containers              >= 0.5
 - contravariant           >= 1.5
 - cmdargs                 >= 0.10
@@ -49,6 +50,7 @@ dependencies:
 - servant-client          >= 0.14
 - singletons              >= 2.4
 - stm                     >= 2.4
+- stm-chans               >= 3.0
 - stm-containers          >= 1.1
 - stm-delay               >= 0.1
 - string-conversions      >= 0.4

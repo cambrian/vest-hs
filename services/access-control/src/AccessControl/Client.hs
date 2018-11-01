@@ -34,15 +34,14 @@ instance Resource T where
     minTokenTimes <-
       subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionValue)
     tokens <- mapMStream (const getToken) minTokenTimes
-    void $ readLatestValue tokens
-    -- ^ Wait for first token to be received. For some reason this is necessary. Is that a bug?
+    void $ streamFirst tokens
     return $
       T
         { accessControlPublicKey
         , publicKey
         , secretKey
-        , readToken = readLatestValueSTM tokens
-        , readMinTokenTime = readLatestValueSTM minTokenTimes
+        , readToken = justSTM $ readLatestValueSTM tokens
+        , readMinTokenTime = justSTM $ readLatestValueSTM minTokenTimes
         }
   cleanup _ = return ()
 

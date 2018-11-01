@@ -16,12 +16,12 @@ import Vest.Prelude.Time as Reexports
 import Vest.Prelude.TypeLevel as Reexports
 import Vest.Prelude.UUID as Reexports
 
-type StreamResource buf a = (StreamPusher a, Stream buf a)
+type StreamResource buf a = (StreamWriter a, Stream buf a)
 
 instance Bufferable buf a => Resource (StreamResource buf a) where
   type ResourceConfig (StreamResource buf a) = ()
   make () = newStream @buf @a
-  cleanup (pusher, _) = closeStream pusher
+  cleanup (writer, _) = closeStream writer
 
 instance (Serializable 'Pretty a) =>
          Serializable 'Pretty (Namespaced ns a) where

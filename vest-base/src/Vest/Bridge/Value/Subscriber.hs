@@ -36,9 +36,9 @@ instance ( HasNamespace service
          ) =>
          Subscriber t (ValueTopic_ fmt service transport name a) where
   subscribe t _ = do
-    (pusher, stream) <- newStream @ValueBuffer
+    (writer, stream) <- newStream @ValueBuffer
     subscribeValue
       (valueTransport @transport t)
       (serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name))
-      (pushStream pusher <=< deserializeUnsafe' @fmt)
+      (writeStream writer <=< deserializeUnsafe' @fmt)
     return stream

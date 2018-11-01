@@ -149,11 +149,19 @@ fromRightOrThrowLeft :: (Exception e) => Either e a -> IO a
 fromRightOrThrowLeft (Left e) = throw e
 fromRightOrThrowLeft (Right a) = return a
 
--- Infix map, like (>>=) but pure.
-infixl 1 >>-
+justSTM :: STM (Maybe a) -> STM a
+-- ^ Retries until Just is received
+justSTM s =
+  s >>= \case
+    Nothing -> retry
+    Just a -> return a
 
+-- | Infix map, like (>>=) but pure.
+-- Note: It's usually the case that f <$> a = a >>- f
 (>>-) :: (Functor f) => f a -> (a -> b) -> f b
 (>>-) = flip map
+
+infixl 1 >>-
 
 blockForever :: IO Void
 blockForever = do

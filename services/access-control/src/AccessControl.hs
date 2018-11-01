@@ -58,7 +58,7 @@ handlers :: Handlers (RpcSpec T)
 handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
 
 makeValues :: T -> IO (Values (ValueSpec T))
-makeValues = return . minTokenTime
+makeValues T {minTokenTime} = return minTokenTime
 
 instance Service T where
   type ServiceArgs T = Args
@@ -72,8 +72,8 @@ instance Service T where
     (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     let (publicKey, secretKey) = seedKeyPair seed
-    (minTokenTimePusher, minTokenTime) <- newStream
-    let bumpMinTokenTime = now >>= pushStream minTokenTimePusher
+    (tokenTimeWriter, minTokenTime) <- newStream
+    let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
     let redisConfig_ = toRedisConfig redisConfig
     with2 redisConfig_ amqpConfig $ \(redis, amqp) ->

@@ -102,19 +102,19 @@ resultLoop caller push close pull = do
 streaming ::
      ClientM (ResultStream result) -> T -> IO (Stream QueueBuffer result)
 streaming requester t = do
-  (pusher, stream) <- newStream
+  (writer, stream) <- newStream
   receivedFirst <- newEmptyMVar
   caller <- myThreadId
   let pushNotify x =
         void $ do
-          pushStream pusher x
+          writeStream writer x
           tryPutMVar receivedFirst ()
   async $ do
     errorOrResult <- call requester t
     case errorOrResult of
-      Left error -> closeStream pusher >> evilThrowTo caller error
+      Left error -> closeStream writer >> evilThrowTo caller error
       Right (ResultStream results) ->
-        results $ resultLoop caller pushNotify $ closeStream pusher
+        results $ resultLoop caller pushNotify $ closeStream writer
   takeMVar receivedFirst
   return stream
 

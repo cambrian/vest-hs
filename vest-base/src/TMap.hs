@@ -36,3 +36,19 @@ parallelFilterM f t = do
          return (k, r))
       kvs
   atomically $ mapM_ (\(k, r) -> unless r $ delete k t) krs
+
+parallelFilterValuesM ::
+     (Eq k, Hashable k) => (v -> IO Bool) -> TMap k v -> IO ()
+parallelFilterValuesM f = parallelFilterM $ f . snd
+
+parallelMapM_ :: ((k, v) -> IO a) -> TMap k v -> IO ()
+-- Not entirely atomic; allows updates to the map while f is executed. Items added during this time
+-- are ignored.
+parallelMapM_ f t = do
+  kvs <- atomically $ toList t
+  Parallel.mapM_ f kvs
+
+parallelMapValuesM_ :: (v -> IO a) -> TMap k v -> IO ()
+-- Not entirely atomic; allows updates to the map while f is executed. Items added during this time
+-- are ignored.
+parallelMapValuesM_ f = parallelMapM_ (f . snd)

@@ -104,10 +104,10 @@ withRpcClient _ f =
 
 makeIncrementValue :: IO (Stream ValueBuffer Int)
 makeIncrementValue = do
-  (pusher, stream) <- newStream
+  (writer, stream) <- newStream
   let loop stop n =
         when (n < stop) $ do
-          pushStream pusher n
+          writeStream writer n
           threadDelay (sec 0.01)
           loop stop (n + 1)
   async $ loop 5 0

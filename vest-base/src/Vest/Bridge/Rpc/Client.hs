@@ -58,7 +58,6 @@ packRequest signer req = do
   headers <- atomically $ signRequest signer HashMap.empty reqText
   return (headers, reqText)
 
--- TODO: refactor with ExceptT
 callDirect ::
      forall timeout fmt auth transport server route t req res.
      ( KnownNat timeout
@@ -132,7 +131,7 @@ callStreaming t req f = do
           RpcResponse response ->
             case response of
               Heartbeat -> return ()
-              Result res -> pushStream resultPusher res
+              Result res -> writeStream resultPusher res
               EndOfResults -> closeStream resultPusher
   Tagged doCleanup <-
     callRaw

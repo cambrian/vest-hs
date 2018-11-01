@@ -67,4 +67,4 @@ instance (Permission.Is p) => Auth (T p) where
 -- AccessControl.T
 instance Permission.Is p => HasAuthVerifier (T p) AccessControl.T where
   authVerifier AccessControl.T {publicKey, minTokenTime} =
-    Verifier publicKey (readLatestValueSTM minTokenTime)
+    Verifier publicKey (justSTM $ readLatestValueSTM minTokenTime)
