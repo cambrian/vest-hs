@@ -1,5 +1,6 @@
 module Vest.Bridge.Value.Publisher
-  ( module Vest.Bridge.Value.Publisher
+  ( Values
+  , Publisher(..)
   ) where
 
 import Vest.Bridge.Value.Prelude
@@ -27,10 +28,6 @@ type family Values spec where
   Values (a
           :<|> b) = (Values a
                      :<|> Values b)
-  -- Would be better to declare like this, but type-level lists cannot be used as argument types:
-  -- Values '[] = '[]
-  -- Values (ValueTopic_ _ _ _ _ a ': values) = ('[ Streamly.Serial a] :++ Values values)
-  -- Watch here: https://www.reddit.com/r/haskell/comments/9n0qan/typefamily_monoid/.
 
 class (HasNamespace t) =>
       Publisher t spec

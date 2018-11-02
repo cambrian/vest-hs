@@ -3,15 +3,16 @@ module AccessControl.Api
   ) where
 
 import qualified AccessControl.Auth as Auth
-import AccessControl.Internal
+import qualified AccessControl.Internal as AccessControl
 import qualified AccessControl.Permission as Permission
 import qualified Transport.Amqp as Amqp
 import Vest
 
 type TokenEndpoint
-   = Endpoint 'NoAuth T Amqp.T "token" PublicKey ('Direct SignedToken)
+   = Endpoint 'NoAuth AccessControl.T Amqp.T "token" PublicKey ('Direct AccessControl.SignedToken)
 
 type InvalidateAllExistingTokensEndpoint
-   = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
+   = Endpoint ('Auth (Auth.T 'Permission.InvalidateAuthTokens)) AccessControl.T Amqp.T "invalidateAllExistingTokens" () ('Direct ())
 
-type TokenVersionValue = ValueTopic T Amqp.T "minValidTokenTimestamp" Timestamp
+type TokenVersionValue
+   = ValueTopic AccessControl.T Amqp.T "minValidTokenTimestamp" Timestamp

@@ -40,8 +40,9 @@ instance KnownUnitName unit => FromJSON (TimeoutException unit)
 timeout ::
      KnownDivRat unit Microsecond
   => Time unit -- ^ time
-  -> IO a -- ^ 'IO' action
-  -> IO (Either (TimeoutException unit) a) -- ^ returns Nothing if no result is available within the given time
+  -> IO a -- ^ IO action
+  -> IO (Either (TimeoutException unit) a) -- ^ returns Nothing if no result is available within
+                                           -- the given time
 timeout t action =
   Time.Units.timeout t action >>- \case
     Just a -> Right a

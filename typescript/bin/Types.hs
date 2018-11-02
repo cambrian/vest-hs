@@ -21,11 +21,14 @@ version = do
     show (versionId :: Int) <>
     "'\n\n"
 
-tagged :: Text
-tagged = "type Tagged<T extends string, K> = { TagDoNotUse: T } | K\n\n"
+taggedType :: Text
+taggedType = "type Tagged<T extends string, K> = { TagDoNotUse: T } | K\n\n"
 
 textAlias :: Text
 textAlias = "type Text<T extends string> = Tagged<T, string>\n\n"
+
+unitType :: Text
+unitType = "type Unit = Array<Boolean>\n\n"
 
 -- Hard-coded substitutions.
 replaceRules :: [Replace]
@@ -57,7 +60,7 @@ main = do
   versionText <- version
   putText . pack . replaceWithList replaceRules $
     unpack
-      (versionText <> tagged <> textAlias <>
+      (versionText <> taggedType <> textAlias <> unitType <>
        (pack . formatTSDeclarations . concat $
         [ getTypeScriptDeclarations (Proxy :: Proxy RpcResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)

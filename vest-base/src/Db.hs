@@ -1,7 +1,6 @@
 module Db
   ( module Reexports
-  , toConfig
-  , JsonConfig(..)
+  , PostgresConfig(..)
   ) where
 
 import Database.Beam as Reexports hiding (insert)
@@ -16,10 +15,10 @@ import qualified Money
 import Vest
 
 -- Postgres serializations for Vest types.
--- In theory you could implement this directly on Timestamp without having to create a UTCTime
--- but that's a bunch of work for what's only a smallish win.
--- No type is provided for Time / interval yet because postgresql-simple doesn't support DiffTime or
--- NominalDiffTime and implementing it would be complicated
+-- In theory you could implement this directly on Timestamp without having to create a UTCTime but
+-- that's a bunch of work for what's only a smallish win.
+-- No type is provided for Time/interval yet because postgresql-simple doesn't support DiffTime or
+-- NominalDiffTime and implementing it would be complicated.
 instance HasSqlValueSyntax be UTCTime => HasSqlValueSyntax be Timestamp where
   sqlValueSyntax = sqlValueSyntax . utcTimeFromTimestamp
 
@@ -28,13 +27,6 @@ instance FromField Timestamp where
 
 instance FromBackendRow Postgres Timestamp
 
--- Beam doesn't support rationals so Money.Dense values can't be persisted. This is probably ok tho.
--- instance HasSqlValueSyntax be Rational =>
---          HasSqlValueSyntax be (Money.Dense a) where
---   sqlValueSyntax = sqlValueSyntax . toRational
--- instance FromField (Money.Dense a) where
---   fromField f bs = fromField f bs >>- Money.dense'
--- instance FromBackendRow Postgres (Money.Dense a)
 instance (HasSqlValueSyntax be Integer, KnownSymbol a, Money.GoodScale scale) =>
          HasSqlValueSyntax be (Money.Discrete' a scale) where
   sqlValueSyntax =
@@ -46,12 +38,7 @@ instance (Money.GoodScale scale) => FromField (Money.Discrete' a scale) where
 instance (Money.GoodScale scale) =>
          FromBackendRow Postgres (Money.Discrete' a scale)
 
-instance Resource Connection where
-  type ResourceConfig Connection = Postgres.ConnectInfo
-  make = connect
-  cleanup = close
-
-data JsonConfig = JsonConfig
+data PostgresConfig = PostgresConfig
   { connectHost :: GHC.Base.String
   , connectPort :: Word16
   , connectUser :: GHC.Base.String
@@ -59,12 +46,17 @@ data JsonConfig = JsonConfig
   , connectDatabase :: GHC.Base.String
   } deriving (Generic, FromJSON, Show)
 
-toConfig :: JsonConfig -> Postgres.ConnectInfo
-toConfig JsonConfig { connectHost
-                    , connectPort
-                    , connectUser
-                    , connectPassword
-                    , connectDatabase
-                    } =
+toConnectInfo :: PostgresConfig -> Postgres.ConnectInfo
+toConnectInfo PostgresConfig { connectHost
+                             , connectPort
+                             , connectUser
+                             , connectPassword
+                             , connectDatabase
+                             } =
   Postgres.ConnectInfo
     {connectHost, connectPort, connectUser, connectPassword, connectDatabase}
+
+instance Resource Connection where
+  type ResourceConfig Connection = PostgresConfig
+  make = connect . toConnectInfo
+  cleanup = close

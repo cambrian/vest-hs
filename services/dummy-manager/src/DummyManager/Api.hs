@@ -46,3 +46,9 @@ type ConcatTextAuthEndpoint
 
 type EchoThriceAuthEndpoint
    = Endpoint_ 5 'JSON ('Auth DummyAuth.T) DummyManager.T WebSocket.T "echoThriceAuth" Text ('Streaming Text)
+
+type VoidEndpoint
+   = Endpoint_ 5 'JSON 'NoAuth DummyManager.T WebSocket.T "getVoid" () ('Direct ())
+
+type VoidStreamEndpoint
+   = Endpoint_ 5 'JSON 'NoAuth DummyManager.T WebSocket.T "getVoidStream" () ('Streaming ())

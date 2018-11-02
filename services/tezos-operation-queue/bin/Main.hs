@@ -1,4 +1,4 @@
-import TezosStatsManager
+import TezosOperationQueue
 import Vest
 
 main :: IO Void
