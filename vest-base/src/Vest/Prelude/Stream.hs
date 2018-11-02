@@ -1,29 +1,25 @@
 -- | Asynchronous streams with buffering and fanout, a la Async.Pipe for OCaml
 --
 -- Future improvements:
--- - merging. Streams will most likely have to maintain a list of writers, and close only after
---   all of their writers do.
--- - track and compress the fanout tree.
+-- - Merging
+-- - Track and compress the propagation tree
 --
 -- OVERVIEW:
 --
 -- Buffering:
 -- Each stream is backed by a buffer. Internally a child thread (propagator) attempts to unbuffer
--- items and push them downstream. The propagator waits for the pushes downstream to finish (in
+-- items and propagate them downstream. The propagator waits for downstream writes to finish (in
 -- parallel) before unbuffering the next item. This means that items may pile up inside
--- the buffer if pushes occur faster than the downstream consumption can handle.
+-- the buffer if the stream is written to faster its downstreams can handle. Writes block until
+-- the buffer accepts them.
 --
--- pushStream:
--- - when closed, does nothing and returns False
--- - when not closed, blocks until the buffer is not full, adds the message, returns True.
---
--- Downstreams:
--- A downstream is any consumer of a stream's values; a downstream need not be a StreamWriter
--- itself. A stream may fanout to any number of downstreams, which all run in parallel.
+-- Fanout:
+-- A stream may have any number of downstream consumers, which are written to in parallel.
+-- Propagation proceeds at the pace of the slowest consumer, so a single slow consumer may cause
+-- buffering upstream. Consider using a ValueBuffer if values are produced much faster than they
+-- can be processed.
 module Vest.Prelude.Stream
-  ( BufWriter(..)
-  , BufReader(..)
-  , Bufferable
+  ( Bufferable
   , QueueBuffer_
   , QueueBuffer
   , ValueBuffer
@@ -43,7 +39,7 @@ module Vest.Prelude.Stream
   , tapFoldStream
   , takeWhileMStream
   , takeStream
-  , streamFirst
+  , streamNext
   , waitStream
   , foldMStream
   , foldStream
@@ -67,71 +63,60 @@ import Data.Semigroup
 import qualified TMap
 import Vest.Prelude.Core
 
-data BufWriter a = BufWriter
-  { writeBuf :: a -> STM Bool
-  , closeBuf :: STM ()
-  }
-
--- TODO: Allow closing of reader? Would need to add isClosedBufWriter
-data BufReader a = BufReader
-  { readBuf :: STM a
-  , isClosedBuf :: STM Bool
-  , isEmptyBuf :: STM Bool
-  , bufHistory :: STM [a] -- ^ Somewhat hacky. Anything returned by this function is pushed to new fanouts before they receive future updates. Used by ValueBuffers
-  }
-
 class Bufferable t a where
-  newBuf :: STM (BufWriter a, BufReader a)
+  newBuf :: STM (t a)
+  writeBuf :: t a -> a -> STM Bool
+  closeBuf :: t a -> STM ()
+  readBuf :: t a -> STM a
+  isClosedBuf :: t a -> STM Bool
+  isEmptyBuf :: t a -> STM Bool
+  bufHistory :: t a -> STM [a]
 
-data QueueBuffer_ (size :: Nat)
+newtype QueueBuffer_ (size :: Nat) a = QueueBuffer_
+  { q :: TBMQueue a
+  }
 
 instance (KnownNat size) => Bufferable (QueueBuffer_ size) a where
-  newBuf = do
-    q <- newTBMQueue $ fromIntegral $ natVal (Proxy :: Proxy size)
-    let isClosedBuf = isClosedTBMQueue q
-        writeBuf a = do
-          closed <- isClosedBuf
-          if closed
-            then return False
-            else do
-              writeTBMQueue q a
-              return True
-        readBuf = justSTM $ readTBMQueue q
-        writer = BufWriter writeBuf (closeTBMQueue q)
-        reader = BufReader readBuf isClosedBuf (isEmptyTBMQueue q) (return [])
-    return (writer, reader)
+  newBuf =
+    QueueBuffer_ <$> newTBMQueue (fromIntegral (natVal (Proxy :: Proxy size)))
+  isClosedBuf = isClosedTBMQueue . q
+  writeBuf t a = do
+    closed <- isClosedBuf t
+    if closed
+      then return False
+      else do
+        writeTBMQueue (q t) a
+        return True
+  readBuf = justSTM . readTBMQueue . q
+  closeBuf = closeTBMQueue . q
+  isEmptyBuf = isEmptyTBMQueue . q
+  bufHistory _ = return []
 
 type QueueBuffer = QueueBuffer_ 64
 
-data ValueBuffer a
-
-writeTMVar :: TMVar a -> a -> STM ()
-writeTMVar t a = tryTakeTMVar t >> putTMVar t a
+data ValueBuffer a = ValueBuffer
+  { val :: TMVar a
+  , latest :: TVar (Maybe a)
+  , closed :: TVar Bool
+  }
 
 instance Eq a => Bufferable ValueBuffer a where
-  newBuf = do
-    val <- newEmptyTMVar
-    latest <- newTVar Nothing
-    closed <- newTVar False
-    let isClosedBuf = readTVar closed
-        writeBuf a = do
-          closed <- isClosedBuf
-          if closed
-            then return False
-            else do
-              l <- readTVar latest
-              when (Just a /= l) $ do
-                writeTMVar val a
-                writeTVar latest $ Just a
-              return True
-        writer = BufWriter writeBuf (writeTVar closed True)
-        reader =
-          BufReader
-            (takeTMVar val)
-            isClosedBuf
-            (isEmptyTMVar val)
-            (maybeToList <$> readTVar latest)
-    return (writer, reader)
+  newBuf = ValueBuffer <$> newEmptyTMVar <*> newTVar Nothing <*> newTVar False
+  isClosedBuf = readTVar . closed
+  writeBuf t a = do
+    closed <- isClosedBuf t
+    if closed
+      then return False
+      else do
+        late <- readTVar $ latest t
+        when (Just a /= late) $ do
+          writeTMVar (val t) a
+          writeTVar (latest t) $ Just a
+        return True
+  readBuf = takeTMVar . val
+  closeBuf t = writeTVar (closed t) True
+  isEmptyBuf = isEmptyTMVar . val
+  bufHistory t = maybeToList <$> readTVar (latest t)
 
 -- | Also used internally to represent effects to be run per-item
 data StreamWriter a = StreamWriter
@@ -186,9 +171,9 @@ instance Decidable StreamWriter where
            Right c -> writeStream' i2 c)
       (closeStream i1 >> closeStream i2)
 
-makeStreamWriter :: BufWriter a -> IO (StreamWriter a)
-makeStreamWriter BufWriter {writeBuf, closeBuf} =
-  return $ StreamWriter (atomically . writeBuf) (atomically closeBuf)
+makeStreamWriter :: Bufferable buf a => buf a -> IO (StreamWriter a)
+makeStreamWriter buf =
+  return $ StreamWriter (atomically . writeBuf buf) (atomically $ closeBuf buf)
 
 -- TODO: generalize to monad transformer?
 data Stream buf a = Stream
@@ -198,8 +183,8 @@ data Stream buf a = Stream
   , streamHistory :: STM [a]
   }
 
-makeStreamReader :: BufReader a -> IO (Stream buf a)
-makeStreamReader BufReader {readBuf, isClosedBuf, isEmptyBuf, bufHistory} = do
+makeStreamReader :: Bufferable buf a => buf a -> IO (Stream buf a)
+makeStreamReader buf = do
   downstreams <- TMap.newIO
   downstreamCtr <- newTVarIO (0 :: Word)
   propagateLock <- Lock.new
@@ -215,24 +200,24 @@ makeStreamReader BufReader {readBuf, isClosedBuf, isEmptyBuf, bufHistory} = do
       -- or return Nothing immediately when the stream is closed and empty
       read =
         (do TMap.null downstreams >>= check . not
-            Just <$> readBuf) <|>
-        (do closed <- isClosedBuf
-            empty <- isEmptyBuf
+            Just <$> readBuf buf) <|>
+        (do closed <- isClosedBuf buf
+            empty <- isEmptyBuf buf
             check $ closed && empty
             return Nothing)
       addDownstream writer =
         Lock.with propagateLock $ do
           c <- atomically nextDownstreamCnt
-          atomically bufHistory >>= mapM_ (writeStream' writer)
-          closed <- atomically isClosedBuf
-          empty <- atomically isEmptyBuf
+          atomically (bufHistory buf) >>= mapM_ (writeStream' writer)
+          closed <- atomically $ isClosedBuf buf
+          empty <- atomically $ isEmptyBuf buf
           if closed && empty
             then closeStream writer
             else atomically $ TMap.insert writer c downstreams
       propagate = do
         a <- MaybeT $ atomically read
         lift $ Lock.with propagateLock $
-          TMap.parallelMapValuesM_ (`writeStream'` a) downstreams
+          TMap.parallelFilterValuesM (`writeStream'` a) downstreams
         propagate
   propagator <-
     async $ do
@@ -240,16 +225,16 @@ makeStreamReader BufReader {readBuf, isClosedBuf, isEmptyBuf, bufHistory} = do
       atomically (TMap.values downstreams) >>= mapM_ closeStream
       atomically $ TMap.reset downstreams -- Just for good measure
   let isFinished = isJust <$> pollSTM propagator
-  return $ Stream addDownstream isClosedBuf isFinished bufHistory
+  return $ Stream addDownstream (isClosedBuf buf) isFinished (bufHistory buf)
 
 class Bufferable buf a =>
       Streamable buf a
   where
   newStream :: IO (StreamWriter a, Stream buf a)
   newStream = do
-    (bw, br) <- atomically $ newBuf @buf
-    writer <- makeStreamWriter bw
-    reader <- makeStreamReader br
+    buf <- atomically newBuf
+    writer <- makeStreamWriter buf
+    reader <- makeStreamReader buf
     return (writer, reader)
   downstream ::
        Bufferable buf b
@@ -302,6 +287,7 @@ class Bufferable buf a =>
     tapStream_ fold stream
     return $ readTVar accumVar
   takeWhileMStream :: (a -> IO Bool) -> Stream buf a -> IO (Stream buf a)
+  -- ^ Removes itself from the parent's downstreams after f returns False.
   takeWhileMStream f Stream {addDownstream} = do
     (writer, reader) <- newStream
     addDownstream $
@@ -310,23 +296,35 @@ class Bufferable buf a =>
            take <- f a
            if take
              then write a
-             else return False)
+             else do
+               closeStream writer
+               return False)
         writer
     return reader
   takeStream :: Natural -> Stream buf a -> IO (Stream buf a)
-  takeStream n stream = do
+  -- ^ Removes itself from the parent's downstreams after n items have been taken.
+  -- NB: includes streamHistory in the count
+  -- Currently buggy when n=0
+  takeStream n Stream {addDownstream} = do
     ctr <- newTVarIO 0
-    takeWhileMStream
-      (const $ atomically $ do
-         c <- readTVar ctr
-         if c < n
-           then do
-             writeTVar ctr $ c + 1
-             return True
-           else return False)
-      stream
-  streamFirst :: Stream buf a -> IO a
-  streamFirst stream =
+    (writer, reader) <- newStream
+    addDownstream $
+      contraM
+        (\write a -> do
+           c <- readTVarIO ctr
+           when (c < n) $ void $ write a
+           if c < n - 1
+             then do
+               atomically $ writeTVar ctr $ c + 1
+               return True
+             else do
+               closeStream writer
+               return False)
+        writer
+    return reader
+  streamNext :: Stream buf a -> IO a
+  -- ^ TODO: performant specialization?
+  streamNext stream =
     takeStream 1 stream >>= listFromStream >>- fromMaybe (panic "bug") . last
   streamFromList :: [a] -> IO (Stream buf a)
   -- ^ Returns the stream immediately. A child thread fills it with the list contents.

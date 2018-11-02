@@ -156,6 +156,9 @@ justSTM s =
     Nothing -> retry
     Just a -> return a
 
+writeTMVar :: TMVar a -> a -> STM ()
+writeTMVar t a = tryTakeTMVar t >> putTMVar t a
+
 -- | Infix map, like (>>=) but pure.
 -- Note: It's usually the case that f <$> a = a >>- f
 (>>-) :: (Functor f) => f a -> (a -> b) -> f b

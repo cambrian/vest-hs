@@ -105,8 +105,22 @@ toFromList =
   testCase "to/from list" "test/Vest/Prelude/Stream/to-from-list.gold" $
   streamFromList @QueueBuffer @Int [1, 2, 3] >>= listFromStream >>- show
 
+takeStreamTest :: TestTree
+takeStreamTest =
+  testCase "take" "test/Vest/Prelude/Stream/take.gold" $ do
+    s <- streamFromList @QueueBuffer @Int [1, 2, 3]
+    head <- takeStream 1 s >>= listFromStream
+    tail <- listFromStream s
+    return $ show (head, tail)
+
 test_stream :: TestTree
 test_stream =
   testGroup
     "Stream"
-    [simpleValue, multiValue, simpleQueue, multiQueue, toFromList]
+    [ simpleValue
+    , multiValue
+    , simpleQueue
+    , multiQueue
+    , toFromList
+    , takeStreamTest
+    ]

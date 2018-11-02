@@ -46,7 +46,7 @@ echoThrice :: T -> Int -> IO (Stream ValueBuffer Int)
 echoThrice _ x = do
   (pusher, stream) <- newStream
   async $
-    mapM_ (\n -> threadDelay (ms 30) >> pushStream pusher n) [x .. x + 2] >>
+    mapM_ (\n -> threadDelay (ms 30) >> writeStream pusher n) [x .. x + 2] >>
     closeStream pusher
   return stream
 

@@ -58,7 +58,7 @@ handlers :: Handlers (RpcSpec T)
 handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
 
 makeValues :: T -> IO (Values (ValueSpec T))
-makeValues t = return (mapStream identity (minTokenTime t))
+makeValues = return . minTokenTime
 
 instance Service T where
   type ServiceArgs T = Args

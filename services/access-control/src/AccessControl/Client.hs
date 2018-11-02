@@ -34,7 +34,7 @@ instance Resource T where
     minTokenTimes <-
       subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionValue)
     tokens <- mapMStream (const getToken) minTokenTimes
-    void $ streamFirst tokens
+    void $ streamNext tokens
     return $
       T
         { accessControlPublicKey
