@@ -16,8 +16,7 @@
 -- Fanout:
 -- A stream may have any number of downstream consumers, which are written to in parallel.
 -- Propagation proceeds at the pace of the slowest consumer, so a single slow consumer may cause
--- buffering upstream. Consider using a ValueBuffer if values are produced much faster than they
--- can be processed.
+-- buffering upstream. Consider using a ValueBuffer if not every value can/needs to be processed.
 module Vest.Prelude.Stream
   ( Bufferable
   , QueueBuffer_
@@ -71,6 +70,8 @@ class Bufferable t a where
   isClosedBuf :: t a -> STM Bool
   isEmptyBuf :: t a -> STM Bool
   bufHistory :: t a -> STM [a]
+  isFinishedBuf :: t a -> STM Bool
+  isFinishedBuf t = (&&) <$> isClosedBuf t <*> isEmptyBuf t
 
 newtype QueueBuffer_ (size :: Nat) a = QueueBuffer_
   { q :: TBMQueue a
@@ -175,7 +176,7 @@ makeStreamWriter :: Bufferable buf a => buf a -> IO (StreamWriter a)
 makeStreamWriter buf =
   return $ StreamWriter (atomically . writeBuf buf) (atomically $ closeBuf buf)
 
--- TODO: generalize to monad transformer?
+-- TODO: generalize to monad transformer around monadIO?
 data Stream buf a = Stream
   { addDownstream :: StreamWriter a -> IO () -- is IO because it has to process message history
   , isClosedStream :: STM Bool
@@ -189,8 +190,8 @@ makeStreamReader buf = do
   downstreamCtr <- newTVarIO (0 :: Word)
   propagateLock <- Lock.new
   -- We lock the propagation during addDownstream because of processing message history.
-  -- Manual locking is required (or async gymnastics, which was uglier), because processing message
-  -- history is impure.
+  -- Manual locking is required (or async gymnastics, which is even uglier), because processing
+  -- message history cannot generally be run in STM.
   -- TODO: refactor to stateTVar when stm-2.5 is available
   let nextDownstreamCnt = do
         c <- readTVar downstreamCtr
@@ -201,17 +202,14 @@ makeStreamReader buf = do
       read =
         (do TMap.null downstreams >>= check . not
             Just <$> readBuf buf) <|>
-        (do closed <- isClosedBuf buf
-            empty <- isEmptyBuf buf
-            check $ closed && empty
+        (do isFinishedBuf buf >>= check
             return Nothing)
       addDownstream writer =
         Lock.with propagateLock $ do
           c <- atomically nextDownstreamCnt
           atomically (bufHistory buf) >>= mapM_ (writeStream' writer)
-          closed <- atomically $ isClosedBuf buf
-          empty <- atomically $ isEmptyBuf buf
-          if closed && empty
+          finished <- isFinishedBuf buf
+          if finished
             then closeStream writer
             else atomically $ TMap.insert writer c downstreams
       propagate = do
