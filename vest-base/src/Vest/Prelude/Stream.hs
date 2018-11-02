@@ -198,7 +198,7 @@ makeStreamReader buf = do
         writeTVar downstreamCtr $ c + 1
         return c
       -- | wait until the stream has a consumer, then read a value
-      -- or return Nothing immediately when the stream is closed and empty
+      -- or return Nothing immediately when the buffer finishes
       read =
         (do TMap.null downstreams >>= check . not
             Just <$> readBuf buf) <|>
@@ -208,7 +208,7 @@ makeStreamReader buf = do
         Lock.with propagateLock $ do
           c <- atomically nextDownstreamCnt
           atomically (bufHistory buf) >>= mapM_ (writeStream' writer)
-          finished <- isFinishedBuf buf
+          finished <- atomically $ isFinishedBuf buf
           if finished
             then closeStream writer
             else atomically $ TMap.insert writer c downstreams
