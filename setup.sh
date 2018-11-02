@@ -1,4 +1,7 @@
 #!/bin/bash
+set -e
+set -o pipefail
+
 CYAN='\033[0;36m'
 NC='\033[0m'
 

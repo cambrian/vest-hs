@@ -3,7 +3,8 @@ module TezosStats
   ( module TezosStats
   ) where
 
--- import TezosStats.Api as TezosStats
+import TezosStats.Api as TezosStats
+
 -- import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
 import Db
@@ -51,16 +52,30 @@ defaultArgs_ =
   summary "tezos-stats v0.1.0" &=
   program "tezos-stats"
 
-type Api = ()
+type Api
+   = OverviewEndpoint
+     :<|> BakersEndpoint
+     :<|> ImplicitEndpoint
+     :<|> OperationEndpoint
 
-handlers :: Handlers Api
+handlers :: Handlers ()
 handlers = ()
+
+type AuxiliaryTypes
+   = Raw Baker
+     :<|> Raw DelegateFraction
+     :<|> Raw DelegateInfo
+     :<|> Raw LedgerOperation
+     :<|> Raw LedgerOperationType
+     :<|> Raw OriginatedAccount
+     :<|> Raw TimestampRate
+     :<|> Raw TimestampSize
 
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
   type EventSpec T = ()
-  type RpcSpec T = Api
+  type RpcSpec T = ()
   defaultArgs = defaultArgs_
   init Args {configFile} f = do
     Config {dbConfig, webSocketConfig} <- Yaml.decodeFileThrow configFile

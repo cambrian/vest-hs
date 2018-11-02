@@ -1,4 +1,7 @@
 #!/bin/bash
+set -e
+set -o pipefail
+
 rm -f rabbit.log
 /usr/local/bin/redis-cli shutdown > /dev/null 2>&1
 /usr/local/bin/redis-server /usr/local/etc/redis.conf > ~/.vest-hs/redis-run.log &

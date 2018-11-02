@@ -3,9 +3,9 @@ module TezosOperationQueue
   ( module TezosOperationQueue
   ) where
 
--- import TezosOperationQueue.Api as TezosOperationQueue
 import qualified Data.Yaml as Yaml
 import Db
+import TezosOperationQueue.Api as TezosOperationQueue
 import TezosOperationQueue.Internal as TezosOperationQueue
 import qualified Transport.WebSocket as WebSocket
 import Vest
@@ -46,10 +46,14 @@ defaultArgs_ =
   summary "tezos-operation-queue v0.1.0" &=
   program "tezos-operation-queue"
 
-type Api = ()
+type Api = InjectEndpoint
+
+-- TODO: Un-stub.
+inject :: T -> Text' "TzOperation" -> IO ()
+inject _ _ = return ()
 
 handlers :: Handlers Api
-handlers = ()
+handlers = inject
 
 instance Service T where
   type ServiceArgs T = Args
