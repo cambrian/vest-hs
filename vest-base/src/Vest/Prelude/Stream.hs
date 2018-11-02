@@ -21,15 +21,16 @@
 -- A downstream is any consumer of a stream's values; a downstream need not be a StreamWriter
 -- itself. A stream may fanout to any number of downstreams, which all run in parallel.
 module Vest.Prelude.Stream
-  ( BufferWriter(..)
-  , BufferReader(..)
+  ( BufWriter(..)
+  , BufReader(..)
   , Bufferable
   , QueueBuffer_
   , QueueBuffer
   , ValueBuffer
   , StreamWriter(..)
   , writeStream
-  , Stream(..)
+  , Stream
+  , makeStreamWriter
   , makeStreamReader
   , newStream
   , filterMapMStream
@@ -66,12 +67,13 @@ import Data.Semigroup
 import qualified TMap
 import Vest.Prelude.Core
 
-data BufferWriter a = BufferWriter
+data BufWriter a = BufWriter
   { writeBuf :: a -> STM Bool
   , closeBuf :: STM ()
   }
 
-data BufferReader a = BufferReader
+-- TODO: Allow closing of reader? Would need to add isClosedBufWriter
+data BufReader a = BufReader
   { readBuf :: STM a
   , isClosedBuf :: STM Bool
   , isEmptyBuf :: STM Bool
@@ -79,13 +81,13 @@ data BufferReader a = BufferReader
   }
 
 class Bufferable t a where
-  newBuf :: STM (BufferWriter a, BufferReader a)
+  newBuf :: STM (BufWriter a, BufReader a)
 
 data QueueBuffer_ (size :: Nat)
 
 instance (KnownNat size) => Bufferable (QueueBuffer_ size) a where
   newBuf = do
-    q <- newTBMQueue (fromIntegral $ natVal (Proxy :: Proxy size))
+    q <- newTBMQueue $ fromIntegral $ natVal (Proxy :: Proxy size)
     let isClosedBuf = isClosedTBMQueue q
         writeBuf a = do
           closed <- isClosedBuf
@@ -95,9 +97,8 @@ instance (KnownNat size) => Bufferable (QueueBuffer_ size) a where
               writeTBMQueue q a
               return True
         readBuf = justSTM $ readTBMQueue q
-        writer = BufferWriter writeBuf (closeTBMQueue q)
-        reader =
-          BufferReader readBuf isClosedBuf (isEmptyTBMQueue q) (return [])
+        writer = BufWriter writeBuf (closeTBMQueue q)
+        reader = BufReader readBuf isClosedBuf (isEmptyTBMQueue q) (return [])
     return (writer, reader)
 
 type QueueBuffer = QueueBuffer_ 64
@@ -123,15 +124,16 @@ instance Eq a => Bufferable ValueBuffer a where
                 writeTMVar val a
                 writeTVar latest $ Just a
               return True
-        writer = BufferWriter writeBuf (writeTVar closed True)
+        writer = BufWriter writeBuf (writeTVar closed True)
         reader =
-          BufferReader
+          BufReader
             (takeTMVar val)
             isClosedBuf
             (isEmptyTMVar val)
             (maybeToList <$> readTVar latest)
     return (writer, reader)
 
+-- | Also used internally to represent effects to be run per-item
 data StreamWriter a = StreamWriter
   { writeStream' :: a -> IO Bool
   , closeStream :: IO ()
@@ -157,6 +159,7 @@ instance Contravariant StreamWriter where
   contramap f (StreamWriter write close) = StreamWriter (write . f) close
 
 contraM :: ((b -> IO Bool) -> a -> IO Bool) -> StreamWriter b -> StreamWriter a
+-- ^ Generalized monadic contramap
 {-# INLINE contraM #-}
 contraM f (StreamWriter write close) = StreamWriter (f write) close
 
@@ -183,8 +186,8 @@ instance Decidable StreamWriter where
            Right c -> writeStream' i2 c)
       (closeStream i1 >> closeStream i2)
 
-makeStreamWriter :: BufferWriter a -> IO (StreamWriter a)
-makeStreamWriter BufferWriter {writeBuf, closeBuf} =
+makeStreamWriter :: BufWriter a -> IO (StreamWriter a)
+makeStreamWriter BufWriter {writeBuf, closeBuf} =
   return $ StreamWriter (atomically . writeBuf) (atomically closeBuf)
 
 -- TODO: generalize to monad transformer?
@@ -195,8 +198,8 @@ data Stream buf a = Stream
   , streamHistory :: STM [a]
   }
 
-makeStreamReader :: BufferReader a -> IO (Stream buf a)
-makeStreamReader BufferReader {readBuf, isClosedBuf, isEmptyBuf, bufHistory} = do
+makeStreamReader :: BufReader a -> IO (Stream buf a)
+makeStreamReader BufReader {readBuf, isClosedBuf, isEmptyBuf, bufHistory} = do
   downstreams <- TMap.newIO
   downstreamCtr <- newTVarIO (0 :: Word)
   propagateLock <- Lock.new
@@ -217,28 +220,25 @@ makeStreamReader BufferReader {readBuf, isClosedBuf, isEmptyBuf, bufHistory} = d
             empty <- isEmptyBuf
             check $ closed && empty
             return Nothing)
-      addDownstream writer = do
-        Lock.acquire propagateLock
-        c <- atomically nextDownstreamCnt
-        atomically bufHistory >>= mapM_ (writeStream' writer)
-        atomically $ TMap.insert writer c downstreams
-        closed <- atomically isClosedBuf
-        empty <- atomically isEmptyBuf
-        when (closed && empty) $ closeStream writer
-        Lock.release propagateLock
+      addDownstream writer =
+        Lock.with propagateLock $ do
+          c <- atomically nextDownstreamCnt
+          atomically bufHistory >>= mapM_ (writeStream' writer)
+          closed <- atomically isClosedBuf
+          empty <- atomically isEmptyBuf
+          if closed && empty
+            then closeStream writer
+            else atomically $ TMap.insert writer c downstreams
       propagate = do
-        m <- atomically read
-        Lock.acquire propagateLock
-        case m of
-          Nothing -> do
-            TMap.parallelMapValuesM_ closeStream downstreams
-            atomically $ TMap.reset downstreams -- Just for good measure
-            Lock.release propagateLock
-          Just a -> do
-            TMap.parallelMapValuesM_ (`writeStream'` a) downstreams
-            Lock.release propagateLock
-            propagate
-  propagator <- async propagate
+        a <- MaybeT $ atomically read
+        lift $ Lock.with propagateLock $
+          TMap.parallelMapValuesM_ (`writeStream'` a) downstreams
+        propagate
+  propagator <-
+    async $ do
+      void $ runMaybeT propagate
+      atomically (TMap.values downstreams) >>= mapM_ closeStream
+      atomically $ TMap.reset downstreams -- Just for good measure
   let isFinished = isJust <$> pollSTM propagator
   return $ Stream addDownstream isClosedBuf isFinished bufHistory
 
