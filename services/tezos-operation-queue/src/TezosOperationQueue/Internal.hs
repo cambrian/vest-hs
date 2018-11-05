@@ -19,3 +19,6 @@ data T = T
 
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket
+
+instance HasLogger T where
+  logger _ = stderrLogger Warn

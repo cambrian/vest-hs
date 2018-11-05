@@ -6,6 +6,7 @@ module Vest.Bridge.Event.Producer
 import Vest.Bridge.Event.Prelude
 import Vest.Bridge.Rpc
 import Vest.DistributedLock
+import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
@@ -50,6 +51,7 @@ instance ( HasUniqueEventNames (a
     produce t (Proxy :: Proxy b) bProducers
 
 instance ( HasNamespace t
+         , HasLogger t
          , HasRpcTransport transport t
          , HasEventTransport transport t
          , HasRedisConnection t
@@ -69,5 +71,6 @@ instance ( HasNamespace t
           lockId = retag $ eventName <> "/producer"
       with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
         const $ do
+        log t Debug $ "Acquired Producer lock."
         send <- publishEvents (eventTransport @transport t) eventName
         tapStream_ (send . serialize' @fmt) stream

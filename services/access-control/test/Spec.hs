@@ -41,6 +41,9 @@ instance HasRpcTransport Amqp.T TestServer where
 instance AccessControl.Client.Has TestServer where
   accessControlClient = accessControlClient
 
+instance HasLogger TestServer where
+  logger _ = stderrLogger Debug
+
 type PermittedEndpoint
    = Endpoint ('Auth (AccessControl.Auth.T 'Permission.B)) TestServer Amqp.T "permittedEndpoint" () ('Direct ())
 
@@ -73,6 +76,9 @@ instance HasRpcTransport Amqp.T TestClient where
 -- There has to be a way to automatically derive this... right?
 instance AccessControl.Client.Has TestClient where
   accessControlClient = accessControlClient
+
+instance HasLogger TestClient where
+  logger _ = stderrLogger Debug
 
 instance Service TestClient where
   type ServiceArgs TestClient = ()

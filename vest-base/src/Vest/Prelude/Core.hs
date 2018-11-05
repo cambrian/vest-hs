@@ -19,6 +19,7 @@ import Data.HashTable.IO as Vest.Prelude.Core (CuckooHashTable, LinearHashTable)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
 import Data.Proxy as Vest.Prelude.Core
 import Numeric.Natural as Vest.Prelude.Core
+import qualified Protolude
 import Protolude as Vest.Prelude.Core hiding
   ( bracket
   , bracketOnError
@@ -74,6 +75,9 @@ import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 import Data.Typeable (tyConModule, typeRepTyCon)
 import qualified Foreign.StablePtr as StablePtr
+import Network.HostName (getHostName)
+import System.Posix.Process (getProcessID)
+import System.Posix.Types (CPid(CPid))
 import System.Random as Vest.Prelude.Core
 
 type Int' t = Tagged t Int
@@ -190,3 +194,14 @@ moduleName ::
      forall t. Typeable t
   => Text
 moduleName = pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy t)
+
+show :: Show a => a -> Text
+-- ^ Redefine show to be text only.
+-- If you want the old polymorphic behavior, use convertString . show
+show = Protolude.show
+
+getHostAndProcessId :: IO Text
+getHostAndProcessId = do
+  host <- getHostName
+  CPid pid <- getProcessID
+  return $ pack host <> ":" <> show pid

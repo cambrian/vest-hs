@@ -9,7 +9,6 @@ import qualified Data.HashTable.IO as HashTable
 import qualified Data.Map as Map
 import qualified Network.AMQP as AMQP
 import qualified Network.AMQP.Types as AMQP.Types
-import qualified Network.HostName
 import Vest
 
 data RequestMessage = RequestMessage
@@ -58,8 +57,8 @@ data T = T
 newQueueName :: IO Text
 newQueueName = do
   (Tagged id) <- nextUUID'
-  myHostName <- Network.HostName.getHostName >>- pack
-  return $ myHostName <> "." <> show id
+  hostpid <- getHostAndProcessId
+  return $ hostpid <> "." <> show id
 
 fromAmqpMsg :: AMQP.Message -> Text
 fromAmqpMsg = pack . ByteString.Lazy.UTF8.toString . AMQP.msgBody
