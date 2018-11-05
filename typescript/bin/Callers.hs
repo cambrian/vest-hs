@@ -1,4 +1,5 @@
 import Data.Aeson.Types (Object)
+import qualified Data.Text as Text (replace)
 import Data.Text.Lazy (toStrict)
 import qualified DummyManager
 import System.Directory
@@ -71,5 +72,5 @@ main = do
   let Args {templateFile} = parsedArgs
   wd <- getCurrentDirectory
   template <- eitherParseFile $ wd </> unpack templateFile
-  either (die . pack) (putText . toStrict) $
+  either (die . pack) (putText . Text.replace "\"" "'" . toStrict) $
     template >>= (`eitherRender` fromPairs ["services" .= callersToGenerate])
