@@ -5,6 +5,7 @@ module Vest.Service
 import Data.Text (takeWhile)
 import System.Console.CmdArgs as Vest.Service
 import Vest.Bridge
+import Vest.Logger
 import Vest.Prelude hiding (takeWhile)
 
 -- | TODO: Can we put shared argument logic here, like reading secret key files?
@@ -14,6 +15,7 @@ class ( Data (ServiceArgs a)
       , Server a (RpcSpec a)
       , Publisher a (ValueSpec a)
       , Producer a (EventSpec a)
+      , HasLogger (ServiceLogger a) a
       ) =>
       Service a
   where
@@ -21,6 +23,7 @@ class ( Data (ServiceArgs a)
   type RpcSpec a
   type ValueSpec a
   type EventSpec a
+  type ServiceLogger a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   serviceName :: Text

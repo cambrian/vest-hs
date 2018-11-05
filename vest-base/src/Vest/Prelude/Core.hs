@@ -29,6 +29,7 @@ import Protolude as Vest.Prelude.Core hiding
   , finally
   , handle
   , handleJust
+  , log -- clashes with Logger.log
   , mask
   , mask_
   , moduleName
