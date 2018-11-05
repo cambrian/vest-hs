@@ -24,3 +24,6 @@ instance HasRpcTransport Amqp.T T where
 
 instance AccessControlClient.Has T where
   accessControlClient = accessControlClient
+
+instance HasLogger T where
+  logger _ = stderrLogger Warn

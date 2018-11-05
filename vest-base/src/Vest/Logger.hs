@@ -22,3 +22,12 @@ instance Monoid Logger where
 
 stderrLogger :: LogLevel -> Logger
 stderrLogger level = Logger $ \lvl msg -> unless (lvl < level) $ putErrText msg
+
+class HasLogger a where
+  logger :: a -> Logger
+
+class HasLogger_ a where
+  log :: a -> LogLevel -> Text -> IO ()
+
+instance HasLogger a => HasLogger_ a where
+  log = log_ . logger

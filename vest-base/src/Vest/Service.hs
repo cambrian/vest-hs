@@ -15,6 +15,7 @@ class ( Data (ServiceArgs a)
       , Server a (RpcSpec a)
       , Publisher a (ValueSpec a)
       , Producer a (EventSpec a)
+      , HasLogger a
       ) =>
       Service a
   where
@@ -24,9 +25,6 @@ class ( Data (ServiceArgs a)
   type EventSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
-  log :: a -> LogLevel -> Text -> IO ()
-  -- ^ Override this implementation to define more advanced logging
-  log _ = log_ $ stderrLogger Debug
   serviceName :: Text
   -- ^ TODO: This is fragile. Think about a better solution.
   serviceName = takeWhile (/= '.') (moduleName @a)

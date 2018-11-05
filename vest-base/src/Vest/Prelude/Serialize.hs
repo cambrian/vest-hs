@@ -4,7 +4,6 @@ module Vest.Prelude.Serialize
 
 import Data.Aeson
 import GHC.Base (String)
-import qualified Protolude
 import Vest.Prelude.Core
 import Vest.Prelude.TypeLevel (symbolText)
 
@@ -25,7 +24,7 @@ class Serializable (fmt :: SerializationFormat) a where
   serialize' = Tagged . serialize @fmt
 
 instance Show a => Serializable 'Haskell a where
-  serialize = Protolude.show
+  serialize = show
 
 instance ToJSON a => Serializable 'JSON a where
   serialize = convertString . encode
@@ -61,11 +60,6 @@ readUnsafe = deserializeUnsafe @'Haskell
 
 readUnsafe' :: (Read a) => Text' t -> IO a
 readUnsafe' = deserializeUnsafe' @'Haskell
-
-show :: (Show a) => a -> Text
--- ^ Redefine show to be text only.
--- If you want the old polymorphic behavior, use convertString . show
-show = serialize @'Haskell
 
 show' :: (Show a) => a -> Text' t
 show' = serialize' @'Haskell

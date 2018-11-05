@@ -38,3 +38,6 @@ instance HasValueTransport Amqp.T T where
 
 instance HasRedisConnection T where
   redisConnection = redis
+
+instance HasLogger T where
+  logger _ = stderrLogger Warn

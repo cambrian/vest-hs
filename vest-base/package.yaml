@@ -61,6 +61,7 @@ dependencies:
 - text                    >= 1.2
 - time                    >= 1.8  # Only for SQL formatting time.
 - transformers            >= 0.5
+- unix                    >= 2.7
 - unordered-containers    >= 0.2
 - utf8-string             >= 1.0
 - uuid                    >= 1.3
