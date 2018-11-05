@@ -15,7 +15,7 @@ class ( Data (ServiceArgs a)
       , Server a (RpcSpec a)
       , Publisher a (ValueSpec a)
       , Producer a (EventSpec a)
-      , HasLogger (ServiceLogger a) a
+      , HasLogger a
       ) =>
       Service a
   where
@@ -23,7 +23,6 @@ class ( Data (ServiceArgs a)
   type RpcSpec a
   type ValueSpec a
   type EventSpec a
-  type ServiceLogger a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   serviceName :: Text

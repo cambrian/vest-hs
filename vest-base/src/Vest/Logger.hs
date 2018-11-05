@@ -11,8 +11,9 @@ data LogLevel
   | Error
   deriving (Eq, Ord, Enum, Show, Read, Generic, ToJSON, FromJSON)
 
-class Logger a where
-  log :: a -> LogLevel -> Text -> IO ()
+newtype Logger = Logger
+  { log :: LogLevel -> Text -> IO ()
+  }
 
-class HasLogger a t where
-  logger :: t -> a
+class HasLogger t where
+  logger :: t -> Logger
