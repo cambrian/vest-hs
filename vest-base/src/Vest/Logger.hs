@@ -6,7 +6,6 @@ import Vest.Prelude
 
 data LogLevel
   = Debug
-  | Info
   | Warn
   | Error
   deriving (Eq, Ord, Enum, Show, Read, Generic, ToJSON, FromJSON)
