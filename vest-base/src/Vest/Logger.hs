@@ -15,7 +15,9 @@ newtype Logger = Logger
   }
 
 instance Semigroup Logger where
-  (<>) a b = Logger $ \level msg -> log_ a level msg >> log_ b level msg
+  (<>) a b =
+    Logger $ \level msg ->
+      void $ waitBoth <$> async (log_ a level msg) <*> async (log_ b level msg)
 
 instance Monoid Logger where
   mempty = Logger $ const $ const $ return ()
