@@ -12,8 +12,14 @@ data LogLevel
   deriving (Eq, Ord, Enum, Show, Read, Generic, ToJSON, FromJSON)
 
 newtype Logger = Logger
-  { log :: LogLevel -> Text -> IO ()
+  { log_ :: LogLevel -> Text -> IO ()
   }
 
-class HasLogger t where
-  logger :: t -> Logger
+instance Semigroup Logger where
+  (<>) a b = Logger $ \level msg -> log_ a level msg >> log_ b level msg
+
+instance Monoid Logger where
+  mempty = Logger $ const $ const $ return ()
+
+stderrLogger :: LogLevel -> Logger
+stderrLogger level = Logger $ \lvl msg -> unless (lvl < level) $ putErrText msg
