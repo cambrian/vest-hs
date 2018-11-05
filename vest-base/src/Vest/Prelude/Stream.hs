@@ -62,6 +62,8 @@ import Data.Semigroup
 import qualified TMap
 import Vest.Prelude.Core
 
+-- Eddie: I wanted to separate this into BufWriters and BufReaders but GHC didn't like it. Maybe
+-- try again at some point.
 class Bufferable t a where
   newBuf :: STM (t a)
   writeBuf :: t a -> a -> STM Bool
@@ -117,7 +119,11 @@ instance Eq a => Bufferable ValueBuffer a where
   readBuf = takeTMVar . val
   closeBuf t = writeTVar (closed t) True
   isEmptyBuf = isEmptyTMVar . val
-  bufHistory t = maybeToList <$> readTVar (latest t)
+  bufHistory t = do
+    empty <- isEmptyBuf t
+    if empty
+      then maybeToList <$> readTVar (latest t)
+      else return []
 
 -- | Also used internally to represent effects to be run per-item
 data StreamWriter a = StreamWriter
@@ -181,7 +187,7 @@ data Stream buf a = Stream
   { addDownstream :: StreamWriter a -> IO () -- is IO because it has to process message history
   , isClosedStream :: STM Bool
   , isFinishedStream :: STM Bool -- closed, empty, and all non-downstream effects are finished
-  , streamHistory :: STM [a]
+  , buf :: buf a -- Hacky way to allow buffer-specific functions.
   }
 
 makeStreamReader :: Bufferable buf a => buf a -> IO (Stream buf a)
@@ -190,7 +196,7 @@ makeStreamReader buf = do
   downstreamCtr <- newTVarIO (0 :: Word)
   propagateLock <- Lock.new
   -- We lock the propagation during addDownstream because of processing message history.
-  -- Manual locking is required (or async gymnastics, which is even uglier), because processing
+  -- Manual locking is required (or async gymnastics, which is worse), because processing
   -- message history cannot generally be run in STM.
   -- TODO: refactor to stateTVar when stm-2.5 is available
   let nextDownstreamCnt = do
@@ -222,8 +228,8 @@ makeStreamReader buf = do
       void $ runMaybeT propagate
       atomically (TMap.values downstreams) >>= mapM_ closeStream
       atomically $ TMap.reset downstreams -- Just for good measure
-  let isFinished = isJust <$> pollSTM propagator
-  return $ Stream addDownstream (isClosedBuf buf) isFinished (bufHistory buf)
+  let isFinishedStream = isJust <$> pollSTM propagator
+  return $ Stream addDownstream (isClosedBuf buf) isFinishedStream buf
 
 class Bufferable buf a =>
       Streamable buf a
@@ -350,9 +356,8 @@ class Bufferable buf a =>
 
 instance Bufferable buf a => Streamable buf a
 
--- TODO: implement for all streams?
 readLatestValueSTM :: Stream ValueBuffer a -> STM (Maybe a)
-readLatestValueSTM s = last <$> streamHistory s
+readLatestValueSTM = readTVar . latest . buf
 
 readLatestValue :: Stream ValueBuffer a -> IO (Maybe a)
 readLatestValue = atomically . readLatestValueSTM
@@ -361,4 +366,4 @@ readFinalValue :: Stream ValueBuffer a -> IO (Maybe a)
 readFinalValue s =
   atomically $ do
     isClosedStream s >>= check
-    last <$> streamHistory s
+    readLatestValueSTM s

@@ -17,17 +17,14 @@ class ( Data (ServiceArgs a)
       ) =>
       Service a
   where
-  type ServiceArgs a -- Can't be data because cmdArgs has to get the type name.
+  type ServiceArgs a
   type RpcSpec a
   type ValueSpec a
   type EventSpec a
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
-  -- ^ Rename?
-  --
-  -- ^ Minimal complete definition.
-  --
   serviceName :: Text
+  -- ^ TODO: This is fragile. Think about a better solution.
   serviceName = takeWhile (/= '.') (moduleName @a)
   serviceName' :: forall t. Text' t
   serviceName' = Tagged $ serviceName @a

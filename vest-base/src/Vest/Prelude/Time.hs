@@ -78,13 +78,20 @@ throwIfTimeout ::
 throwIfTimeout (Left exn) = throw exn
 throwIfTimeout (Right a) = return a
 
+data ZeroIntervalException =
+  ZeroIntervalException
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (Hashable, Exception)
+
 intervalRenewable ::
      (KnownDivRat unit Microsecond, KnownDivRat unit Second)
   => Time unit
   -> IO ()
   -> IO (IO' "RenewInterval" (), IO' "CancelInterval" ())
--- ^ Begins by waiting; does not execute immediately.
+-- ^ Begins by waiting; does not execute immediately. Interval cannot be zero; the function will
+-- throw at runtime.
 intervalRenewable interval action = do
+  when (interval == Time 0) $ throw ZeroIntervalException
   nextBeat <- newTVarIO (Timestamp 0)
   let renew = do
         time <- now

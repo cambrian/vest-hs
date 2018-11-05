@@ -72,8 +72,7 @@ instance Resource T where
   type ResourceConfig T = Config
   make :: Config -> IO T
     -- Connects to RabbitMQ, begins listening on RPC queue.
-  make Config {hostname, virtualHost, username, password} --
-   = do
+  make Config {hostname, virtualHost, username, password} = do
     conn <- AMQP.openConnection (unpack hostname) virtualHost username password
     publishChan <- AMQP.openChannel conn
     responseConsumerChan <- AMQP.openChannel conn
