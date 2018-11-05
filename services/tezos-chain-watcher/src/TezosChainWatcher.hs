@@ -2,11 +2,11 @@ module TezosChainWatcher
   ( module TezosChainWatcher
   ) where
 
--- import TezosChainWatcher.Api as TezosChainWatcher
 import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
 import Db
 import qualified Http
+import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Internal as TezosChainWatcher
 import qualified Transport.Amqp as Amqp
 import Vest
@@ -57,7 +57,8 @@ handlers = ()
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
-  type EventSpec T = ()
+  type EventSpec T = BlockEvents
+                     :<|> CycleEvents
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do

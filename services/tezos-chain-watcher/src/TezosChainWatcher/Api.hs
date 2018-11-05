@@ -11,6 +11,10 @@ data CycleEvent = CycleEvent
   , timestamp :: Timestamp
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
+instance Indexable CycleEvent where
+  type IndexOf CycleEvent = Word64
+  index = number
+
 type CycleEvents = Event T Amqp.T "cycles" CycleEvent
 
 data Operation = Operation
@@ -27,5 +31,9 @@ data BlockEvent = BlockEvent
   , txFee :: FixedQty "XTZ"
   , operations :: [Operation]
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
+instance Indexable BlockEvent where
+  type IndexOf BlockEvent = Word64
+  index = number
 
 type BlockEvents = Event T Amqp.T "blocks" BlockEvent
