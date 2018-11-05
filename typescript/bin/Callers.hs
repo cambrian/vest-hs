@@ -4,6 +4,8 @@ import qualified DummyManager
 import System.Directory
 import System.FilePath
 import Text.EDE
+import qualified TezosOperationQueue
+import qualified TezosStats
 import Typescript
 import Vest
 
@@ -11,6 +13,11 @@ callersToGenerate :: [Object]
 callersToGenerate =
   [ specToNamespaceObject
       (Proxy :: Proxy DummyManager.T, Proxy :: Proxy DummyManager.Api)
+  , specToNamespaceObject
+      ( Proxy :: Proxy TezosOperationQueue.T
+      , Proxy :: Proxy TezosOperationQueue.Api)
+  , specToNamespaceObject
+      (Proxy :: Proxy TezosStats.T, Proxy :: Proxy TezosStats.Api)
   -- NOTE: Put any additional APIs here.
   ]
 

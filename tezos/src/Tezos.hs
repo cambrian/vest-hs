@@ -12,21 +12,21 @@ data UnexpectedResultException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 data DelegationInfo = DelegationInfo
-  { delegator :: Text' "TzOriginatedPkh"
-  , size :: FixedQty' "DelegationSize" "XTZ"
+  { delegator :: Text' "TzOriginatedHash"
+  , size :: FixedQty "XTZ"
   } deriving (Show, Generic, FromJSON)
 
 data RewardInfo = RewardInfo
   { delegate :: Text' "TzImplicitPkh"
-  , reward :: FixedQty' "RewardSize" "XTZ"
-  , staked :: FixedQty' "StakedSize" "XTZ"
+  , reward :: FixedQty "XTZ"
+  , staked :: FixedQty "XTZ"
   , delegations :: [DelegationInfo]
   } deriving (Show, Generic, FromJSON)
 
 snapshotLag :: Int -> Int
 snapshotLag = subtract 2
 
-toFixedQtyUnsafe :: Text -> IO (FixedQty' t "XTZ")
+toFixedQtyUnsafe :: Text -> IO (FixedQty "XTZ")
 toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 
 -- | Calculates reward split info.

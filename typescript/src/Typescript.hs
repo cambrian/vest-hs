@@ -56,8 +56,8 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
-    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
-    (getTypeScriptDeclarations (Proxy :: Proxy res))
+    getTypeScriptDeclarations (Proxy :: Proxy req) ++
+    getTypeScriptDeclarations (Proxy :: Proxy res)
   makeSpecTsTypes ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [SpecTsTypes]
@@ -78,8 +78,8 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
-    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
-    (getTypeScriptDeclarations (Proxy :: Proxy res))
+    getTypeScriptDeclarations (Proxy :: Proxy req) ++
+    getTypeScriptDeclarations (Proxy :: Proxy res)
   makeSpecTsTypes ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [SpecTsTypes]
@@ -100,8 +100,8 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
-    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
-    (getTypeScriptDeclarations (Proxy :: Proxy res))
+    getTypeScriptDeclarations (Proxy :: Proxy req) ++
+    getTypeScriptDeclarations (Proxy :: Proxy res)
   makeSpecTsTypes ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [SpecTsTypes]
@@ -122,8 +122,8 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [TSDeclaration]
   generateTsDeclarations _ =
-    (getTypeScriptDeclarations (Proxy :: Proxy req)) ++
-    (getTypeScriptDeclarations (Proxy :: Proxy res))
+    getTypeScriptDeclarations (Proxy :: Proxy req) ++
+    getTypeScriptDeclarations (Proxy :: Proxy res)
   makeSpecTsTypes ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [SpecTsTypes]
@@ -137,3 +137,23 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         , res = toTsTypeText' (Proxy :: Proxy res)
         }
     ]
+
+-- Used to generate TS declarations from a :<|> list of auxiliary types in an API.
+class CollectorRaw spec where
+  generateTsAuxiliary :: Proxy spec -> [TSDeclaration]
+
+instance (CollectorRaw a, CollectorRaw b) =>
+         CollectorRaw (a
+                       :<|> b) where
+  generateTsAuxiliary ::
+       Proxy (a
+              :<|> b)
+    -> [TSDeclaration]
+  generateTsAuxiliary _ =
+    nub
+      (generateTsAuxiliary (Proxy :: Proxy a) ++
+       generateTsAuxiliary (Proxy :: Proxy b))
+
+instance (TypeScript a) => CollectorRaw (Raw a) where
+  generateTsAuxiliary :: Proxy (Raw a) -> [TSDeclaration]
+  generateTsAuxiliary _ = getTypeScriptDeclarations (Proxy :: Proxy a)

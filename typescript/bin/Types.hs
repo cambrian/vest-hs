@@ -3,6 +3,8 @@ import Data.Aeson.Types ()
 import qualified DummyManager
 import System.Random
 import Text.Replace
+import qualified TezosOperationQueue
+import qualified TezosStats
 import qualified Transport.WebSocket as WebSocket
 import Typescript
 import Vest
@@ -10,6 +12,9 @@ import Vest
 typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =
   [ generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
+  , generateTsDeclarations (Proxy :: Proxy TezosOperationQueue.Api)
+  , generateTsAuxiliary (Proxy :: Proxy TezosStats.AuxiliaryTypes)
+  , generateTsDeclarations (Proxy :: Proxy TezosStats.Api)
   -- Put any additional APIs here.
   ]
 

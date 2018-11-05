@@ -1,9 +1,10 @@
-module TezosOperationQueue.Api where
--- WIP Stuff:
---   ( module TezosOperationQueue.Api
---   ) where
--- import qualified Transport.WebSocket as WebSocket
--- import qualified TezosOperationQueue.Internal as TezosOperationQueue
--- import Vest
--- type TokenEndpoint
---  = Endpoint 'NoAuth TezosOperationQueue.T WebSocket.T "overview" () ('Direct AccessControl.SignedToken)
+module TezosOperationQueue.Api
+  ( module TezosOperationQueue.Api
+  ) where
+
+import qualified TezosOperationQueue.Internal as TezosOperationQueue
+import qualified Transport.WebSocket as WebSocket
+import Vest
+
+type InjectEndpoint
+   = Endpoint 'NoAuth TezosOperationQueue.T WebSocket.T "inject" (Text' "TzOperation") ('Direct ())

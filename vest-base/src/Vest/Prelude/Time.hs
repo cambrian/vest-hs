@@ -2,9 +2,9 @@ module Vest.Prelude.Time
   ( module Vest.Prelude.Time
   ) where
 
-import Vest.Prelude.Core
-
 import qualified Control.Exception as Evil (Exception)
+import Data.Aeson.TypeScript.TH
+import Data.Aeson.Types
 import Data.Time.Clock as Vest.Prelude.Time (NominalDiffTime, UTCTime)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
@@ -12,6 +12,10 @@ import Time.Rational (KnownDivRat)
 import Time.Timestamp as Vest.Prelude.Time
 import Time.Units as Vest.Prelude.Time hiding (timeout)
 import qualified Time.Units
+import Vest.Prelude.Core
+
+instance TypeScript UTCTime where
+  getTypeScriptType _ = "string"
 
 deriving instance Generic Timestamp
 
