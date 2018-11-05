@@ -57,7 +57,7 @@ data T = T
 newQueueName :: IO Text
 newQueueName = do
   (Tagged id) <- nextUUID'
-  hostpid <- getHostAndProcessId
+  hostpid <- getHostPid
   return $ hostpid <> "." <> show id
 
 fromAmqpMsg :: AMQP.Message -> Text

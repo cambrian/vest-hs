@@ -5,6 +5,7 @@ module Vest.Bridge.Value.Publisher
 
 import Vest.Bridge.Value.Prelude
 import Vest.DistributedLock
+import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
@@ -49,6 +50,7 @@ instance ( HasUniqueValueNames (a
     publish t (Proxy :: Proxy b) bValues
 
 instance ( HasNamespace t
+         , HasLogger t
          , HasValueTransport transport t
          , HasRedisConnection t
          , Serializable fmt a
@@ -60,7 +62,6 @@ instance ( HasNamespace t
     void . async $ do
       let valueName = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy name)
           lockId = retag $ valueName <> "/publisher"
-      with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
-        const $ do
+      withDistributedLock t lockId $ do
         send <- publishValue (valueTransport @transport t) valueName
         tapStream_ (send . serialize' @fmt) stream

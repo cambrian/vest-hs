@@ -69,8 +69,6 @@ instance ( HasNamespace t
     void . async $ do
       let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
           lockId = retag $ eventName <> "/producer"
-      with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
-        const $ do
-        log t Debug $ "Acquired Producer lock."
+      withDistributedLock t lockId $ do
         send <- publishEvents (eventTransport @transport t) eventName
         tapStream_ (send . serialize' @fmt) stream

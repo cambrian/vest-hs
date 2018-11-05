@@ -200,8 +200,8 @@ show :: Show a => a -> Text
 -- If you want the old polymorphic behavior, use convertString . show
 show = Protolude.show
 
-getHostAndProcessId :: IO Text
-getHostAndProcessId = do
+getHostPid :: IO Text
+getHostPid = do
   host <- getHostName
   CPid pid <- getProcessID
   return $ pack host <> ":" <> show pid
