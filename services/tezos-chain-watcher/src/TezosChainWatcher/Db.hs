@@ -7,7 +7,7 @@ import Vest
 
 data BlockT f = Block
   { hash :: C f (Text' "TzBlockHash")
-  , cycle :: C f Word
+  , cycle :: C f Word64
   , fee :: C f (FixedQty' "TzOperationFee" "XTZ")
   , timestamp :: C f Timestamp
   , createdAt :: C f Timestamp

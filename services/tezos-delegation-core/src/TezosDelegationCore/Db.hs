@@ -179,7 +179,7 @@ deriving instance Show (PrimaryKey DelegationT Identity)
 
 data ConfirmedTxT f = ConfirmedTx
   { id :: C f UUID
-  , hash :: C f (Text' "TxHash")
+  , hash :: C f (Text' "OpHash")
   , index :: C f Word64
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
@@ -204,7 +204,7 @@ deriving instance Read (PrimaryKey ConfirmedTxT Identity)
 deriving instance Show (PrimaryKey ConfirmedTxT Identity)
 
 data ConfirmedPaymentT f = ConfirmedPayment
-  { hash :: C f (Text' "TxHash")
+  { hash :: C f (Text' "OpHash")
   , size :: C f (FixedQty "XTZ")
   , index :: C f Word64
   , createdAt :: C f Timestamp
@@ -220,7 +220,7 @@ deriving instance Show ConfirmedPayment
 
 instance Table ConfirmedPaymentT where
   data PrimaryKey ConfirmedPaymentT f = ConfirmedPaymentHash (C f
-                                                              (Text' "TxHash"))
+                                                              (Text' "OpHash"))
                                         deriving (Generic, Beamable)
   primaryKey ConfirmedPayment {hash} = ConfirmedPaymentHash hash
 
