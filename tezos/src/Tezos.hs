@@ -14,7 +14,7 @@ data UnexpectedResultException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 snapshotLag :: Int -> Int
-snapshotLag = subtract 2
+snapshotLag = subtract 7
 
 toFixedQtyUnsafe :: Text -> IO (FixedQty XTZ)
 toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
