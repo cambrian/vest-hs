@@ -7,6 +7,7 @@ module TezosStats
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Yaml as Yaml
 import Db
+import qualified Tezos
 import TezosStats.Api as TezosStats
 import TezosStats.Internal as TezosStats
 
@@ -75,7 +76,7 @@ bakersFn T {rawStubData} _ = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   return $ bakersResponse stubData
 
-implicit :: T -> Text' "TzImplicitPkh" -> IO TezosStats.ImplicitResponse
+implicit :: T -> Tezos.ImplicitPkh -> IO TezosStats.ImplicitResponse
 implicit T {rawStubData} implicitPkh = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   case HashMap.lookup implicitPkh (implicitResponse stubData) of
@@ -84,7 +85,7 @@ implicit T {rawStubData} implicitPkh = do
 
 operation ::
      T
-  -> Text' "TzOperationHash"
+  -> Tezos.OperationHash
   -> IO (Stream ValueBuffer TezosStats.OperationResponse)
 operation T {rawStubData, streamDelayMillis} opHash = do
   stubData <- deserializeUnsafe @'JSON rawStubData

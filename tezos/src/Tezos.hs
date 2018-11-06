@@ -11,22 +11,34 @@ data UnexpectedResultException =
   UnexpectedResultException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
+type BlockHash = Text' "TzBlockHash"
+
+type OperationHash = Text' "TzOperationHash"
+
+type ImplicitPkh = Text' "TzImplicitPkh"
+
+type OriginatedHash = Text' "TzOriginatedHash"
+
+type AccountHash = Text' "TzAccountHash" -- Either type of account hash.
+
+type Operation = Text' "TzOperation"
+
 data DelegationInfo = DelegationInfo
-  { delegator :: Text' "TzOriginatedHash"
-  , size :: FixedQty "XTZ"
+  { delegator :: OriginatedHash
+  , size :: FixedQty XTZ
   } deriving (Show, Generic, FromJSON)
 
 data RewardInfo = RewardInfo
-  { delegate :: Text' "TzImplicitPkh"
-  , reward :: FixedQty "XTZ"
-  , staked :: FixedQty "XTZ"
+  { delegate :: ImplicitPkh
+  , reward :: FixedQty XTZ
+  , staked :: FixedQty XTZ
   , delegations :: [DelegationInfo]
   } deriving (Show, Generic, FromJSON)
 
 snapshotLag :: Int -> Int
 snapshotLag = subtract 2
 
-toFixedQtyUnsafe :: Text -> IO (FixedQty "XTZ")
+toFixedQtyUnsafe :: Text -> IO (FixedQty XTZ)
 toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 
 -- | Calculates reward split info.
@@ -34,11 +46,7 @@ toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 -- rewardBlock: The last block in cycle (X - frozenCycles).
 -- snapshotBlock: The snapshot block in cycle (X - frozenCycles - snapshotLag).
 getRewardInfo ::
-     Http.T
-  -> Text' "TzBlockHash"
-  -> Text' "TzBlockHash"
-  -> Text' "TzImplicitPkh"
-  -> IO RewardInfo
+     Http.T -> BlockHash -> BlockHash -> ImplicitPkh -> IO RewardInfo
 getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged delegateId) = do
   frozenBalanceCycles <-
     Http.direct

@@ -6,21 +6,23 @@ import Money
 import Money.Aeson ()
 import Vest.Prelude.Core
 
+type USD = "USD"
+
+type XTZ = "XTZ"
+
 -- use:
 -- import Vest
 -- import qualified Money
 -- (this refers to the external Money package)
-type instance Scale "XTZ" "XTZ" = '(1000000, 1)
+type instance Scale XTZ "tezos" = '(1, 1)
 
-type instance Scale "XTZ" "tezos" = '(1, 1)
+type instance Scale XTZ "mutez" = '(1000000, 1)
 
-type instance Scale "XTZ" "mutez" = '(1000000, 1)
-
-type instance Scale "XTZ" "roll" = '(1, 10000)
+type instance Scale XTZ "roll" = '(1, 10000)
 
 type family CurrencyUnit currency where
-  CurrencyUnit "USD" = "cent"
-  CurrencyUnit "XTZ" = "mutez"
+  CurrencyUnit USD = "cent"
+  CurrencyUnit XTZ = "mutez"
 
 type FixedQty currency = Discrete currency (CurrencyUnit currency)
 

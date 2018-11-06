@@ -61,23 +61,3 @@ instance ( Serializable fmt (IndexOf a)
           eventName
           (writeStream writer <=< deserializeUnsafe' @fmt)
         getStartIndex >>= gapFilledStream stream materialize >>= f
-
-gapFilledStream ::
-     Indexable a
-  => Stream QueueBuffer a
-  -> (IndexOf a -> IO a)
-  -> IndexOf a
-  -> IO (Stream QueueBuffer a)
-gapFilledStream stream materializer startIndex = do
-  (writer, masterStream) <- newStream
-  let f a idx =
-        if idx < index a
-          then do
-            a' <- materializer idx
-            void $ writeStream writer a'
-            f a $ succ idx
-          else do
-            void $ writeStream writer a
-            return $ succ $ index a
-  void . async $ foldMStream f startIndex stream >> closeStream writer
-  return masterStream

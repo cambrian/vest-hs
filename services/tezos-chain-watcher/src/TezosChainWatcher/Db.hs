@@ -3,12 +3,13 @@ module TezosChainWatcher.Db
   ) where
 
 import Db
+import qualified Tezos
 import Vest
 
 data BlockT f = Block
-  { hash :: C f (Text' "TzBlockHash")
+  { hash :: C f Tezos.BlockHash
   , cycle :: C f Word64
-  , fee :: C f (FixedQty' "TzOperationFee" "XTZ")
+  , fee :: C f (FixedQty XTZ)
   , timestamp :: C f Timestamp
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
@@ -22,7 +23,7 @@ deriving instance Read Block
 deriving instance Show Block
 
 instance Table BlockT where
-  data PrimaryKey BlockT f = BlockHash (C f (Text' "TzBlockHash"))
+  data PrimaryKey BlockT f = BlockHash (C f Tezos.BlockHash)
                              deriving (Generic, Beamable)
   primaryKey Block {hash} = BlockHash hash
 
@@ -33,7 +34,7 @@ deriving instance Read (PrimaryKey BlockT Identity)
 deriving instance Show (PrimaryKey BlockT Identity)
 
 data OperationT f = Operation
-  { hash :: C f (Text' "TzOperationHash")
+  { hash :: C f Tezos.OperationHash
   , block :: PrimaryKey BlockT f
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
@@ -48,7 +49,7 @@ deriving instance Show Operation
 
 instance Table OperationT where
   data PrimaryKey OperationT f = OperationHash (C f
-                                                (Text' "TzOperationHash"))
+                                                Tezos.OperationHash)
                                  deriving (Generic, Beamable)
   primaryKey Operation {hash} = OperationHash hash
 
@@ -60,8 +61,8 @@ deriving instance Show (PrimaryKey OperationT Identity)
 
 data OriginationT f = Origination
   { opHash :: PrimaryKey OperationT f
-  , originator :: C f (Text' "TzOriginatorPkh")
-  , originated :: C f (Text' "TzOriginatedPkh")
+  , originator :: C f Tezos.ImplicitPkh
+  , originated :: C f Tezos.OriginatedHash
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -88,9 +89,9 @@ deriving instance Show (PrimaryKey OriginationT Identity)
 
 data TransactionT f = Transaction
   { opHash :: PrimaryKey OperationT f
-  , from :: C f (Text' "TzAccountHash")
-  , to :: C f (Text' "TzAccountHash")
-  , size :: C f (FixedQty' "TransactionSize" "XTZ")
+  , from :: C f Tezos.AccountHash
+  , to :: C f Tezos.AccountHash
+  , size :: C f (FixedQty XTZ)
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
