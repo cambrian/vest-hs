@@ -242,5 +242,19 @@ data T f = T
   , confirmedPayments :: f (TableEntity ConfirmedPaymentT)
   } deriving (Generic)
 
-schema :: DatabaseSettings be T
+instance Database Postgres T
+
+schema :: DatabaseSettings Postgres T
 schema = defaultDbSettings
+
+selectNextCycle :: Connection -> IO Word64
+selectNextCycle conn = do
+  let selectMaxCycleNumber =
+        runSelectReturningOne $
+        select $ aggregate_ max_ $ number <$> all_ (cycles schema)
+  m <- runBeamPostgres conn selectMaxCycleNumber
+  return $
+    case m of
+      Nothing -> 0
+      Just Nothing -> 0
+      Just (Just num) -> num + 1

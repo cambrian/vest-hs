@@ -6,7 +6,8 @@ module TezosStats
 -- import qualified AccessControl.Client as AccessControlClient
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Yaml as Yaml
-import Db
+
+-- import qualified Db
 import qualified Tezos
 import TezosStats.Api as TezosStats
 import TezosStats.Internal as TezosStats
@@ -17,7 +18,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-    -- dbConfig :: PostgresConfig
+    -- dbConfig :: Db.Config
   { webSocketConfig :: WebSocket.Config
   -- , amqpConfig :: Amqp.Config
   -- , redisConfig :: RedisConfig
