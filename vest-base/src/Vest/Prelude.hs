@@ -1,6 +1,6 @@
 module Vest.Prelude
-  ( module Reexports
-  , module Vest.Prelude
+  ( module Vest.Prelude
+  , module Reexports
   ) where
 
 import Data.Text (breakOn, stripPrefix)

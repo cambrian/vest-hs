@@ -1,27 +1,17 @@
 module Tezos
   ( module Tezos
+  , module Reexports
   ) where
 
 import Data.Aeson
 import qualified Http
 import Tezos.Node
+import Tezos.Prelude as Reexports
 import Vest
 
 data UnexpectedResultException =
   UnexpectedResultException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
-
-type BlockHash = Text' "TzBlockHash"
-
-type OperationHash = Text' "TzOperationHash"
-
-type ImplicitPkh = Text' "TzImplicitPkh"
-
-type OriginatedHash = Text' "TzOriginatedHash"
-
-type AccountHash = Text' "TzAccountHash" -- Either type of account hash.
-
-type Operation = Text' "TzOperation"
 
 data DelegationInfo = DelegationInfo
   { delegator :: OriginatedHash

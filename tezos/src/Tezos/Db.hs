@@ -1,14 +1,15 @@
-module TezosChainWatcher.Db
-  ( module TezosChainWatcher.Db
+module Tezos.Db
+  ( module Tezos.Db
   ) where
 
 import Db
-import qualified Tezos
+import qualified Tezos.Prelude as Tezos
 import Vest
 
 data BlockT f = Block
-  { hash :: C f Tezos.BlockHash
-  , cycle :: C f Word64
+  { number :: C f Word64
+  , hash :: C f Tezos.BlockHash
+  , cycleNumber :: C f Word64
   , fee :: C f (FixedQty XTZ)
   , timestamp :: C f Timestamp
   , createdAt :: C f Timestamp
@@ -22,10 +23,14 @@ deriving instance Read Block
 
 deriving instance Show Block
 
+instance Indexable Block where
+  type IndexOf Block = Word64
+  index = number
+
 instance Table BlockT where
-  data PrimaryKey BlockT f = BlockHash (C f Tezos.BlockHash)
+  data PrimaryKey BlockT f = BlockNumber (C f Word64)
                              deriving (Generic, Beamable)
-  primaryKey Block {hash} = BlockHash hash
+  primaryKey Block {number} = BlockNumber number
 
 deriving instance Eq (PrimaryKey BlockT Identity)
 
@@ -35,7 +40,7 @@ deriving instance Show (PrimaryKey BlockT Identity)
 
 data OperationT f = Operation
   { hash :: C f Tezos.OperationHash
-  , block :: PrimaryKey BlockT f
+  , blockNumber :: PrimaryKey BlockT f
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 

@@ -27,6 +27,7 @@ data Operation = Operation
 
 data BlockEvent = BlockEvent
   { number :: Word64
+  , hash :: Tezos.BlockHash
   , cycleNumber :: Word64
   , timestamp :: Timestamp
   , txFee :: FixedQty XTZ
