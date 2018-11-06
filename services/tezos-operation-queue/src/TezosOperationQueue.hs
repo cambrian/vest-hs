@@ -4,7 +4,7 @@ module TezosOperationQueue
   ) where
 
 import qualified Data.Yaml as Yaml
-import Db
+import qualified Db
 import qualified Tezos
 import TezosOperationQueue.Api as TezosOperationQueue
 import TezosOperationQueue.Internal as TezosOperationQueue
@@ -13,7 +13,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-    -- dbConfig :: PostgresConfig
+    -- dbConfig :: Db.Config
   -- , amqpConfig :: Amqp.Config
   { webSocketConfig :: WebSocket.Config
   -- , redisConfig :: RedisConfig

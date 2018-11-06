@@ -5,7 +5,7 @@ module TezosDelegationCore
 -- import TezosDelegationCore.Api as TezosDelegationCore
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import Db
+import qualified Db
 import TezosChainWatcher.Api
 import qualified TezosDelegationCore.Db as Db ()
 import TezosDelegationCore.Internal as TezosDelegationCore
@@ -14,7 +14,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: PostgresConfig
+  { dbConfig :: Db.Config
   , amqpConfig :: Amqp.Config
   , redisConfig :: RedisConfig
   } deriving (Generic, FromJSON)
@@ -54,6 +54,8 @@ type Api = ()
 handlers :: Handlers Api
 handlers = ()
 
+-- cycleConsumer :: Consumers CycleEvents
+-- cycleConsumer T {db} = panic "unimplemented"
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()

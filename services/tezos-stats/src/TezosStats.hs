@@ -17,7 +17,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-    -- dbConfig :: PostgresConfig
+    -- dbConfig :: Db.Config
   { webSocketConfig :: WebSocket.Config
   -- , amqpConfig :: Amqp.Config
   -- , redisConfig :: RedisConfig

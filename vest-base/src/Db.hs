@@ -1,6 +1,6 @@
 module Db
   ( module Reexports
-  , PostgresConfig(..)
+  , Config(..)
   ) where
 
 import Database.Beam as Reexports hiding (insert)
@@ -10,7 +10,7 @@ import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
-import qualified GHC.Base
+import GHC.Base (String)
 import qualified Money
 import Vest
 
@@ -38,25 +38,19 @@ instance (Money.GoodScale scale) => FromField (Money.Discrete' a scale) where
 instance (Money.GoodScale scale) =>
          FromBackendRow Postgres (Money.Discrete' a scale)
 
-data PostgresConfig = PostgresConfig
-  { connectHost :: GHC.Base.String
-  , connectPort :: Word16
-  , connectUser :: GHC.Base.String
-  , connectPassword :: GHC.Base.String
-  , connectDatabase :: GHC.Base.String
+data Config = Config
+  { host :: String
+  , port :: Word16
+  , user :: String
+  , password :: String
+  , database :: String
   } deriving (Generic, FromJSON, Show)
 
-toConnectInfo :: PostgresConfig -> Postgres.ConnectInfo
-toConnectInfo PostgresConfig { connectHost
-                             , connectPort
-                             , connectUser
-                             , connectPassword
-                             , connectDatabase
-                             } =
-  Postgres.ConnectInfo
-    {connectHost, connectPort, connectUser, connectPassword, connectDatabase}
+pgConnectInfo :: Config -> Postgres.ConnectInfo
+pgConnectInfo Config {host, port, user, password, database} =
+  Postgres.ConnectInfo host port user password database
 
 instance Resource Connection where
-  type ResourceConfig Connection = PostgresConfig
-  make = connect . toConnectInfo
+  type ResourceConfig Connection = Config
+  make = connect . pgConnectInfo
   cleanup = close

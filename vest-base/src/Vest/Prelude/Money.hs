@@ -37,10 +37,3 @@ class ( KnownSymbol currency
       , GoodScale (Scale currency (CurrencyUnit currency))
       ) =>
       Currency currency
-
-
-instance ( KnownSymbol currency
-         , KnownSymbol (CurrencyUnit currency)
-         , GoodScale (Scale currency (CurrencyUnit currency))
-         ) =>
-         Currency currency

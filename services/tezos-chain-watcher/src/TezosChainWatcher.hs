@@ -4,7 +4,7 @@ module TezosChainWatcher
 
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import Db
+import qualified Db
 import qualified Http
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Internal as TezosChainWatcher
@@ -13,7 +13,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: PostgresConfig
+  { dbConfig :: Db.Config
   , amqpConfig :: Amqp.Config
   , redisConfig :: RedisConfig
   , tezosConfig :: Http.Config
