@@ -4,7 +4,8 @@ module TezosOperationQueue
   ) where
 
 import qualified Data.Yaml as Yaml
-import qualified Db
+
+-- import qualified Db
 import qualified Tezos
 import TezosOperationQueue.Api as TezosOperationQueue
 import TezosOperationQueue.Internal as TezosOperationQueue
