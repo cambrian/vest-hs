@@ -33,7 +33,8 @@ data TestServiceConfig a = TestServiceConfig
   { testServiceArgs :: ServiceArgs a
   , testServiceHandlers :: Handlers (RpcSpec a)
   , testServiceValues :: a -> IO (Values (ValueSpec a))
-  , testServiceEvents :: a -> IO (Producers (EventSpec a))
+  , testServiceEventsProduced :: a -> IO (Producers (EventsProduced a))
+  , testServiceEventsConsumed :: a -> Consumers (EventsConsumed a)
   }
 
 instance Service a => Resource (TestService a) where
@@ -41,13 +42,20 @@ instance Service a => Resource (TestService a) where
   make TestServiceConfig { testServiceArgs = args
                          , testServiceHandlers = handlers
                          , testServiceValues = vars
-                         , testServiceEvents = events
+                         , testServiceEventsProduced = eventsProduced
+                         , testServiceEventsConsumed = eventsConsumed
                          } = do
     serviceVar <- newEmptyTMVarIO
     mainThread <- myThreadId
     serviceThread <-
       async' $
-      run @a args handlers vars events (atomically . putTMVar serviceVar)
+      run
+        args
+        handlers
+        vars
+        eventsProduced
+        eventsConsumed
+        (atomically . putTMVar serviceVar)
     exceptionWatcher <-
       async $ do
         threadResult <- waitCatch (untag serviceThread)

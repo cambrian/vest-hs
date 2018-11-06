@@ -28,7 +28,7 @@ data T = T
   , secretKey :: SecretKey
   , minTokenTime :: Stream ValueBuffer Timestamp
   , bumpMinTokenTime :: IO ()
-  }
+  } deriving (HasNamespace)
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp

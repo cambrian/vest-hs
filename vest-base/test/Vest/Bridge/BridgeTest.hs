@@ -14,11 +14,7 @@ data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T
   , redis :: RedisConnection
-  }
-
--- This instance is not really overlapping but for some reason GHC thinks it is.
-instance {-# OVERLAPPING #-} HasNamespace T where
-  namespace = "test"
+  } deriving (HasNamespace)
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp

@@ -16,7 +16,7 @@ data T = T
   -- , accessControlClient :: AccessControlClient.T
   , rawStubData :: Text
   , streamDelayMillis :: Natural
-  }
+  } deriving (HasNamespace)
 
 -- instance HasRedisConnection T where
 --   redisConnection = redis

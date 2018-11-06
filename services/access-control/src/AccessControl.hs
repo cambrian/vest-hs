@@ -65,7 +65,8 @@ instance Service T where
   type RpcSpec T = TokenEndpoint
                    :<|> InvalidateAllExistingTokensEndpoint
   type ValueSpec T = TokenVersionValue
-  type EventSpec T = ()
+  type EventsProduced T = ()
+  type EventsConsumed T = ()
   defaultArgs = defaultArgs_
   init Args {configFile, subjectsFile, seedFile} f = do
     Config {amqpConfig, redisConfig} <- Yaml.decodeFileThrow configFile

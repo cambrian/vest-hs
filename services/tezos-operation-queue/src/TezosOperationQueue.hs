@@ -58,7 +58,8 @@ handlers = inject
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
-  type EventSpec T = ()
+  type EventsProduced T = ()
+  type EventsConsumed T = ()
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile} f = do

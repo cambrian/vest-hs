@@ -24,6 +24,9 @@ unnamespaced (Namespaced (_, a)) = a
 
 class HasNamespace t where
   namespace :: Text
+  default namespace :: Typeable t =>
+    Text
+  namespace = moduleName @t
   namespace' :: forall ns. Text' ns
   namespace' = Tagged $ namespace @t
   namespaced :: forall ns a. a -> Namespaced ns a

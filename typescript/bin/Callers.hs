@@ -50,7 +50,7 @@ specToNamespaceObject ::
   -> Object
 specToNamespaceObject (proxyService, proxySpec) =
   fromPairs
-    [ "namespace" .= serviceName @service
+    [ "namespace" .= namespace @service
     , "specs" .=
       map (specTsTypesToObject proxyService) (makeSpecTsTypes proxySpec)
     ]

@@ -79,7 +79,8 @@ instance Service T where
   type ServiceArgs T = Args
   type RpcSpec T = Api
   type ValueSpec T = ()
-  type EventSpec T = ()
+  type EventsProduced T = ()
+  type EventsConsumed T = ()
   defaultArgs = defaultArgs_
   init Args {port} f =
     with (WebSocket.localConfigOn port) (\webSocket -> f $ T {webSocket})

@@ -12,13 +12,16 @@ data T = T
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , accessControlClient :: AccessControl.Client.T
-  }
+  } deriving (HasNamespace)
 
 instance HasRedisConnection T where
   redisConnection = redis
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
+
+instance HasEventTransport Amqp.T T where
+  eventTransport = amqp
 
 instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient

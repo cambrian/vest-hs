@@ -15,7 +15,7 @@ data T = T
   { webSocket :: WebSocket.T
   -- , redis :: RedisConnection
   -- , accessControlClient :: AccessControlClient.T
-  }
+  } deriving (HasNamespace)
 
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket

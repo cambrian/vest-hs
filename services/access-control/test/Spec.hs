@@ -34,6 +34,9 @@ data TestServer = TestServer
   , accessControlClient :: AccessControl.Client.T
   }
 
+instance HasNamespace TestServer where
+  namespace = "TestServer"
+
 instance HasRpcTransport Amqp.T TestServer where
   rpcTransport = amqp
 
@@ -55,7 +58,8 @@ instance Service TestServer where
   type RpcSpec TestServer = PermittedEndpoint
                             :<|> ForbiddenEndpoint
   type ValueSpec TestServer = ()
-  type EventSpec TestServer = ()
+  type EventsProduced TestServer = ()
+  type EventsConsumed TestServer = ()
   defaultArgs = ()
   init () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
@@ -68,6 +72,9 @@ data TestClient = TestClient
   { amqp :: Amqp.T
   , accessControlClient :: AccessControl.Client.T
   }
+
+instance HasNamespace TestClient where
+  namespace = "TestClient"
 
 instance HasRpcTransport Amqp.T TestClient where
   rpcTransport = amqp
@@ -83,7 +90,8 @@ instance Service TestClient where
   type ServiceArgs TestClient = ()
   type RpcSpec TestClient = ()
   type ValueSpec TestClient = ()
-  type EventSpec TestClient = ()
+  type EventsProduced TestClient = ()
+  type EventsConsumed TestClient = ()
   defaultArgs = ()
   init () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
@@ -139,7 +147,8 @@ accessControlServiceConfig =
           }
     , testServiceHandlers = AccessControl.handlers
     , testServiceValues = AccessControl.makeValues
-    , testServiceEvents = const $ return ()
+    , testServiceEventsProduced = const $ return ()
+    , testServiceEventsConsumed = return ()
     }
 
 handler :: TestServer -> AccessControl.Auth.Claims -> () -> IO ()
@@ -151,7 +160,8 @@ testServerConfig =
     { testServiceArgs = ()
     , testServiceHandlers = handler :<|> handler
     , testServiceValues = const $ return ()
-    , testServiceEvents = const $ return ()
+    , testServiceEventsProduced = const $ return ()
+    , testServiceEventsConsumed = return ()
     }
 
 testClientConfig :: TestServiceConfig TestClient
@@ -160,7 +170,8 @@ testClientConfig =
     { testServiceArgs = ()
     , testServiceHandlers = ()
     , testServiceValues = const $ return ()
-    , testServiceEvents = const $ return ()
+    , testServiceEventsProduced = const $ return ()
+    , testServiceEventsConsumed = return ()
     }
 
 generateDataFiles :: TestTree

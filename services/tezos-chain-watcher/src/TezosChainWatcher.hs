@@ -57,8 +57,9 @@ handlers = ()
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
-  type EventSpec T = BlockEvents
-                     :<|> CycleEvents
+  type EventsProduced T = BlockEvents
+                          :<|> CycleEvents
+  type EventsConsumed T = ()
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do

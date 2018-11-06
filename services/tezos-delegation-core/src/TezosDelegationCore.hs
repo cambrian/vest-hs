@@ -6,6 +6,7 @@ module TezosDelegationCore
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import Db
+import TezosChainWatcher.Api
 import qualified TezosDelegationCore.Db as Db ()
 import TezosDelegationCore.Internal as TezosDelegationCore
 import qualified Transport.Amqp as Amqp
@@ -56,7 +57,8 @@ handlers = ()
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
-  type EventSpec T = ()
+  type EventsProduced T = ()
+  type EventsConsumed T = CycleEvents
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
@@ -71,4 +73,5 @@ instance Service T where
       (\(db, amqp, redis) -> do
          accessControlClient <-
            AccessControl.Client.make amqp accessControlPublicKey seed
-         f $ T {db, amqp, redis, accessControlClient})
+         let t = T {db, amqp, redis, accessControlClient}
+         f t)

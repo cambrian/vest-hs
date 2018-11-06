@@ -47,7 +47,7 @@ class (Auth a) =>
   authVerifier :: t -> AuthVerifier a
 
 -- Empty auth instance. This is not intended to be used externally; you should prefer
--- auth 'Nothing instead of 'Auth ().
+-- auth 'NoAuth instead of 'Auth ().
 -- TODO: replace () with data EmptyAuth?
 instance RequestSigner () where
   signRequest () headers _ = return headers

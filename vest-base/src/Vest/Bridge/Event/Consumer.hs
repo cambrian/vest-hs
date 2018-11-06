@@ -1,5 +1,6 @@
 module Vest.Bridge.Event.Consumer
-  ( Consumers
+  ( ConsumerThreads
+  , Consumers
   , Consumer(..)
   ) where
 
@@ -11,26 +12,34 @@ import Vest.Prelude
 import Vest.Redis
 
 -- | Consumption begins from the provided index (inclusive).
+type family ConsumerThreads spec where
+  ConsumerThreads () = ()
+  ConsumerThreads (Event_ _ _ _ _ a) = Async Void
+  ConsumerThreads (a
+                   :<|> b) = (ConsumerThreads a
+                              :<|> ConsumerThreads b)
+
 type family Consumers spec where
   Consumers () = ()
-  Consumers (Event_ _ _ _ _ a) = IO (IndexOf a) -> (Stream QueueBuffer a -> IO Void) -> IO (Async Void)
+  Consumers (Event_ _ _ _ _ a) = ( IO (IndexOf a)
+                                 , Stream QueueBuffer a -> IO Void)
   Consumers (a
              :<|> b) = (Consumers a
                         :<|> Consumers b)
 
 class Consumer t spec where
-  consume :: t -> Proxy spec -> IO (Consumers spec)
+  consume :: t -> Proxy spec -> Consumers spec -> IO (ConsumerThreads spec)
 
 instance Consumer t () where
-  consume _ _ = return ()
+  consume _ _ _ = return ()
 
 instance (Consumer t a, Consumer t b) =>
          Consumer t (a
                      :<|> b) where
-  consume t _ = do
-    consumerA <- consume t (Proxy :: Proxy a)
-    consumerB <- consume t (Proxy :: Proxy b)
-    return $ consumerA :<|> consumerB
+  consume t _ (aConsumers :<|> bConsumers) = do
+    aThreads <- consume t (Proxy :: Proxy a) aConsumers
+    bThreads <- consume t (Proxy :: Proxy b) bConsumers
+    return $ aThreads :<|> bThreads
 
 instance ( Serializable fmt (IndexOf a)
          , Deserializable fmt (RpcResponse a)
@@ -45,11 +54,10 @@ instance ( Serializable fmt (IndexOf a)
          , Indexable a
          ) =>
          Consumer t (Event_ fmt server transport name a) where
-  consume t _ = do
+  consume t _ (getStartIndex, f) = do
     let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
         lockId = retag $ eventName <> "/consumer/" <> Tagged (namespace @t)
-    return $ \getStartIndex f ->
-      async $
+    async $
       withDistributedLock t lockId $ do
         (writer, stream) <- newStream
         let materialize =
