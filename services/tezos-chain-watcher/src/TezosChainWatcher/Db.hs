@@ -69,8 +69,8 @@ deriving instance Show (PrimaryKey OperationT Identity)
 
 data OriginationT f = Origination
   { opHash :: PrimaryKey OperationT f
-  , originator :: C f Tezos.ImplicitPkh
-  , originated :: C f Tezos.OriginatedHash
+  , originator :: C f Tezos.ImplicitAccount
+  , originated :: C f Tezos.OriginatedAccount
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -97,8 +97,8 @@ deriving instance Show (PrimaryKey OriginationT Identity)
 
 data TransactionT f = Transaction
   { opHash :: PrimaryKey OperationT f
-  , from :: C f Tezos.AccountHash
-  , to :: C f Tezos.AccountHash
+  , from :: C f Tezos.Account
+  , to :: C f Tezos.Account
   , size :: C f (FixedQty XTZ)
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)

@@ -24,7 +24,7 @@ data TimestampRate = TimestampRate
 $(deriveTypeScript defaultOptions ''TimestampRate)
 
 data DelegateFraction = DelegateFraction
-  { delegate :: Tezos.ImplicitPkh
+  { delegate :: Tezos.ImplicitAccount
   , fraction :: Double
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -48,7 +48,7 @@ type OverviewEndpoint
 data Baker = Baker
   { name :: Text
   , description :: Text
-  , hash :: Tezos.ImplicitPkh
+  , hash :: Tezos.ImplicitAccount
   , fee :: Integer' XTZ
   , bond :: Integer' XTZ
   , totalDelegations :: Integer' XTZ
@@ -71,7 +71,7 @@ type BakersEndpoint
    = EndpointJson 'NoAuth TezosStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
 
 data DelegateInfo = DelegateInfo
-  { hash :: Tezos.ImplicitPkh
+  { hash :: Tezos.ImplicitAccount
   , name :: Text
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -88,7 +88,7 @@ $(deriveTypeScript defaultOptions ''LedgerOperationType)
 data LedgerOperation = LedgerOperation
   { operationType :: LedgerOperationType
   , hash :: Tezos.OperationHash
-  , from :: Maybe Tezos.AccountHash -- From account can be either originated or implicit.
+  , from :: Maybe Tezos.Account -- From account can be either originated or implicit.
   , size :: Integer' XTZ
   , blockHash :: Maybe Tezos.BlockHash
   , timestamp :: UTCTime
@@ -97,7 +97,7 @@ data LedgerOperation = LedgerOperation
 $(deriveTypeScript defaultOptions ''LedgerOperation)
 
 data OriginatedAccount = OriginatedAccount
-  { hash :: Tezos.OriginatedHash
+  { hash :: Tezos.OriginatedAccount
   , delegate :: DelegateInfo
   , balance :: Integer' XTZ
   , ledger :: [LedgerOperation]
@@ -114,7 +114,7 @@ data ImplicitResponse = ImplicitResponse
 $(deriveTypeScript defaultOptions ''ImplicitResponse)
 
 type ImplicitEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" Tezos.ImplicitPkh ('Direct ImplicitResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" Tezos.ImplicitAccount ('Direct ImplicitResponse)
 
 data OperationResponse = OperationResponse
   { baked :: Bool
@@ -132,6 +132,6 @@ type OperationEndpoint
 data StubData = StubData
   { overviewResponse :: OverviewResponse
   , bakersResponse :: BakersResponse
-  , implicitResponse :: HashMap Tezos.ImplicitPkh ImplicitResponse
+  , implicitResponse :: HashMap Tezos.ImplicitAccount ImplicitResponse
   , operationResponses :: HashMap Tezos.OperationHash [OperationResponse]
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)

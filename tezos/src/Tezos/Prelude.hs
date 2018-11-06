@@ -8,21 +8,21 @@ type BlockHash = Text' "TzBlockHash"
 
 type OperationHash = Text' "TzOperationHash"
 
-type ImplicitPkh = Text' "TzImplicitPkh"
+type ImplicitAccount = Text' "TzImplicitPkh"
 
-type OriginatedHash = Text' "TzOriginatedHash"
+type OriginatedAccount = Text' "TzOriginatedHash"
 
-type AccountHash = Text' "TzAccountHash" -- Either type of account hash.
+type Account = Text' "TzAccountHash" -- Either type of account hash.
 
 type SignedOperationContents = Text' "TzSignedOperationContents"
 
 data DelegationInfo = DelegationInfo
-  { delegator :: OriginatedHash
+  { delegator :: OriginatedAccount
   , size :: FixedQty XTZ
   } deriving (Show, Generic, FromJSON)
 
 data RewardInfo = RewardInfo
-  { delegate :: ImplicitPkh
+  { delegate :: ImplicitAccount
   , reward :: FixedQty XTZ
   , staked :: FixedQty XTZ
   , delegations :: [DelegationInfo]
@@ -39,14 +39,14 @@ instance Indexable CycleEvent where
 
 data OriginationOp = OriginationOp
   { opHash :: OperationHash
-  , originator :: ImplicitPkh
-  , originated :: OriginatedHash
+  , originator :: ImplicitAccount
+  , originated :: OriginatedAccount
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 data TransactionOp = TransactionOp
   { opHash :: OperationHash
-  , from :: AccountHash
-  , to :: AccountHash
+  , from :: Account
+  , to :: Account
   , size :: FixedQty XTZ
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
