@@ -1,6 +1,6 @@
 import Http
 import Test
-import Tezos
+import Tezos hiding (Operation(..))
 import Tezos.Node
 import Vest
 

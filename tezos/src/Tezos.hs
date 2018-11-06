@@ -13,18 +13,6 @@ data UnexpectedResultException =
   UnexpectedResultException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-data DelegationInfo = DelegationInfo
-  { delegator :: OriginatedHash
-  , size :: FixedQty XTZ
-  } deriving (Show, Generic, FromJSON)
-
-data RewardInfo = RewardInfo
-  { delegate :: ImplicitPkh
-  , reward :: FixedQty XTZ
-  , staked :: FixedQty XTZ
-  , delegations :: [DelegationInfo]
-  } deriving (Show, Generic, FromJSON)
-
 snapshotLag :: Int -> Int
 snapshotLag = subtract 2
 
@@ -35,6 +23,7 @@ toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 -- Assume that the current cycle is X.
 -- rewardBlock: The last block in cycle (X - frozenCycles).
 -- snapshotBlock: The snapshot block in cycle (X - frozenCycles - snapshotLag).
+-- These rewards are to be paid out when the current cycle ends.
 getRewardInfo ::
      Http.T -> BlockHash -> BlockHash -> ImplicitPkh -> IO RewardInfo
 getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged delegateId) = do

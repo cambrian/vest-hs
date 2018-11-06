@@ -50,7 +50,7 @@ defaultArgs_ =
 type Api = InjectEndpoint
 
 -- TODO: Un-stub.
-inject :: T -> Tezos.Operation -> IO ()
+inject :: T -> Tezos.SignedOperationContents -> IO ()
 inject _ _ = return ()
 
 handlers :: Handlers Api
