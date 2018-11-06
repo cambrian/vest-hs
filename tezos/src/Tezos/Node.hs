@@ -109,7 +109,7 @@ data BlockMetadata = BlockMetadata
 
 type GetBlockMetadata = WithChainBlock ("metadata" :> Direct [BlockMetadata])
 
-data DelegationOp = DelegationOp
+data Delegation = Delegation
   { kind :: Text
   , source :: Text
   , fee :: Text
@@ -119,9 +119,9 @@ data DelegationOp = DelegationOp
   , delegate :: Maybe Text
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-$(deriveTypeScript defaultOptions ''DelegationOp)
+$(deriveTypeScript defaultOptions ''Delegation)
 
-data OriginationOp = OriginationOp
+data Origination = Origination
   { kind :: Text
   , source :: Text
   , fee :: Text
@@ -136,9 +136,9 @@ data OriginationOp = OriginationOp
   , script :: Maybe Value
   } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-$(deriveTypeScript defaultOptions ''OriginationOp)
+$(deriveTypeScript defaultOptions ''Origination)
 
-data TransactionOp = TransactionOp
+data Transaction = Transaction
   { kind :: Text
   , source :: Text
   , fee :: Text
@@ -150,25 +150,25 @@ data TransactionOp = TransactionOp
   , parameters :: Maybe Value
   } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-$(deriveTypeScript defaultOptions ''TransactionOp)
+$(deriveTypeScript defaultOptions ''Transaction)
 
-data UndefinedOp = UndefinedOp
+data Undefined = Undefined
   { kind :: Text
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
-$(deriveTypeScript defaultOptions ''UndefinedOp)
+$(deriveTypeScript defaultOptions ''Undefined)
 
 data Operation
-  = Delegation DelegationOp
-  | Origination OriginationOp
-  | Transaction TransactionOp
-  | Endorsement UndefinedOp
-  | Reveal UndefinedOp
-  | Ballot UndefinedOp
-  | Proposals UndefinedOp
-  | ActivateAccount UndefinedOp
-  | DoubleBakingEvidence UndefinedOp
-  | DoubleEndorsementEvidence UndefinedOp
+  = DelegationOp Delegation
+  | OriginationOp Origination
+  | TransactionOp Transaction
+  | EndorsementOp Undefined
+  | RevealOp Undefined
+  | BallotOp Undefined
+  | ProposalsOp Undefined
+  | ActivateAccountOp Undefined
+  | DoubleBakingEvidenceOp Undefined
+  | DoubleEndorsementEvidenceOp Undefined
   deriving (Eq, Show, Read, Generic, Hashable, ToJSON)
 
 -- This manual dispatch is absolute shit but (after much effort and a question on GitHub) remains
@@ -178,19 +178,19 @@ instance FromJSON Operation where
     case operation of
       Object object ->
         case HashMap.lookup "kind" object of
-          Just (String "delegation") -> Delegation <$> parseJSON operation
-          Just (String "origination") -> Origination <$> parseJSON operation
-          Just (String "transaction") -> Transaction <$> parseJSON operation
-          Just (String "endorsement") -> Endorsement <$> parseJSON operation
-          Just (String "reveal") -> Reveal <$> parseJSON operation
-          Just (String "ballot") -> Ballot <$> parseJSON operation
-          Just (String "proposals") -> Proposals <$> parseJSON operation
+          Just (String "delegation") -> DelegationOp <$> parseJSON operation
+          Just (String "origination") -> OriginationOp <$> parseJSON operation
+          Just (String "transaction") -> TransactionOp <$> parseJSON operation
+          Just (String "endorsement") -> EndorsementOp <$> parseJSON operation
+          Just (String "reveal") -> RevealOp <$> parseJSON operation
+          Just (String "ballot") -> BallotOp <$> parseJSON operation
+          Just (String "proposals") -> ProposalsOp <$> parseJSON operation
           Just (String "activate_account") ->
-            ActivateAccount <$> parseJSON operation
+            ActivateAccountOp <$> parseJSON operation
           Just (String "double_baking_evidence") ->
-            DoubleBakingEvidence <$> parseJSON operation
+            DoubleBakingEvidenceOp <$> parseJSON operation
           Just (String "double_endorsement_evidence") ->
-            DoubleEndorsementEvidence <$> parseJSON operation
+            DoubleEndorsementEvidenceOp <$> parseJSON operation
           _ -> fail "unexpected operation kind"
       _ -> fail "unexpected JSON shape"
 

@@ -68,7 +68,7 @@ deriving instance Read (PrimaryKey OperationT Identity)
 deriving instance Show (PrimaryKey OperationT Identity)
 
 data OriginationT f = Origination
-  { opHash :: PrimaryKey OperationT f
+  { hash :: PrimaryKey OperationT f
   , originator :: C f Tezos.ImplicitAccount
   , originated :: C f Tezos.OriginatedAccount
   , createdAt :: C f Timestamp
@@ -83,11 +83,11 @@ deriving instance Read Origination
 deriving instance Show Origination
 
 instance Table OriginationT where
-  data PrimaryKey OriginationT f = OriginationOpHash (PrimaryKey
-                                                      OperationT
-                                                      f)
+  data PrimaryKey OriginationT f = OriginationHash (PrimaryKey
+                                                    OperationT
+                                                    f)
                                    deriving (Generic, Beamable)
-  primaryKey Origination {opHash} = OriginationOpHash opHash
+  primaryKey Origination {hash} = OriginationHash hash
 
 deriving instance Eq (PrimaryKey OriginationT Identity)
 
@@ -96,7 +96,7 @@ deriving instance Read (PrimaryKey OriginationT Identity)
 deriving instance Show (PrimaryKey OriginationT Identity)
 
 data TransactionT f = Transaction
-  { opHash :: PrimaryKey OperationT f
+  { hash :: PrimaryKey OperationT f
   , from :: C f Tezos.Account
   , to :: C f Tezos.Account
   , size :: C f (FixedQty XTZ)
@@ -112,11 +112,11 @@ deriving instance Read Transaction
 deriving instance Show Transaction
 
 instance Table TransactionT where
-  data PrimaryKey TransactionT f = TransactionOpHash (PrimaryKey
-                                                      OperationT
-                                                      f)
+  data PrimaryKey TransactionT f = TransactionHash (PrimaryKey
+                                                    OperationT
+                                                    f)
                                    deriving (Generic, Beamable)
-  primaryKey Transaction {opHash} = TransactionOpHash opHash
+  primaryKey Transaction {hash} = TransactionHash hash
 
 deriving instance Eq (PrimaryKey TransactionT Identity)
 

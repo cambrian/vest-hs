@@ -37,22 +37,22 @@ instance Indexable CycleEvent where
   type IndexOf CycleEvent = Word64
   index = number
 
-data OriginationOp = OriginationOp
-  { opHash :: OperationHash
+data Origination = Origination
+  { hash :: OperationHash
   , originator :: ImplicitAccount
   , originated :: OriginatedAccount
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
-data TransactionOp = TransactionOp
-  { opHash :: OperationHash
+data Transaction = Transaction
+  { hash :: OperationHash
   , from :: Account
   , to :: Account
   , size :: FixedQty XTZ
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 data Operation
-  = Origination OriginationOp
-  | Transaction TransactionOp
+  = OriginationOp Origination
+  | TransactionOp Transaction
   | Other OperationHash
   deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 

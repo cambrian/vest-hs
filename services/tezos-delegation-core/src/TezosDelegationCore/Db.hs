@@ -266,7 +266,7 @@ wasCycleAlreadyHandled conn cycle = do
   let selectCycle = lookup_ (cycles schema) $ CycleNumber cycle
   isJust <$> runBeamPostgres conn (runSelectReturningOne selectCycle)
 
-delegatesTrackedAtCycle :: Connection -> Word64 -> IO [Tezos.ImplicitPkh]
+delegatesTrackedAtCycle :: Connection -> Word64 -> IO [Tezos.ImplicitAccount]
 delegatesTrackedAtCycle conn cycle = do
   let selectDelgates =
         select $

@@ -62,9 +62,9 @@ printMainBlock block connection =
   (print .
    filter
      (\case
-        Delegation _ -> True
-        Transaction _ -> True
-        Origination _ -> True
+        DelegationOp _ -> True
+        TransactionOp _ -> True
+        OriginationOp _ -> True
         _ -> False) .
    concatMap contents . concat)
 
