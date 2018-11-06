@@ -77,7 +77,7 @@ bakersFn T {rawStubData} _ = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   return $ bakersResponse stubData
 
-implicit :: T -> Tezos.ImplicitPkh -> IO TezosStats.ImplicitResponse
+implicit :: T -> Tezos.ImplicitAccount -> IO TezosStats.ImplicitResponse
 implicit T {rawStubData} implicitPkh = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   case HashMap.lookup implicitPkh (implicitResponse stubData) of

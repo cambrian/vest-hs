@@ -21,11 +21,11 @@ toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 
 -- | Calculates reward split info.
 -- Assume that the current cycle is X.
--- rewardBlock: The last block in cycle (X - frozenCycles).
--- snapshotBlock: The snapshot block in cycle (X - frozenCycles - snapshotLag).
--- These rewards are to be paid out when the current cycle ends.
+-- rewardBlock: The last block in cycle (X - 1 - frozenCycles).
+-- snapshotBlock: The snapshot block in cycle (X - 1 - frozenCycles - snapshotLag).
+-- These rewards are to be paid out during the current cycle.
 getRewardInfo ::
-     Http.T -> BlockHash -> BlockHash -> ImplicitPkh -> IO RewardInfo
+     Http.T -> BlockHash -> BlockHash -> ImplicitAccount -> IO RewardInfo
 getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged delegateId) = do
   frozenBalanceCycles <-
     Http.direct
@@ -65,3 +65,12 @@ getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged del
          return DelegationInfo {delegator = Tagged delegator, size})
       delegators
   return RewardInfo {delegate = Tagged delegateId, reward, staked, delegations}
+-- materializeBlockEvent :: Http.T -> IndexOf BlockEvent -> IO BlockEvent
+-- materializeBlockEvent connection index = do
+--   latestBlock <- Http.direct
+--       (Http.request
+--          (Proxy :: Proxy GetBlock)
+--          mainChain
+--          headBlock)
+--       connection
+--   blockLevel <-

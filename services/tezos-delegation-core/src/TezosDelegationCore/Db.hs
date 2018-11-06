@@ -32,7 +32,7 @@ deriving instance Read (PrimaryKey CycleT Identity)
 deriving instance Show (PrimaryKey CycleT Identity)
 
 data DelegateT f = Delegate
-  { address :: C f Tezos.ImplicitPkh
+  { address :: C f Tezos.ImplicitAccount
   , name :: C f Text
   , description :: C f Text
   , firstManagedCycle :: PrimaryKey CycleT f
@@ -50,7 +50,7 @@ deriving instance Show Delegate
 
 instance Table DelegateT where
   data PrimaryKey DelegateT f = DelegateAddress (C f
-                                                 Tezos.ImplicitPkh)
+                                                 Tezos.ImplicitAccount)
                                 deriving (Generic, Beamable)
   primaryKey Delegate {address} = DelegateAddress address
 
@@ -96,7 +96,7 @@ deriving instance Show (PrimaryKey RewardT Identity)
 
 data PayoutT f = Payout
   { id :: C f UUID
-  , delegator :: C f Tezos.OriginatedHash
+  , delegator :: C f Tezos.OriginatedAccount
   , size :: C f (FixedQty XTZ)
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
@@ -147,7 +147,7 @@ deriving instance Read (PrimaryKey RefundT Identity)
 deriving instance Show (PrimaryKey RefundT Identity)
 
 data DelegationT f = Delegation
-  { delegator :: C f Tezos.OriginatedHash
+  { delegator :: C f Tezos.OriginatedAccount
   , delegate :: PrimaryKey DelegateT f
   , rightsCycle :: PrimaryKey CycleT f
   , size :: C f (FixedQty XTZ)
@@ -166,7 +166,7 @@ deriving instance Show Delegation
 
 instance Table DelegationT where
   data PrimaryKey DelegationT f = DelegationDelegator (C f
-                                                       Tezos.OriginatedHash)
+                                                       Tezos.OriginatedAccount)
                                                     (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
                                   deriving (Generic, Beamable)
   primaryKey Delegation {delegator, delegate, rightsCycle} =
