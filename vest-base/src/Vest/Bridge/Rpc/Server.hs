@@ -98,13 +98,15 @@ serve_ sender t handler =
             sender (sendToClient . RpcResponse) (handler t claims req))
         [ Handler $ \(x :: AuthException) ->
             sendToClient $ RpcResponseClientException $ show x
+        , Handler $ \(x :: CallException) ->
+            sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: DeserializeException fmt) ->
             sendToClient $ RpcResponseClientException $ show x
         , Handler $ \(x :: SomeException) -> do
             sendToClient $ RpcResponseServerException $ show x
             log t Error $ show x
-            -- ^ TODO: send a generic 503 type message instead of `show x`, and add logging
-            throw x
+            -- ^ TODO: Send a generic 503 type message instead of `show x` and add logging.
+            -- throw x
         ]
       where
         sendToClient = respond . serialize' @fmt @(RpcResponse res)

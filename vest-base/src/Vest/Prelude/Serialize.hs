@@ -16,7 +16,7 @@ data SerializationFormat
 newtype DeserializeException (fmt :: SerializationFormat) =
   DeserializeException Text
   deriving (Eq, Ord, Show, Read, Generic)
-  deriving anyclass (Exception, Hashable, ToJSON, FromJSON)
+  deriving anyclass (Exception, Hashable, FromJSON, ToJSON)
 
 class Serializable (fmt :: SerializationFormat) a where
   serialize :: a -> Text

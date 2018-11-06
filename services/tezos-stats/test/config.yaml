@@ -1,0 +1,6 @@
+# Local defaults.
+webSocketConfig:
+  servePort: 3000
+  pingInterval: 30
+  servers: []
+streamDelayMillis: 100

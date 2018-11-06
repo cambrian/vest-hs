@@ -12,9 +12,9 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: PostgresConfig
+    -- dbConfig :: PostgresConfig
   -- , amqpConfig :: Amqp.Config
-  , webSocketConfig :: WebSocket.Config
+  { webSocketConfig :: WebSocket.Config
   -- , redisConfig :: RedisConfig
   } deriving (Generic, FromJSON)
 
@@ -62,5 +62,5 @@ instance Service T where
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
   init Args {configFile} f = do
-    Config {dbConfig, webSocketConfig} <- Yaml.decodeFileThrow configFile
-    with2 dbConfig webSocketConfig (\(db, webSocket) -> f $ T {db, webSocket})
+    Config {webSocketConfig} <- Yaml.decodeFileThrow configFile
+    with webSocketConfig (\webSocket -> f $ T {webSocket})

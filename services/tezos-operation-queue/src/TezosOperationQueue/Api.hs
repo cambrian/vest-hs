@@ -7,4 +7,4 @@ import qualified Transport.WebSocket as WebSocket
 import Vest
 
 type InjectEndpoint
-   = Endpoint 'NoAuth TezosOperationQueue.T WebSocket.T "inject" (Text' "TzOperation") ('Direct ())
+   = EndpointJson 'NoAuth TezosOperationQueue.T WebSocket.T "inject" (Text' "TzOperation") ('Direct ())

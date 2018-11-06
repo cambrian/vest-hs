@@ -1,0 +1,175 @@
+{
+  "overviewResponse": {
+    "bakerCount": 2,
+    "totalRewards": 4300,
+    "bondsOverTime": [
+      {
+        "timestamp": "2007-04-05T14:30Z",
+        "size": 4000
+      },
+      {
+        "timestamp": "2007-05-05T14:30Z",
+        "size": 5000
+      }
+    ],
+    "totalDelegationsOverTime": [
+      {
+        "timestamp": "2007-04-05T14:30Z",
+        "size": 10000
+      },
+      {
+        "timestamp": "2007-05-05T14:30Z",
+        "size": 15000
+      }
+    ],
+    "interestRatesOverTime": [
+      {
+        "timestamp": "2007-04-05T14:30Z",
+        "rate": 0.0952
+      },
+      {
+        "timestamp": "2007-05-05T14:30Z",
+        "rate": 0.1039
+      }
+    ],
+    "delegateDistribution": [
+      {
+        "delegate": "VestPublicKeyHash",
+        "fraction": 0.6
+      },
+      {
+        "delegate": "PolychinaPublicKeyHash",
+        "fraction": 0.4
+      }
+    ],
+    "retrieved": "2007-05-05T14:30Z"
+  },
+  "bakersResponse": {
+    "bakers": [
+      {
+        "name": "Vest",
+        "description": "Tite.",
+        "hash": "VestPublicKeyHash",
+        "fee": 20,
+        "bond": 3000,
+        "totalDelegations": 3,
+        "overDelegated": false,
+        "cyclesOutstanding": 1,
+        "interestRatesOverTime": [
+          {
+            "timestamp": "2007-04-05T14:30Z",
+            "rate": 0.0952
+          },
+          {
+            "timestamp": "2007-05-05T14:30Z",
+            "rate": 0.1039
+          }
+        ],
+        "rewardsOverTime": [
+          {
+            "timestamp": "2007-04-05T14:30Z",
+            "size": 1000
+          },
+          {
+            "timestamp": "2007-05-05T14:30Z",
+            "size": 1200
+          }
+        ]
+      },
+      {
+        "name": "Polychina",
+        "description": "Dope.",
+        "hash": "PolychinaPublicKeyHash",
+        "fee": 20,
+        "bond": 2000,
+        "totalDelegations": 1,
+        "overDelegated": true,
+        "cyclesOutstanding": 2,
+        "interestRatesOverTime": [
+          {
+            "timestamp": "2007-04-05T14:30Z",
+            "rate": 0.0952
+          },
+          {
+            "timestamp": "2007-05-05T14:30Z",
+            "rate": 0.1039
+          }
+        ],
+        "rewardsOverTime": [
+          {
+            "timestamp": "2007-04-05T14:30Z",
+            "size": 700
+          },
+          {
+            "timestamp": "2007-05-05T14:30Z",
+            "size": 1400
+          }
+        ]
+      }
+    ],
+    "retrieved": "2007-05-05T14:30Z"
+  },
+  "implicitResponse": {
+    "SanjayPublicKeyHash": {
+      "balance": 100000,
+      "originated": [
+        {
+          "hash": "SanjayOriginatedHash",
+          "delegate": {
+            "name": "Polychina",
+            "hash": "PolychinaPublicKeyHash"
+          },
+          "balance": 200000,
+          "ledger": [
+            {
+              "operationType": "Deposit",
+              "hash": "SomeDepositOpHash",
+              "from": "SanjayPublicKeyHash",
+              "size": 1337,
+              "blockHash": "SomeBlockHash",
+              "timestamp": "2007-04-20T04:20Z"
+            }
+          ]
+        }
+      ],
+      "retrieved": "2007-05-05T14:30Z"
+    }
+  },
+  "operationResponses": {
+    "SomeDepositOpHash": [
+      {
+        "baked": false,
+        "error": false,
+        "retrieved": "2007-05-01T14:30Z"
+      },
+      {
+        "baked": true,
+        "error": false,
+        "confirmations": 5,
+        "blockHash": "SomeBlockHash",
+        "retrieved": "2007-05-01T14:36Z"
+      },
+      {
+        "baked": true,
+        "error": false,
+        "confirmations": 10,
+        "blockHash": "SomeBlockHash",
+        "retrieved": "2007-05-01T14:41Z"
+      },
+      {
+        "baked": true,
+        "error": false,
+        "confirmations": 15,
+        "blockHash": "SomeBlockHash",
+        "retrieved": "2007-05-01T14:46Z"
+      },
+      {
+        "baked": true,
+        "error": false,
+        "confirmations": 20,
+        "blockHash": "SomeBlockHash",
+        "retrieved": "2007-05-01T14:51Z"
+      }
+    ]
+  }
+}

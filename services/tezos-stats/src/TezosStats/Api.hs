@@ -30,7 +30,7 @@ data DelegateFraction = DelegateFraction
 $(deriveTypeScript defaultOptions ''DelegateFraction)
 
 data OverviewResponse = OverviewResponse
-  { minerCount :: Int
+  { bakerCount :: Int
   , totalRewards :: Integer' "XTZ"
   , bondsOverTime :: [TimestampSize]
   , totalDelegationsOverTime :: [TimestampSize]
@@ -42,7 +42,7 @@ data OverviewResponse = OverviewResponse
 $(deriveTypeScript defaultOptions ''OverviewResponse)
 
 type OverviewEndpoint
-   = Endpoint 'NoAuth TezosStats.T WebSocket.T "overview" () ('Direct OverviewResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "overview" () ('Direct OverviewResponse)
 
 data Baker = Baker
   { name :: Text
@@ -67,7 +67,7 @@ data BakersResponse = BakersResponse
 $(deriveTypeScript defaultOptions ''BakersResponse)
 
 type BakersEndpoint
-   = Endpoint 'NoAuth TezosStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
 
 data DelegateInfo = DelegateInfo
   { hash :: Text' "TzImplicitPkh"
@@ -113,7 +113,7 @@ data ImplicitResponse = ImplicitResponse
 $(deriveTypeScript defaultOptions ''ImplicitResponse)
 
 type ImplicitEndpoint
-   = Endpoint 'NoAuth TezosStats.T WebSocket.T "implicit" (Text' "TzImplicitPkh") ('Direct ImplicitResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" (Text' "TzImplicitPkh") ('Direct ImplicitResponse)
 
 data OperationResponse = OperationResponse
   { baked :: Bool
@@ -126,4 +126,11 @@ data OperationResponse = OperationResponse
 $(deriveTypeScript defaultOptions ''OperationResponse)
 
 type OperationEndpoint
-   = Endpoint 'NoAuth TezosStats.T WebSocket.T "operation" (Text' "TzOperationHash") ('Streaming OperationResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "operation" (Text' "TzOperationHash") ('Streaming OperationResponse)
+
+data StubData = StubData
+  { overviewResponse :: OverviewResponse
+  , bakersResponse :: BakersResponse
+  , implicitResponse :: HashMap (Text' "TzImplicitPkh") ImplicitResponse
+  , operationResponses :: HashMap (Text' "TzOperationHash") [OperationResponse]
+  } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)

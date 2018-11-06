@@ -13,7 +13,7 @@ import Vest.Prelude
 
 data AuthException =
   AuthException
-  deriving (Eq, Read, Show, Generic, Exception, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 -- | Signing and verification are STM operations because they should be lightweight but
 -- nevertheless may want to read state (e.g. the current access token version).

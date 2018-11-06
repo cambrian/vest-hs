@@ -12,8 +12,13 @@ type Route = Text' "Route"
 
 newtype AlreadyServingException =
   AlreadyServingException Route
-  deriving (Eq, Show, Read, Generic)
-  deriving anyclass (Exception, FromJSON, ToJSON)
+  deriving (Eq, Ord, Show, Read, Generic)
+  deriving anyclass (Exception, Hashable, FromJSON, ToJSON)
+
+newtype CallException =
+  CallException Text
+  deriving (Eq, Ord, Show, Read, Generic)
+  deriving anyclass (Exception, Hashable, FromJSON, ToJSON)
 
 -- | We use callbacks instread of streaming interfaces because Streamly streams
 -- don't have persistence and TB[M]Queues are ugly.
@@ -63,6 +68,8 @@ data Endpoint_ (timeoutSeconds :: Nat) (fmt :: SerializationFormat) (auth :: Aut
 type DefaultTimeoutSeconds = 5
 
 type Endpoint = Endpoint_ DefaultTimeoutSeconds 'Haskell
+
+type EndpointJson = Endpoint_ DefaultTimeoutSeconds 'JSON
 
 timeoutsPerHeartbeat :: Ratio Natural
 timeoutsPerHeartbeat = 2

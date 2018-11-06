@@ -3,18 +3,19 @@ module TezosStats.Internal
   ) where
 
 -- import qualified AccessControl.Client as AccessControlClient
-import qualified Db
-
+-- import qualified Db
 -- import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
 import Vest
 
 data T = T
-  { db :: Db.Connection
+    -- db :: Db.Connection
   -- , amqp :: Amqp.T
-  , webSocket :: WebSocket.T
+  { webSocket :: WebSocket.T
   -- , redis :: RedisConnection
   -- , accessControlClient :: AccessControlClient.T
+  , rawStubData :: Text
+  , streamDelayMillis :: Natural
   }
 
 -- instance HasRedisConnection T where
