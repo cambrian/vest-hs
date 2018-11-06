@@ -24,7 +24,8 @@ data DelegationInfo = DelegationInfo
 data RewardInfo = RewardInfo
   { delegate :: ImplicitAccount
   , reward :: FixedQty XTZ
-  , staked :: FixedQty XTZ
+  , stakingBalance :: FixedQty XTZ
+  , delegatedBalance :: FixedQty XTZ
   , delegations :: [DelegationInfo]
   } deriving (Show, Generic, FromJSON)
 

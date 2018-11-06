@@ -48,7 +48,8 @@ getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged del
          snapshotBlock
          delegateId)
       connection
-  staked <- toFixedQtyUnsafe (staking_balance delegateSnapshot)
+  stakingBalance <- toFixedQtyUnsafe (staking_balance delegateSnapshot)
+  delegatedBalance <- toFixedQtyUnsafe (delegated_balance delegateSnapshot)
   let delegators = delegated_contracts delegateSnapshot
   delegations <-
     mapConcurrently
@@ -64,7 +65,14 @@ getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged del
            toFixedQtyUnsafe
          return DelegationInfo {delegator = Tagged delegator, size})
       delegators
-  return RewardInfo {delegate = Tagged delegateId, reward, staked, delegations}
+  return
+    RewardInfo
+      { delegate = Tagged delegateId
+      , reward
+      , stakingBalance
+      , delegatedBalance
+      , delegations
+      }
 -- materializeBlockEvent :: Http.T -> IndexOf BlockEvent -> IO BlockEvent
 -- materializeBlockEvent connection index = do
 --   latestBlock <- Http.direct

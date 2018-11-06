@@ -60,6 +60,7 @@ cycleConsumer T {db} =
   let nextCycle = selectNextCycle db
       f Tezos.CycleEvent {number} = do
         wasCycleAlreadyHandled db number >>= (`when` return ())
+        delegates <- delegatesTrackedAtCycle db number
         return ()
    in (nextCycle, f)
 
