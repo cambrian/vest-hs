@@ -19,7 +19,7 @@ type SignedOperationContents = Text' "TzSignedOperationContents"
 data DelegationInfo = DelegationInfo
   { delegator :: OriginatedAccount
   , size :: FixedQty XTZ
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
 data RewardInfo = RewardInfo
   { delegate :: ImplicitAccount
@@ -27,7 +27,7 @@ data RewardInfo = RewardInfo
   , stakingBalance :: FixedQty XTZ
   , delegatedBalance :: FixedQty XTZ
   , delegations :: [DelegationInfo]
-  } deriving (Show, Generic, FromJSON)
+  } deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
 data CycleEvent = CycleEvent
   { number :: Word64

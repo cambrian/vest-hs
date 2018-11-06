@@ -56,11 +56,13 @@ handlers :: Handlers Api
 handlers = ()
 
 cycleConsumer :: T -> Consumers CycleEvents
-cycleConsumer T {db} =
+cycleConsumer T {db, amqp} =
   let nextCycle = selectNextCycle db
-      f Tezos.CycleEvent {number} = do
-        wasCycleAlreadyHandled db number >>= (`when` return ())
-        delegates <- delegatesTrackedAtCycle db number
+      getRewardInfo = makeClient amqp (Proxy :: Proxy RewardInfoEndpoint)
+      f Tezos.CycleEvent {number = cycleNumber} = do
+        wasCycleAlreadyHandled db cycleNumber >>= (`when` return ())
+        delegates <- delegatesTrackedAtCycle db cycleNumber
+        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNumber delegates
         return ()
    in (nextCycle, f)
 
