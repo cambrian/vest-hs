@@ -7,7 +7,7 @@ import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import qualified Db
 import TezosChainWatcher.Api
-import qualified TezosDelegationCore.Db as Db ()
+import TezosDelegationCore.Db
 import TezosDelegationCore.Internal as TezosDelegationCore
 import qualified Transport.Amqp as Amqp
 import Vest
@@ -54,8 +54,14 @@ type Api = ()
 handlers :: Handlers Api
 handlers = ()
 
--- cycleConsumer :: Consumers CycleEvents
--- cycleConsumer T {db} = panic "unimplemented"
+cycleConsumer :: T -> Consumers CycleEvents
+cycleConsumer T {db} =
+  let nextCycle = selectNextCycle db
+      f CycleEvent {number} = do
+        wasCycleAlreadyHandled db number >>= (`when` return ())
+        return ()
+   in (nextCycle, f)
+
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
