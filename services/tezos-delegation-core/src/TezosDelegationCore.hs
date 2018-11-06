@@ -6,6 +6,7 @@ module TezosDelegationCore
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import qualified Db
+import qualified Tezos
 import TezosChainWatcher.Api
 import TezosDelegationCore.Db
 import TezosDelegationCore.Internal as TezosDelegationCore
@@ -57,7 +58,7 @@ handlers = ()
 cycleConsumer :: T -> Consumers CycleEvents
 cycleConsumer T {db} =
   let nextCycle = selectNextCycle db
-      f CycleEvent {number} = do
+      f Tezos.CycleEvent {number} = do
         wasCycleAlreadyHandled db number >>= (`when` return ())
         return ()
    in (nextCycle, f)

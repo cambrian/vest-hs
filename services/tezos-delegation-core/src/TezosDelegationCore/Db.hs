@@ -31,12 +31,15 @@ deriving instance Read (PrimaryKey CycleT Identity)
 
 deriving instance Show (PrimaryKey CycleT Identity)
 
+cycleNumber :: PrimaryKey CycleT f -> C f Word64
+cycleNumber (CycleNumber n) = n
+
 data DelegateT f = Delegate
   { address :: C f Tezos.ImplicitPkh
   , name :: C f Text
   , description :: C f Text
   , firstManagedCycle :: PrimaryKey CycleT f
-  , priceTiers :: C f [(FixedQty XTZ, Rational)]
+  , priceTiers :: C f (PgJSON [(FixedQty XTZ, Rational)])
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -231,7 +234,7 @@ deriving instance Read (PrimaryKey ConfirmedPaymentT Identity)
 
 deriving instance Show (PrimaryKey ConfirmedPaymentT Identity)
 
-data Db f = Db
+data Schema f = Schema
   { cycles :: f (TableEntity CycleT)
   , delegates :: f (TableEntity DelegateT)
   , rewards :: f (TableEntity RewardT)
@@ -242,17 +245,16 @@ data Db f = Db
   , confirmedPayments :: f (TableEntity ConfirmedPaymentT)
   } deriving (Generic)
 
-instance Database Postgres Db
+instance Database Postgres Schema
 
-schema :: DatabaseSettings Postgres Db
+schema :: DatabaseSettings Postgres Schema
 schema = defaultDbSettings
 
 selectNextCycle :: Connection -> IO Word64
 selectNextCycle conn = do
   let selectMaxCycleNumber =
-        runSelectReturningOne $
         select $ aggregate_ max_ $ number <$> all_ (cycles schema)
-  m <- runBeamPostgres conn selectMaxCycleNumber
+  m <- runBeamPostgres conn $ runSelectReturningOne selectMaxCycleNumber
   return $
     case m of
       Nothing -> 0
@@ -260,7 +262,16 @@ selectNextCycle conn = do
       Just (Just num) -> num + 1
 
 wasCycleAlreadyHandled :: Connection -> Word64 -> IO Bool
-wasCycleAlreadyHandled conn cycleNum = do
-  let selectCycle =
-        runSelectReturningOne $ lookup_ (cycles schema) $ CycleNumber cycleNum
-  isJust <$> runBeamPostgres conn selectCycle
+wasCycleAlreadyHandled conn cycle = do
+  let selectCycle = lookup_ (cycles schema) $ CycleNumber cycle
+  isJust <$> runBeamPostgres conn (runSelectReturningOne selectCycle)
+
+delegatesTrackedAtCycle :: Connection -> Word64 -> IO [Tezos.ImplicitPkh]
+delegatesTrackedAtCycle conn cycle = do
+  let selectDelgates =
+        select $
+        address <$>
+        filter_
+          ((val_ cycle >=.) . cycleNumber . firstManagedCycle)
+          (all_ $ delegates schema)
+  runBeamPostgres conn $ runSelectReturningList selectDelgates

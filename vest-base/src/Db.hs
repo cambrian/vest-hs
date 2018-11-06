@@ -14,7 +14,15 @@ import GHC.Base (String)
 import qualified Money
 import Vest
 
+deriving instance Read a => Read (PgJSON a)
+
 -- Postgres serializations for Vest types.
+-- Tagged types have HasSqlValueSyntax defined in Beam but no FromField instances
+instance FromField a => FromField (Tagged t a) where
+  fromField f bs = Tagged <$> fromField f bs
+
+instance FromField a => FromBackendRow Postgres (Tagged t a)
+
 -- In theory you could implement this directly on Timestamp without having to create a UTCTime but
 -- that's a bunch of work for what's only a smallish win.
 -- No type is provided for Time/interval yet because postgresql-simple doesn't support DiffTime or
@@ -23,7 +31,7 @@ instance HasSqlValueSyntax be UTCTime => HasSqlValueSyntax be Timestamp where
   sqlValueSyntax = sqlValueSyntax . utcTimeFromTimestamp
 
 instance FromField Timestamp where
-  fromField f bs = fromField f bs >>- timestampFromUTCTime
+  fromField f bs = timestampFromUTCTime <$> fromField f bs
 
 instance FromBackendRow Postgres Timestamp
 
@@ -32,10 +40,10 @@ instance (HasSqlValueSyntax be Integer, KnownSymbol a, Money.GoodScale scale) =>
   sqlValueSyntax =
     sqlValueSyntax . Money.someDiscreteAmount . Money.toSomeDiscrete
 
-instance (Money.GoodScale scale) => FromField (Money.Discrete' a scale) where
-  fromField f bs = fromField f bs >>- Money.discrete @scale
+instance Money.GoodScale scale => FromField (Money.Discrete' a scale) where
+  fromField f bs = Money.discrete @scale <$> fromField f bs
 
-instance (Money.GoodScale scale) =>
+instance Money.GoodScale scale =>
          FromBackendRow Postgres (Money.Discrete' a scale)
 
 data Config = Config
