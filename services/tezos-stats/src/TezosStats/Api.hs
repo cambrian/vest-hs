@@ -4,13 +4,14 @@ module TezosStats.Api
 
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
+import qualified Tezos
 import qualified TezosStats.Internal as TezosStats
 import qualified Transport.WebSocket as WebSocket
 import Vest
 
 data TimestampSize = TimestampSize
   { timestamp :: UTCTime
-  , size :: Integer' "XTZ"
+  , size :: Integer' XTZ
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''TimestampSize)
@@ -23,7 +24,7 @@ data TimestampRate = TimestampRate
 $(deriveTypeScript defaultOptions ''TimestampRate)
 
 data DelegateFraction = DelegateFraction
-  { delegate :: Text' "TzImplicitPkh"
+  { delegate :: Tezos.ImplicitPkh
   , fraction :: Double
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -31,7 +32,7 @@ $(deriveTypeScript defaultOptions ''DelegateFraction)
 
 data OverviewResponse = OverviewResponse
   { bakerCount :: Int
-  , totalRewards :: Integer' "XTZ"
+  , totalRewards :: Integer' XTZ
   , bondsOverTime :: [TimestampSize]
   , totalDelegationsOverTime :: [TimestampSize]
   , interestRatesOverTime :: [TimestampRate]
@@ -47,10 +48,10 @@ type OverviewEndpoint
 data Baker = Baker
   { name :: Text
   , description :: Text
-  , hash :: Text' "TzImplicitPkh"
-  , fee :: Integer' "XTZ"
-  , bond :: Integer' "XTZ"
-  , totalDelegations :: Integer' "XTZ"
+  , hash :: Tezos.ImplicitPkh
+  , fee :: Integer' XTZ
+  , bond :: Integer' XTZ
+  , totalDelegations :: Integer' XTZ
   , overDelegated :: Bool
   , cyclesOutstanding :: Int
   , interestRatesOverTime :: [TimestampRate]
@@ -70,7 +71,7 @@ type BakersEndpoint
    = EndpointJson 'NoAuth TezosStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
 
 data DelegateInfo = DelegateInfo
-  { hash :: Text' "TzImplicitPkh"
+  { hash :: Tezos.ImplicitPkh
   , name :: Text
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -86,26 +87,26 @@ $(deriveTypeScript defaultOptions ''LedgerOperationType)
 
 data LedgerOperation = LedgerOperation
   { operationType :: LedgerOperationType
-  , hash :: Text' "TzOperationHash"
-  , from :: Maybe (Text' "TzAccountHash") -- AccountHash can be either originated or implicit.
-  , size :: Integer' "XTZ"
-  , blockHash :: Maybe (Text' "TzBlockHash")
+  , hash :: Tezos.OperationHash
+  , from :: Maybe Tezos.AccountHash -- From account can be either originated or implicit.
+  , size :: Integer' XTZ
+  , blockHash :: Maybe Tezos.BlockHash
   , timestamp :: UTCTime
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''LedgerOperation)
 
 data OriginatedAccount = OriginatedAccount
-  { hash :: Text' "TzOriginatedHash"
+  { hash :: Tezos.OriginatedHash
   , delegate :: DelegateInfo
-  , balance :: Integer' "XTZ"
+  , balance :: Integer' XTZ
   , ledger :: [LedgerOperation]
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''OriginatedAccount)
 
 data ImplicitResponse = ImplicitResponse
-  { balance :: Integer' "XTZ"
+  { balance :: Integer' XTZ
   , originated :: [OriginatedAccount]
   , retrieved :: UTCTime
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
@@ -113,24 +114,24 @@ data ImplicitResponse = ImplicitResponse
 $(deriveTypeScript defaultOptions ''ImplicitResponse)
 
 type ImplicitEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" (Text' "TzImplicitPkh") ('Direct ImplicitResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" Tezos.ImplicitPkh ('Direct ImplicitResponse)
 
 data OperationResponse = OperationResponse
   { baked :: Bool
   , error :: Bool
   , confirmations :: Maybe Int
-  , blockHash :: Maybe (Text' "TzBlockHash")
+  , blockHash :: Maybe Tezos.BlockHash
   , retrieved :: UTCTime
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''OperationResponse)
 
 type OperationEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "operation" (Text' "TzOperationHash") ('Streaming OperationResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "operation" Tezos.OperationHash ('Streaming OperationResponse)
 
 data StubData = StubData
   { overviewResponse :: OverviewResponse
   , bakersResponse :: BakersResponse
-  , implicitResponse :: HashMap (Text' "TzImplicitPkh") ImplicitResponse
-  , operationResponses :: HashMap (Text' "TzOperationHash") [OperationResponse]
+  , implicitResponse :: HashMap Tezos.ImplicitPkh ImplicitResponse
+  , operationResponses :: HashMap Tezos.OperationHash [OperationResponse]
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)

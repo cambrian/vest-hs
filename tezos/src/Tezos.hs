@@ -1,10 +1,12 @@
 module Tezos
   ( module Tezos
+  , module Reexports
   ) where
 
 import Data.Aeson
 import qualified Http
 import Tezos.Node
+import Tezos.Prelude as Reexports
 import Vest
 
 data UnexpectedResultException =
@@ -12,21 +14,21 @@ data UnexpectedResultException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 data DelegationInfo = DelegationInfo
-  { delegator :: Text' "TzOriginatedHash"
-  , size :: FixedQty "XTZ"
+  { delegator :: OriginatedHash
+  , size :: FixedQty XTZ
   } deriving (Show, Generic, FromJSON)
 
 data RewardInfo = RewardInfo
-  { delegate :: Text' "TzImplicitPkh"
-  , reward :: FixedQty "XTZ"
-  , staked :: FixedQty "XTZ"
+  { delegate :: ImplicitPkh
+  , reward :: FixedQty XTZ
+  , staked :: FixedQty XTZ
   , delegations :: [DelegationInfo]
   } deriving (Show, Generic, FromJSON)
 
 snapshotLag :: Int -> Int
 snapshotLag = subtract 2
 
-toFixedQtyUnsafe :: Text -> IO (FixedQty "XTZ")
+toFixedQtyUnsafe :: Text -> IO (FixedQty XTZ)
 toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 
 -- | Calculates reward split info.
@@ -34,11 +36,7 @@ toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 -- rewardBlock: The last block in cycle (X - frozenCycles).
 -- snapshotBlock: The snapshot block in cycle (X - frozenCycles - snapshotLag).
 getRewardInfo ::
-     Http.T
-  -> Text' "TzBlockHash"
-  -> Text' "TzBlockHash"
-  -> Text' "TzImplicitPkh"
-  -> IO RewardInfo
+     Http.T -> BlockHash -> BlockHash -> ImplicitPkh -> IO RewardInfo
 getRewardInfo connection (Tagged rewardBlock) (Tagged snapshotBlock) (Tagged delegateId) = do
   frozenBalanceCycles <-
     Http.direct

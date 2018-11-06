@@ -2,6 +2,7 @@ module TezosChainWatcher.Api
   ( module TezosChainWatcher.Api
   ) where
 
+import qualified Tezos
 import TezosChainWatcher.Internal
 import qualified Transport.Amqp as Amqp
 import Vest
@@ -18,17 +19,18 @@ instance Indexable CycleEvent where
 type CycleEvents = Event T Amqp.T "cycles" CycleEvent
 
 data Operation = Operation
-  { hash :: Text' "OpHash"
-  , sender :: Text' "Address"
-  , recipient :: Maybe (Text' "Address")
-  , size :: Maybe (FixedQty "XTZ")
+  { hash :: Tezos.OperationHash
+  , sender :: Tezos.AccountHash
+  , recipient :: Maybe Tezos.AccountHash
+  , size :: Maybe (FixedQty XTZ)
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 data BlockEvent = BlockEvent
   { number :: Word64
+  , hash :: Tezos.BlockHash
   , cycleNumber :: Word64
   , timestamp :: Timestamp
-  , txFee :: FixedQty "XTZ"
+  , txFee :: FixedQty XTZ
   , operations :: [Operation]
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
