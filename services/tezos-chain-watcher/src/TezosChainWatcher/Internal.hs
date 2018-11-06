@@ -22,6 +22,9 @@ instance HasRedisConnection T where
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
 
+instance HasEventTransport Amqp.T T where
+  eventTransport = amqp
+
 instance AccessControlClient.Has T where
   accessControlClient = accessControlClient
 

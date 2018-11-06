@@ -6,6 +6,7 @@ module TezosDelegationCore
 import qualified AccessControl.Client as AccessControlClient
 import qualified Data.Yaml as Yaml
 import Db
+import qualified TezosDelegationCore.Db as Db ()
 import TezosDelegationCore.Internal as TezosDelegationCore
 import qualified Transport.Amqp as Amqp
 import Vest
