@@ -231,7 +231,7 @@ deriving instance Read (PrimaryKey ConfirmedPaymentT Identity)
 
 deriving instance Show (PrimaryKey ConfirmedPaymentT Identity)
 
-data T f = T
+data Db f = Db
   { cycles :: f (TableEntity CycleT)
   , delegates :: f (TableEntity DelegateT)
   , rewards :: f (TableEntity RewardT)
@@ -242,9 +242,9 @@ data T f = T
   , confirmedPayments :: f (TableEntity ConfirmedPaymentT)
   } deriving (Generic)
 
-instance Database Postgres T
+instance Database Postgres Db
 
-schema :: DatabaseSettings Postgres T
+schema :: DatabaseSettings Postgres Db
 schema = defaultDbSettings
 
 selectNextCycle :: Connection -> IO Word64
@@ -258,3 +258,9 @@ selectNextCycle conn = do
       Nothing -> 0
       Just Nothing -> 0
       Just (Just num) -> num + 1
+
+wasCycleAlreadyHandled :: Connection -> Word64 -> IO Bool
+wasCycleAlreadyHandled conn cycleNum = do
+  let selectCycle =
+        runSelectReturningOne $ lookup_ (cycles schema) $ CycleNumber cycleNum
+  isJust <$> runBeamPostgres conn selectCycle

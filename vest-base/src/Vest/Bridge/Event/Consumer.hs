@@ -11,18 +11,17 @@ import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
--- | Consumption begins from the provided index (inclusive).
 type family ConsumerThreads spec where
   ConsumerThreads () = ()
-  ConsumerThreads (Event_ _ _ _ _ a) = Async Void
+  ConsumerThreads (Event_ _ _ _ _ a) = Async ()
   ConsumerThreads (a
                    :<|> b) = (ConsumerThreads a
                               :<|> ConsumerThreads b)
 
+-- | Consumption begins from the provided index (inclusive).
 type family Consumers spec where
   Consumers () = ()
-  Consumers (Event_ _ _ _ _ a) = ( IO (IndexOf a)
-                                 , Stream QueueBuffer a -> IO Void)
+  Consumers (Event_ _ _ _ _ a) = (IO (IndexOf a), a -> IO ())
   Consumers (a
              :<|> b) = (Consumers a
                         :<|> Consumers b)
@@ -68,4 +67,4 @@ instance ( Serializable fmt (IndexOf a)
           (eventTransport @transport t)
           eventName
           (writeStream writer <=< deserializeUnsafe' @fmt)
-        getStartIndex >>= gapFilledStream stream materialize >>= f
+        getStartIndex >>= gapFilledStream stream materialize >>= tapStream_ f
