@@ -32,6 +32,8 @@ class Resource a where
          (fromIntegral numResources))
       destroyAllResources
 
+-- TODO: do resource acquisision in parallel
+-- TODO: replace these fns with :<|> operator
 with2 ::
      (Resource a, Resource b)
   => ResourceConfig a

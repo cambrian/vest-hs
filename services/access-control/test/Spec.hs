@@ -59,11 +59,10 @@ instance Service TestServer where
   defaultArgs = ()
   init () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
-    with Amqp.localConfig $ \amqp ->
-      with
-        AccessControl.Client.Config
-          {accessControlPublicKey, seed = testServerSeed, amqp} $ \accessControlClient ->
-        f $ TestServer {amqp, accessControlClient}
+    with Amqp.localConfig $ \amqp -> do
+      accessControlClient <-
+        AccessControl.Client.make amqp accessControlPublicKey testServerSeed
+      f $ TestServer {amqp, accessControlClient}
 
 data TestClient = TestClient
   { amqp :: Amqp.T
@@ -88,11 +87,10 @@ instance Service TestClient where
   defaultArgs = ()
   init () f = do
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
-    with Amqp.localConfig $ \amqp ->
-      with
-        AccessControl.Client.Config
-          {accessControlPublicKey, seed = testClientSeed, amqp} $ \accessControlClient ->
-        f $ TestClient {amqp, accessControlClient}
+    with Amqp.localConfig $ \amqp -> do
+      accessControlClient <-
+        AccessControl.Client.make amqp accessControlPublicKey testClientSeed
+      f $ TestClient {amqp, accessControlClient}
 
 generatePublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file
@@ -120,7 +118,7 @@ testPermitted t =
   testCase "Permitted" "access-control/test/permitted.gold" $ do
     t <- t
     let call = makeClient t (Proxy :: Proxy PermittedEndpoint)
-    call () >>- show
+    show <$> call ()
 
 testForbidden :: IO TestClient -> TestTree
 testForbidden t =
@@ -128,7 +126,7 @@ testForbidden t =
   testCase "Forbidden" "access-control/test/forbidden.gold" $ do
     t <- t
     let call = makeClient t (Proxy :: Proxy ForbiddenEndpoint)
-    call () >>- show
+    show <$> call ()
 
 accessControlServiceConfig :: TestServiceConfig AccessControl.T
 accessControlServiceConfig =

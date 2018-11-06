@@ -3,7 +3,7 @@ module TezosHotWallet
   ) where
 
 -- import TezosHotWallet.Api as TezosHotWallet
-import qualified AccessControl.Client as AccessControlClient
+import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import Db
 import qualified Http
@@ -70,8 +70,7 @@ instance Service T where
       amqpConfig
       redisConfig
       tezosConfig
-      (\(db, amqp, redis, tezos) ->
-         with
-           AccessControlClient.Config {accessControlPublicKey, seed, amqp}
-           (\accessControlClient ->
-              f $ T {db, amqp, redis, tezos, accessControlClient}))
+      (\(db, amqp, redis, tezos) -> do
+         accessControlClient <-
+           AccessControl.Client.make amqp accessControlPublicKey seed
+         f $ T {db, amqp, redis, tezos, accessControlClient})

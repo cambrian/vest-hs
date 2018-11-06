@@ -3,7 +3,7 @@ module TezosDelegationCore
   ) where
 
 -- import TezosDelegationCore.Api as TezosDelegationCore
-import qualified AccessControl.Client as AccessControlClient
+import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import Db
 import qualified TezosDelegationCore.Db as Db ()
@@ -68,7 +68,7 @@ instance Service T where
       dbConfig
       amqpConfig
       redisConfig
-      (\(db, amqp, redis) ->
-         with
-           AccessControlClient.Config {accessControlPublicKey, seed, amqp}
-           (\accessControlClient -> f $ T {db, amqp, redis, accessControlClient}))
+      (\(db, amqp, redis) -> do
+         accessControlClient <-
+           AccessControl.Client.make amqp accessControlPublicKey seed
+         f $ T {db, amqp, redis, accessControlClient})

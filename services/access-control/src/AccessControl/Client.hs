@@ -19,31 +19,23 @@ data T = T
   , readMinTokenTime :: STM Timestamp
   }
 
-data Config = Config
-  { accessControlPublicKey :: PublicKey
-  , seed :: ByteString
-  , amqp :: Amqp.T
-  }
-
-instance Resource T where
-  type ResourceConfig T = Config
-  make Config {accessControlPublicKey, seed, amqp} = do
-    let (publicKey, secretKey) = seedKeyPair seed
-        getToken =
-          makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
-    minTokenTimes <-
-      subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionValue)
-    tokens <- mapMStream (const getToken) minTokenTimes
-    void $ streamNext tokens
-    return $
-      T
-        { accessControlPublicKey
-        , publicKey
-        , secretKey
-        , readToken = justSTM $ readLatestValueSTM tokens
-        , readMinTokenTime = justSTM $ readLatestValueSTM minTokenTimes
-        }
-  cleanup _ = return ()
+make :: Amqp.T -> PublicKey -> ByteString -> IO T
+make amqp accessControlPublicKey seed = do
+  let (publicKey, secretKey) = seedKeyPair seed
+      getToken =
+        makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
+  minTokenTimes <-
+    subscribe amqp (Proxy :: Proxy AccessControl.TokenVersionValue)
+  tokens <- mapMStream (const getToken) minTokenTimes
+  void $ streamNext tokens
+  return $
+    T
+      { accessControlPublicKey
+      , publicKey
+      , secretKey
+      , readToken = justSTM $ readLatestValueSTM tokens
+      , readMinTokenTime = justSTM $ readLatestValueSTM minTokenTimes
+      }
 
 -- These instances overlap with the definitions below when t == T.
 -- TODO: There's probably a way to remove the overlap?

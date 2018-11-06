@@ -1,9 +1,5 @@
 -- | Asynchronous streams with buffering and fanout, a la Async.Pipe for OCaml
 --
--- Future improvements:
--- - Merging
--- - Track and compress the propagation tree
---
 -- OVERVIEW:
 --
 -- Buffering:
@@ -17,6 +13,10 @@
 -- A stream may have any number of downstream consumers, which are written to in parallel.
 -- Propagation proceeds at the pace of the slowest consumer, so a single slow consumer may cause
 -- buffering upstream. Consider using a ValueBuffer if not every value can/needs to be processed.
+--
+-- TODO:
+-- - Implement mergeStreams
+-- - Make pure filterMaps not buffered
 module Vest.Prelude.Stream
   ( Bufferable
   , QueueBuffer_

@@ -2,7 +2,7 @@ module TezosChainWatcher.Internal
   ( module TezosChainWatcher.Internal
   ) where
 
-import qualified AccessControl.Client as AccessControlClient
+import qualified AccessControl.Client
 import qualified Db
 import qualified Http
 import qualified Transport.Amqp as Amqp
@@ -13,7 +13,7 @@ data T = T
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , tezos :: Http.T
-  , accessControlClient :: AccessControlClient.T
+  , accessControlClient :: AccessControl.Client.T
   }
 
 instance HasRedisConnection T where
@@ -25,7 +25,7 @@ instance HasRpcTransport Amqp.T T where
 instance HasEventTransport Amqp.T T where
   eventTransport = amqp
 
-instance AccessControlClient.Has T where
+instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient
 
 instance HasLogger T where
