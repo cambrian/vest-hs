@@ -10,9 +10,10 @@ import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
+-- | Consumption begins from the provided index (inclusive).
 type family Consumers spec where
   Consumers () = ()
-  Consumers (Event_ _ _ _ _ a) = IO (IndexOf a) -> (Stream QueueBuffer a -> IO ()) -> IO (Async ())
+  Consumers (Event_ _ _ _ _ a) = IO (IndexOf a) -> (Stream QueueBuffer a -> IO Void) -> IO (Async Void)
   Consumers (a
              :<|> b) = (Consumers a
                         :<|> Consumers b)

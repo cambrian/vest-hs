@@ -79,7 +79,7 @@ implicit :: T -> Text' "TzImplicitPkh" -> IO TezosStats.ImplicitResponse
 implicit T {rawStubData} implicitPkh = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   case HashMap.lookup implicitPkh (implicitResponse stubData) of
-    Nothing -> throw $ CallException "no such implicit PKH"
+    Nothing -> throw $ InvalidCallException "no such implicit PKH"
     Just response -> return response
 
 operation ::
@@ -89,7 +89,7 @@ operation ::
 operation T {rawStubData, streamDelayMillis} opHash = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   case HashMap.lookup opHash (operationResponses stubData) of
-    Nothing -> throw $ CallException "no such operation hash"
+    Nothing -> throw $ InvalidCallException "no such operation hash"
     Just streamOpList -> do
       (pusher, stream) <- newStream
       async $

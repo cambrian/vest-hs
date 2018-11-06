@@ -31,8 +31,8 @@ newtype ClientException =
   deriving (Eq, Show)
   deriving anyclass (Exception)
 
-newtype ServerException =
-  ServerException Text
+data ServerException =
+  ServerException
   deriving (Eq, Show)
   deriving anyclass (Exception)
 
@@ -80,8 +80,7 @@ callDirect t req = do
         deserializeUnsafe' @fmt resOrExcText >>= \case
           RpcResponseClientException eText ->
             evilThrowTo mainThread $ ClientException eText
-          RpcResponseServerException eText ->
-            evilThrowTo mainThread $ ServerException eText
+          RpcResponseServerException -> evilThrowTo mainThread ServerException
           RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
     callRaw
@@ -125,8 +124,7 @@ callStreaming t req f = do
         deserializeUnsafe' @fmt resOrExcText >>= \case
           RpcResponseClientException eText ->
             evilThrowTo mainThread $ ClientException eText
-          RpcResponseServerException eText ->
-            evilThrowTo mainThread $ ServerException eText
+          RpcResponseServerException -> evilThrowTo mainThread ServerException
             -- does this cause doCleanup to get skipped?
           RpcResponse response ->
             case response of

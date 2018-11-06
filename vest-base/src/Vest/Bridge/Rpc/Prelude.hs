@@ -15,8 +15,8 @@ newtype AlreadyServingException =
   deriving (Eq, Ord, Show, Read, Generic)
   deriving anyclass (Exception, Hashable, FromJSON, ToJSON)
 
-newtype CallException =
-  CallException Text
+newtype InvalidCallException =
+  InvalidCallException Text
   deriving (Eq, Ord, Show, Read, Generic)
   deriving anyclass (Exception, Hashable, FromJSON, ToJSON)
 
@@ -83,7 +83,7 @@ type Headers = HashMap (Text' "Header") Text
 
 data RpcResponse a
   = RpcResponseClientException Text
-  | RpcResponseServerException Text
+  | RpcResponseServerException
   | RpcResponse a
   deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 

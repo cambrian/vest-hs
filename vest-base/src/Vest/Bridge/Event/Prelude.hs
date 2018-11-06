@@ -7,6 +7,8 @@ import Vest.Prelude
 
 type EventName = Text' "EventName"
 
+-- | In theory the RPC and PubSub portions of the event harness could run on separate transports.
+-- For this reason, EventTransport is its own class, and not a superclass of RpcTransport.
 class EventTransport t where
   publishEvents ::
        t -- ^ Should be mutated to store cleanup details.
@@ -29,7 +31,8 @@ type PrefixedEventName (eventName :: Symbol) = AppendSymbol "event/" eventName
 type family EventMaterializeEndpoint event where
   EventMaterializeEndpoint (Event_ fmt t transport name a) = Endpoint_ 5 fmt 'NoAuth t transport (PrefixedEventName name) (IndexOf a) ('Direct a)
 
--- Expects transport to be both an RpcTransport and an EventTransport.
+-- | Even though we separate EventTransport and RpcTransport, the transport here has to be both
+-- because we're lazy.
 data Event_ (fmt :: SerializationFormat) service transport (name :: k) a
 
 type Event = Event_ 'Haskell

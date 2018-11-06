@@ -96,14 +96,17 @@ serve_ sender t handler =
               fromRightOrThrowLeft
             req <- deserializeUnsafe' @fmt reqText
             sender (sendToClient . RpcResponse) (handler t claims req))
-        [ Handler $ \(x :: AuthException) ->
+        [ Handler $ \(x :: AuthException) -> do
             sendToClient $ RpcResponseClientException $ show x
-        , Handler $ \(x :: CallException) ->
+            log t Warn $ show x
+        , Handler $ \(x :: InvalidCallException) -> do
             sendToClient $ RpcResponseClientException $ show x
-        , Handler $ \(x :: DeserializeException fmt) ->
+            log t Warn $ show x
+        , Handler $ \(x :: DeserializeException fmt) -> do
             sendToClient $ RpcResponseClientException $ show x
+            log t Warn $ show x
         , Handler $ \(x :: SomeException) -> do
-            sendToClient $ RpcResponseServerException $ show x
+            sendToClient RpcResponseServerException
             log t Error $ show x
             -- ^ TODO: Send a generic 503 type message instead of `show x` and add logging.
             -- throw x
