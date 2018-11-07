@@ -36,7 +36,7 @@ cycleNumber :: PrimaryKey CycleT f -> C f Word64
 cycleNumber (CycleNumber n) = n
 
 data DelegateT f = Delegate
-  { address :: C f Tezos.ImplicitAccount
+  { address :: C f Tezos.ImplicitAddress
   , name :: C f Text
   , description :: C f Text
   , firstManagedCycle :: PrimaryKey CycleT f
@@ -54,7 +54,7 @@ deriving instance Show Delegate
 
 instance Table DelegateT where
   data PrimaryKey DelegateT f = DelegateAddress (C f
-                                                 Tezos.ImplicitAccount)
+                                                 Tezos.ImplicitAddress)
                                 deriving (Generic, Beamable)
   primaryKey Delegate {address} = DelegateAddress address
 
@@ -130,7 +130,7 @@ deriving instance Show (PrimaryKey RewardT Identity)
 
 data DividendT f = Dividend
   { id :: C f UUID
-  , delegator :: C f Tezos.OriginatedAccount
+  , delegator :: C f Tezos.OriginatedAddress
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
   , timestamp :: C f Timestamp
@@ -183,7 +183,7 @@ deriving instance Read (PrimaryKey RefundT Identity)
 deriving instance Show (PrimaryKey RefundT Identity)
 
 data DelegationT f = Delegation
-  { delegator :: C f Tezos.OriginatedAccount
+  { delegator :: C f Tezos.OriginatedAddress
   , delegate :: PrimaryKey DelegateT f
   , dividendCycle :: PrimaryKey CycleT f
   , size :: C f (FixedQty XTZ)
@@ -201,7 +201,7 @@ deriving instance Show Delegation
 
 instance Table DelegationT where
   data PrimaryKey DelegationT f = DelegationPKey (C f
-                                                  Tezos.OriginatedAccount)
+                                                  Tezos.OriginatedAddress)
                                                (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
                                   deriving (Generic, Beamable)
   primaryKey Delegation {delegator, delegate, dividendCycle} =
@@ -300,7 +300,7 @@ wasCycleAlreadyHandled conn cycle = do
   let selectCycle = lookup_ (cycles schema) $ CycleNumber cycle
   runBeamPostgres conn $ isJust <$> runSelectReturningOne selectCycle
 
-delegatesTrackedAtCycle :: Connection -> Word64 -> IO [Tezos.ImplicitAccount]
+delegatesTrackedAtCycle :: Connection -> Word64 -> IO [Tezos.ImplicitAddress]
 delegatesTrackedAtCycle conn cycle = do
   let selectDelgates =
         select $

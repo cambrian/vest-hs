@@ -166,7 +166,7 @@ data Operation
   | RevealOp Undefined
   | BallotOp Undefined
   | ProposalsOp Undefined
-  | ActivateAccountOp Undefined
+  | ActivateAddressOp Undefined
   | DoubleBakingEvidenceOp Undefined
   | DoubleEndorsementEvidenceOp Undefined
   deriving (Eq, Show, Read, Generic, Hashable, ToJSON)
@@ -186,7 +186,7 @@ instance FromJSON Operation where
           Just (String "ballot") -> BallotOp <$> parseJSON operation
           Just (String "proposals") -> ProposalsOp <$> parseJSON operation
           Just (String "activate_account") ->
-            ActivateAccountOp <$> parseJSON operation
+            ActivateAddressOp <$> parseJSON operation
           Just (String "double_baking_evidence") ->
             DoubleBakingEvidenceOp <$> parseJSON operation
           Just (String "double_endorsement_evidence") ->

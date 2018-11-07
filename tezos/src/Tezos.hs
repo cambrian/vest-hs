@@ -103,7 +103,7 @@ getSnapshotBlockHash connection bakingCycleNumber snapshotCycleNumber = do
 -- block where baking rights were calculated for the baking cycle. This interface allows efficient
 -- requests, even though the snapshot block is redundant information.
 getRewardInfoSingle ::
-     Http.T -> BlockHash -> BlockHash -> ImplicitAccount -> IO RewardInfo
+     Http.T -> BlockHash -> BlockHash -> ImplicitAddress -> IO RewardInfo
 getRewardInfoSingle connection (Tagged rewardBlockHash) (Tagged snapshotBlockHash) (Tagged delegateId) = do
   frozenBalanceCycles <-
     Http.direct
@@ -152,7 +152,7 @@ getRewardInfoSingle connection (Tagged rewardBlockHash) (Tagged snapshotBlockHas
       , delegations
       }
 
-getRewardInfo :: Http.T -> Int -> [ImplicitAccount] -> IO [RewardInfo]
+getRewardInfo :: Http.T -> Int -> [ImplicitAddress] -> IO [RewardInfo]
 getRewardInfo connection cycleNumber delegateIds = do
   let rewardBlockCycle = bakingCycle cycleNumber
       snapshotBlockCycle = snapshotCycle cycleNumber

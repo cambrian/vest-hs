@@ -24,7 +24,7 @@ data TimestampRate = TimestampRate
 $(deriveTypeScript defaultOptions ''TimestampRate)
 
 data DelegateFraction = DelegateFraction
-  { delegate :: Tezos.ImplicitAccount
+  { delegate :: Tezos.ImplicitAddress
   , fraction :: Double
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -48,7 +48,7 @@ type OverviewEndpoint
 data Baker = Baker
   { name :: Text
   , description :: Text
-  , hash :: Tezos.ImplicitAccount
+  , hash :: Tezos.ImplicitAddress
   , fee :: Integer' XTZ
   , bond :: Integer' XTZ
   , totalDelegations :: Integer' XTZ
@@ -71,7 +71,7 @@ type BakersEndpoint
    = EndpointJson 'NoAuth TezosStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
 
 data DelegateInfo = DelegateInfo
-  { hash :: Tezos.ImplicitAccount
+  { hash :: Tezos.ImplicitAddress
   , name :: Text
   } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
 
@@ -88,7 +88,7 @@ $(deriveTypeScript defaultOptions ''LedgerOperationType)
 data LedgerOperation = LedgerOperation
   { operationType :: LedgerOperationType
   , hash :: Tezos.OperationHash
-  , from :: Maybe Tezos.Account -- From account can be either originated or implicit.
+  , from :: Maybe Tezos.Address -- From account can be either originated or implicit.
   , size :: Integer' XTZ
   , blockHash :: Maybe Tezos.BlockHash
   , timestamp :: UTCTime
@@ -96,25 +96,25 @@ data LedgerOperation = LedgerOperation
 
 $(deriveTypeScript defaultOptions ''LedgerOperation)
 
-data OriginatedAccount = OriginatedAccount
-  { hash :: Tezos.OriginatedAccount
+data OriginatedAddress = OriginatedAddress
+  { hash :: Tezos.OriginatedAddress
   , delegate :: DelegateInfo
   , balance :: Integer' XTZ
   , ledger :: [LedgerOperation]
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
-$(deriveTypeScript defaultOptions ''OriginatedAccount)
+$(deriveTypeScript defaultOptions ''OriginatedAddress)
 
 data ImplicitResponse = ImplicitResponse
   { balance :: Integer' XTZ
-  , originated :: [OriginatedAccount]
+  , originated :: [OriginatedAddress]
   , retrieved :: UTCTime
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''ImplicitResponse)
 
 type ImplicitEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" Tezos.ImplicitAccount ('Direct ImplicitResponse)
+   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" Tezos.ImplicitAddress ('Direct ImplicitResponse)
 
 data OperationResponse = OperationResponse
   { baked :: Bool
@@ -132,6 +132,6 @@ type OperationEndpoint
 data StubData = StubData
   { overviewResponse :: OverviewResponse
   , bakersResponse :: BakersResponse
-  , implicitResponse :: HashMap Tezos.ImplicitAccount ImplicitResponse
+  , implicitResponse :: HashMap Tezos.ImplicitAddress ImplicitResponse
   , operationResponses :: HashMap Tezos.OperationHash [OperationResponse]
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
