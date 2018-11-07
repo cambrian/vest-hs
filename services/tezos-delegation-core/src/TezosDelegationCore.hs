@@ -55,15 +55,104 @@ type Api = ()
 handlers :: Handlers Api
 handlers = ()
 
+platformFee :: Rational
+platformFee = 0.5
+
+billPaymentTime :: Time Day
+billPaymentTime = day 5
+
 cycleConsumer :: T -> Consumers CycleEvents
-cycleConsumer T {db, amqp} =
+cycleConsumer t@T {db, amqp} =
   let nextCycle = selectNextCycle db
       getRewardInfo = makeClient amqp (Proxy :: Proxy RewardInfoEndpoint)
-      f Tezos.CycleEvent {number = cycleNumber} = do
-        wasCycleAlreadyHandled db cycleNumber >>= (`when` return ())
-        delegates <- delegatesTrackedAtCycle db cycleNumber
-        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNumber delegates
-        return ()
+      f Tezos.CycleEvent {number = cycleNo, timestamp} = do
+        wasCycleAlreadyHandled db cycleNo >>= (`when` return ())
+        delegates <- delegatesTrackedAtCycle db cycleNo
+        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNo delegates
+        time <- now
+        -- Wrap the whole cycle's processing in a transaction because it lets us not deal with
+        -- partially processed cycles.
+        Db.withTransactionSerializable db $ do
+          forM_ rewardInfos $ \Tezos.RewardInfo { delegate
+                                                , reward
+                                                , stakingBalance
+                                                , delegatedBalance
+                                                , delegations
+                                                } -> do
+            dividends_ <-
+              mapM
+                (\Tezos.DelegationInfo {delegator, size} -> do
+                   id <- nextUUID
+                   -- TODO: adjust for overdelegation
+                   -- TODO: use delegate price tiers
+                   let d =
+                         fixedOf Round $
+                         rationalOf reward ^* 0.1 ^* size ^/^ stakingBalance
+                   return (id, delegator, d))
+                delegations
+            let totalDividends =
+                  foldr
+                    (\(_, _, size) tot -> tot + size)
+                    (fixedQty @Mutez 0)
+                    dividends_
+                grossDelegateReward = reward - totalDividends
+                paymentOwed =
+                  fixedOf Ceiling $
+                  rationalOf grossDelegateReward ^* platformFee
+            billId <- nextUUID
+            -- Insert entries into Db
+            Db.runBeamPostgresDebug (log t Debug . pack) db $ do
+              Db.runInsert $
+                Db.insert
+                  (bills schema)
+                  (Db.insertValues
+                     [ Bill
+                         billId
+                         (DelegateAddress delegate)
+                         paymentOwed
+                         (fixedQty @Mutez 0)
+                         True
+                         False
+                         timestamp
+                         (timeAdd billPaymentTime time)
+                         time
+                     ])
+                  Db.onConflictDefault
+              Db.runInsert $
+                Db.insert
+                  (rewards schema)
+                  (Db.insertValues
+                     [ Reward
+                         (DelegateAddress delegate)
+                         (CycleNumber cycleNo)
+                         reward
+                         stakingBalance
+                         delegatedBalance
+                         (BillId billId)
+                         timestamp
+                         time
+                     ])
+                  Db.onConflictDefault
+              forM_ dividends_ $ \(id, delegator, size) ->
+                Db.runInsert $
+                Db.insert
+                  (dividends schema)
+                  (Db.insertValues
+                     [ Dividend
+                         id
+                         delegator
+                         (DelegateAddress delegate)
+                         size
+                         timestamp
+                         time
+                     ])
+                  Db.onConflictDefault
+          Db.runBeamPostgresDebug (log t Debug . pack) db $
+            Db.runInsert $
+            Db.insert
+              (cycles schema)
+              (Db.insertValues [Cycle cycleNo timestamp time])
+              Db.onConflictDefault
    in (nextCycle, f)
 
 instance Service T where
@@ -85,5 +174,4 @@ instance Service T where
       (\(db, amqp, redis) -> do
          accessControlClient <-
            AccessControl.Client.make amqp accessControlPublicKey seed
-         let t = T {db, amqp, redis, accessControlClient}
-         f t)
+         f $ T {db, amqp, redis, accessControlClient})

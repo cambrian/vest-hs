@@ -9,6 +9,7 @@ import Database.Beam.Postgres as Reexports
 import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
 import Database.PostgreSQL.Simple.FromField
+import Database.PostgreSQL.Simple.Transaction as Reexports
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
 import GHC.Base (String)
 import qualified Money

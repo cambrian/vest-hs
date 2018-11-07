@@ -21,16 +21,20 @@ import Data.Proxy as Vest.Prelude.Core
 import Numeric.Natural as Vest.Prelude.Core
 import qualified Protolude
 import Protolude as Vest.Prelude.Core hiding
-  ( bracket
+  ( Sum
+  , (<.>)
+  , bracket
   , bracketOnError
   , bracket_
   , catch
   , catchJust
   , catches
   , finally
+  , getSum
   , handle
   , handleJust
   , log -- clashes with Logger.log
+  , magnitude
   , mask
   , mask_
   , moduleName
@@ -51,6 +55,7 @@ import qualified TMap
 import Control.Monad.Fail as Vest.Prelude.Core
 import Control.Monad.ST as Vest.Prelude.Core
 import Control.Monad.State as Vest.Prelude.Core hiding (fail)
+import Data.AdditiveGroup as Vest.Prelude.Core
 import Data.Aeson as Vest.Prelude.Core
   ( FromJSON(..)
   , FromJSONKey(..)
@@ -74,6 +79,7 @@ import Data.Tagged as Vest.Prelude.Core hiding (witness)
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 import Data.Typeable (tyConModule, typeRepTyCon)
+import Data.VectorSpace as Vest.Prelude.Core
 import qualified Foreign.StablePtr as StablePtr
 import Network.HostName (getHostName)
 import System.Posix.Process (getProcessID)
@@ -205,3 +211,7 @@ getHostPid = do
   host <- getHostName
   CPid pid <- getProcessID
   return $ pack host <> ":" <> show pid
+
+-- | Consider using units of measure for this
+class VectorDivisible a where
+  (^/^) :: a -> a -> Rational

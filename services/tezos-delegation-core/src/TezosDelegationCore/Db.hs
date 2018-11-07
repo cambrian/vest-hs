@@ -32,6 +32,7 @@ deriving instance Read (PrimaryKey CycleT Identity)
 deriving instance Show (PrimaryKey CycleT Identity)
 
 cycleNumber :: PrimaryKey CycleT f -> C f Word64
+-- ^ TODO: replace with lens?
 cycleNumber (CycleNumber n) = n
 
 data DelegateT f = Delegate
@@ -63,14 +64,45 @@ deriving instance Read (PrimaryKey DelegateT Identity)
 
 deriving instance Show (PrimaryKey DelegateT Identity)
 
--- TODO: do we also need to store total reward, total balance?
+data BillT f = Bill
+  { id :: C f UUID
+  , delegate :: PrimaryKey DelegateT f
+  , size :: C f (FixedQty XTZ)
+  , fulfilled :: C f (FixedQty XTZ)
+  , open :: C f Bool
+  , late :: C f Bool
+  , timestamp :: C f Timestamp
+  , dueAt :: C f Timestamp
+  , createdAt :: C f Timestamp
+  } deriving (Generic, Beamable)
+
+type Bill = BillT Identity
+
+deriving instance Eq Bill
+
+deriving instance Read Bill
+
+deriving instance Show Bill
+
+instance Table BillT where
+  data PrimaryKey BillT f = BillId (C f UUID)
+                            deriving (Generic, Beamable)
+  primaryKey Bill {id} = BillId id
+
+deriving instance Eq (PrimaryKey BillT Identity)
+
+deriving instance Read (PrimaryKey BillT Identity)
+
+deriving instance Show (PrimaryKey BillT Identity)
+
 data RewardT f = Reward
   { delegate :: PrimaryKey DelegateT f
-  , rightsCycle :: PrimaryKey CycleT f
+  , cycle :: PrimaryKey CycleT f
+  , size :: C f (FixedQty XTZ)
+  , stakingBalace :: C f (FixedQty XTZ)
   , delegatedBalance :: C f (FixedQty XTZ)
-  , rewardFromDelegations :: C f (FixedQty XTZ)
-  , owedToVest :: C f (FixedQty XTZ)
-  , paymentFulfilled :: C f (FixedQty XTZ)
+  , bill :: PrimaryKey BillT f
+  , timestamp :: C f Timestamp
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -88,8 +120,7 @@ instance Table RewardT where
                                                       f)
                                                    (PrimaryKey CycleT f)
                               deriving (Generic, Beamable)
-  primaryKey Reward {delegate, rightsCycle} =
-    RewardDelegateAndCycle delegate rightsCycle
+  primaryKey Reward {delegate, cycle} = RewardDelegateAndCycle delegate cycle
 
 deriving instance Eq (PrimaryKey RewardT Identity)
 
@@ -97,31 +128,33 @@ deriving instance Read (PrimaryKey RewardT Identity)
 
 deriving instance Show (PrimaryKey RewardT Identity)
 
-data PayoutT f = Payout
+data DividendT f = Dividend
   { id :: C f UUID
   , delegator :: C f Tezos.OriginatedAccount
+  , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
+  , timestamp :: C f Timestamp
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
-type Payout = PayoutT Identity
+type Dividend = DividendT Identity
 
-deriving instance Eq Payout
+deriving instance Eq Dividend
 
-deriving instance Read Payout
+deriving instance Read Dividend
 
-deriving instance Show Payout
+deriving instance Show Dividend
 
-instance Table PayoutT where
-  data PrimaryKey PayoutT f = PayoutId (C f UUID)
-                              deriving (Generic, Beamable)
-  primaryKey Payout {id} = PayoutId id
+instance Table DividendT where
+  data PrimaryKey DividendT f = DividendId (C f UUID)
+                                deriving (Generic, Beamable)
+  primaryKey Dividend {id} = DividendId id
 
-deriving instance Eq (PrimaryKey PayoutT Identity)
+deriving instance Eq (PrimaryKey DividendT Identity)
 
-deriving instance Read (PrimaryKey PayoutT Identity)
+deriving instance Read (PrimaryKey DividendT Identity)
 
-deriving instance Show (PrimaryKey PayoutT Identity)
+deriving instance Show (PrimaryKey DividendT Identity)
 
 data RefundT f = Refund
   { id :: C f UUID
@@ -152,10 +185,9 @@ deriving instance Show (PrimaryKey RefundT Identity)
 data DelegationT f = Delegation
   { delegator :: C f Tezos.OriginatedAccount
   , delegate :: PrimaryKey DelegateT f
-  , rightsCycle :: PrimaryKey CycleT f
+  , dividendCycle :: PrimaryKey CycleT f
   , size :: C f (FixedQty XTZ)
-  , dividend :: C f (FixedQty XTZ)
-  , payout :: PrimaryKey PayoutT f
+  , dividend :: PrimaryKey DividendT f
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -168,12 +200,12 @@ deriving instance Read Delegation
 deriving instance Show Delegation
 
 instance Table DelegationT where
-  data PrimaryKey DelegationT f = DelegationDelegator (C f
-                                                       Tezos.OriginatedAccount)
-                                                    (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
+  data PrimaryKey DelegationT f = DelegationPKey (C f
+                                                  Tezos.OriginatedAccount)
+                                               (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
                                   deriving (Generic, Beamable)
-  primaryKey Delegation {delegator, delegate, rightsCycle} =
-    DelegationDelegator delegator delegate rightsCycle
+  primaryKey Delegation {delegator, delegate, dividendCycle} =
+    DelegationPKey delegator delegate dividendCycle
 
 deriving instance Eq (PrimaryKey DelegationT Identity)
 
@@ -209,6 +241,7 @@ deriving instance Show (PrimaryKey ConfirmedTxT Identity)
 
 data ConfirmedPaymentT f = ConfirmedPayment
   { hash :: C f Tezos.OperationHash
+  , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
   , index :: C f Word64
   , createdAt :: C f Timestamp
@@ -238,7 +271,8 @@ data Schema f = Schema
   { cycles :: f (TableEntity CycleT)
   , delegates :: f (TableEntity DelegateT)
   , rewards :: f (TableEntity RewardT)
-  , payouts :: f (TableEntity PayoutT)
+  , bills :: f (TableEntity BillT)
+  , dividends :: f (TableEntity DividendT)
   , refunds :: f (TableEntity RefundT)
   , delegations :: f (TableEntity DelegationT)
   , confirmedTxs :: f (TableEntity ConfirmedTxT)
