@@ -11,8 +11,8 @@ import Vest
 mainChain :: Text
 mainChain = "main"
 
-headBlock :: Text
-headBlock = "head"
+headBlockHash :: Text
+headBlockHash = "head"
 
 type Direct result = Get '[ JSON] result
 
@@ -232,6 +232,11 @@ data Block = Block
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 type GetBlock = WithChainBlock (Direct Block)
+
+type GetBlockHash = WithChainBlock ("hash" :> Direct Text)
+
+type GetBlockSnapshotIndices
+   = WithChainBlock ("context" :> "raw" :> "json" :> "rolls" :> "owner" :> "snapshot" :> Capture "cycle" Int :> Direct [Int])
 
 type GetContractManager = WithChainBlockContract ("manager" :> Direct Text)
 

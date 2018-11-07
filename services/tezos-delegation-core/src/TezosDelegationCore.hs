@@ -62,7 +62,7 @@ cycleConsumer T {db, amqp} =
       f Tezos.CycleEvent {number = cycleNumber} = do
         wasCycleAlreadyHandled db cycleNumber >>= (`when` return ())
         delegates <- delegatesTrackedAtCycle db cycleNumber
-        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNumber delegates
+        _ <- getRewardInfo $ RewardInfoRequest cycleNumber delegates
         return ()
    in (nextCycle, f)
 
