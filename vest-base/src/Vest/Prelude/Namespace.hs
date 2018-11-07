@@ -3,7 +3,8 @@ module Vest.Prelude.Namespace
   ) where
 
 import Data.List (span)
-import Vest.Prelude.Core
+import Data.Text (takeWhile)
+import Vest.Prelude.Core hiding (takeWhile)
 
 -- TODO: Make doctests for pretty serialization roundtrip, isstring.
 newtype Namespaced (ns :: k) a =
@@ -26,7 +27,9 @@ class HasNamespace t where
   namespace :: Text
   default namespace :: Typeable t =>
     Text
-  namespace = moduleName @t
+  namespace = takeWhile (/= '.') $ moduleName @t
+  -- ^ Turns DummyManager.Internal (for example) into DummyManager. We can reconsider this in the
+  -- future if we ever need multiple namespaces within the same root module name.
   namespace' :: forall ns. Text' ns
   namespace' = Tagged $ namespace @t
   namespaced :: forall ns a. a -> Namespaced ns a

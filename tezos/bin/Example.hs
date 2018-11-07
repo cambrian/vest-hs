@@ -10,25 +10,37 @@ publicTezosConfig =
 
 printMainHeadConstants :: T -> IO ()
 printMainHeadConstants connection =
-  direct (request (Proxy :: Proxy GetConstants) mainChain headBlock) connection >>=
+  direct
+    (request (Proxy :: Proxy GetConstants) mainChain headBlockHash)
+    connection >>=
   print
 
 printMainHeadContractsCount :: T -> IO ()
 printMainHeadContractsCount connection =
-  direct (request (Proxy :: Proxy ListContracts) mainChain headBlock) connection >>=
+  direct
+    (request (Proxy :: Proxy ListContracts) mainChain headBlockHash)
+    connection >>=
   (print . length)
 
 printContractManager :: Text -> T -> IO ()
 printContractManager contract connection =
   direct
-    (request (Proxy :: Proxy GetContractManager) mainChain headBlock contract)
+    (request
+       (Proxy :: Proxy GetContractManager)
+       mainChain
+       headBlockHash
+       contract)
     connection >>=
   print
 
 printContractBalance :: Text -> T -> IO ()
 printContractBalance contract connection =
   direct
-    (request (Proxy :: Proxy GetContractBalance) mainChain headBlock contract)
+    (request
+       (Proxy :: Proxy GetContractBalance)
+       mainChain
+       headBlockHash
+       contract)
     connection >>=
   print
 
@@ -38,7 +50,7 @@ printFrozenBalanceCycles delegate connection =
     (request
        (Proxy :: Proxy ListFrozenBalanceCycles)
        mainChain
-       headBlock
+       headBlockHash
        delegate)
     connection >>=
   print
@@ -49,7 +61,7 @@ printDelegatedContracts delegate connection =
     (request
        (Proxy :: Proxy ListDelegatedContracts)
        mainChain
-       headBlock
+       headBlockHash
        delegate)
     connection >>=
   print
@@ -76,7 +88,7 @@ printMonitorBlocks connection = do
 main :: IO ()
 main = do
   connection <- make publicTezosConfig
-  printMainHeadConstants connection
+  ignoreIO $ printMainHeadConstants connection
   ignoreIO $ printMainHeadContractsCount connection
   ignoreIO $
     printContractManager "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
@@ -92,10 +104,6 @@ main = do
       connection
   -- Compare with https://api1.tzscan.io/v2/rewards_split
   -- tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv?cycle=20&p=0
-  getRewardInfo
-    connection
-    (Tagged "BLsTCXPM2FyueaAhLVctzSYHDCkSJviRphnynZEAq4bFugLdP8v")
-    (Tagged "BM7AshJjzA9vDNDMbwDiGYfHPdWawy9nZCdabCttuCWZDA72SqL")
-    (Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv") >>=
+  getRewardInfo connection 26 [Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv"] >>=
     print
   ignoreIO $ printMonitorBlocks connection
