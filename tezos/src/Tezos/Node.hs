@@ -74,5 +74,6 @@ toCycleEventStream blockEventStream lastSeen = do
          else do
            when (lastCycleNumber /= lastSeen + 1) $
              throw UnexpectedResultException
+           atomically $ swapTVar lastSeenVar lastCycleNumber
            return $ Just $ CycleEvent {number = lastCycleNumber, timestamp})
     blockEventStream
