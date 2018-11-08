@@ -123,7 +123,9 @@ instance Service T where
     Config {webSocketConfig, streamDelayMillis} <-
       Yaml.decodeFileThrow configFile
     rawStubData <- readFile stubDataFile
-    with webSocketConfig $ \webSocket -> do
-      let t = T {webSocket, rawStubData, streamDelayMillis}
-          handlers = overview t :<|> bakersFn t :<|> implicit t :<|> operation t
-      f (t, handlers, (), (), ())
+    with webSocketConfig $ \webSocket ->
+      f $ T {webSocket, rawStubData, streamDelayMillis}
+  rpcHandlers t = overview t :<|> bakersFn t :<|> implicit t :<|> operation t
+  valuesPublished _ = ()
+  eventProducers _ = ()
+  eventConsumers _ = ()

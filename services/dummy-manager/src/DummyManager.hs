@@ -82,5 +82,8 @@ instance Service T where
   type EventsConsumed T = ()
   defaultArgs = defaultArgs_
   init Args {port} f =
-    with (WebSocket.localConfigOn port) $ \webSocket ->
-      f (T {webSocket}, handlers, (), (), ())
+    with (WebSocket.localConfigOn port) $ \webSocket -> f $ T {webSocket}
+  rpcHandlers _ = handlers
+  valuesPublished _ = ()
+  eventConsumers _ = ()
+  eventProducers _ = ()

@@ -228,5 +228,8 @@ instance Service T where
     with (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig) $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      let t = T {dbPool, amqp, redis, accessControlClient}
-      f (t, (), (), (), panic "unimplemented")
+      f $ T {dbPool, amqp, redis, accessControlClient}
+  rpcHandlers _ = ()
+  valuesPublished _ = ()
+  eventProducers _ = ()
+  eventConsumers _ = panic "unimplemented"

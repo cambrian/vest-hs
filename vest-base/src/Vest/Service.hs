@@ -8,7 +8,6 @@ import Vest.Logger
 import Vest.Prelude hiding (takeWhile)
 
 -- | TODO: Can we put shared argument logic here, like reading secret key files?
--- makeStreams and handlers are not defined on the Service because they cause circular imports :(
 class ( Data (ServiceArgs a)
       , HasNamespace a
       , HasLogger a
@@ -25,22 +24,19 @@ class ( Data (ServiceArgs a)
   type EventsProduced a
   type EventsConsumed a
   defaultArgs :: ServiceArgs a
-  init ::
-       ServiceArgs a
-    -> (( a
-        , Handlers (RpcSpec a)
-        , Values (ValueSpec a)
-        , Producers (EventsProduced a)
-        , Consumers (EventsConsumed a)) -> IO b)
-    -> IO b
+  init :: ServiceArgs a -> (a -> IO b) -> IO b
+  rpcHandlers :: a -> Handlers (RpcSpec a)
+  valuesPublished :: a -> Values (ValueSpec a)
+  eventProducers :: a -> Producers (EventsProduced a)
+  eventConsumers :: a -> Consumers (EventsConsumed a)
   run :: ServiceArgs a -> (a -> IO b) -> IO Void
   -- ^ This function runs a service with an arbitrary body function.
   run args f =
-    init args $ \(a, handlers, values, producers, consumers) -> do
-      serve a (Proxy :: Proxy (RpcSpec a)) handlers
-      publish a (Proxy :: Proxy (ValueSpec a)) values
-      produce a (Proxy :: Proxy (EventsProduced a)) producers
-      consume a (Proxy :: Proxy (EventsConsumed a)) consumers
+    init args $ \a -> do
+      serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
+      publish a (Proxy :: Proxy (ValueSpec a)) $ valuesPublished a
+      produce a (Proxy :: Proxy (EventsProduced a)) $ eventProducers a
+      consume a (Proxy :: Proxy (EventsConsumed a)) $ eventConsumers a
       f a
       blockForever
   start :: IO Void

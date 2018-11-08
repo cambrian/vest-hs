@@ -66,8 +66,11 @@ instance Service TestServer where
     with Amqp.localConfig $ \amqp -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey testServerSeed
-      let t = TestServer {amqp, accessControlClient}
-      f (t, const return :<|> const return, (), (), ())
+      f $ TestServer {amqp, accessControlClient}
+  rpcHandlers _ = const return :<|> const return
+  valuesPublished _ = ()
+  eventProducers _ = ()
+  eventConsumers _ = ()
 
 data TestClient = TestClient
   { amqp :: Amqp.T
@@ -99,8 +102,11 @@ instance Service TestClient where
     with Amqp.localConfig $ \amqp -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey testClientSeed
-      let t = TestClient {amqp, accessControlClient}
-      f (t, (), (), (), ())
+      f $ TestClient {amqp, accessControlClient}
+  rpcHandlers _ = ()
+  valuesPublished _ = ()
+  eventProducers _ = ()
+  eventConsumers _ = ()
 
 generatePublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file

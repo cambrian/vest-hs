@@ -63,9 +63,8 @@ instance Service T where
   defaultArgs = defaultArgs_
   init Args {configFile} f = do
     Config {webSocketConfig} <- Yaml.decodeFileThrow configFile
-    with
-      webSocketConfig
-      (\webSocket -> do
-         let t = T {webSocket}
-             handlers = inject t
-         f (t, handlers, (), (), ()))
+    with webSocketConfig $ \webSocket -> f $ T {webSocket}
+  rpcHandlers = inject
+  valuesPublished _ = ()
+  eventProducers _ = ()
+  eventConsumers _ = ()

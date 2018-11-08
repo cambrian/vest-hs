@@ -73,16 +73,18 @@ instance Service T where
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
-    with (redisConfig :<|> amqpConfig) $ \(redis :<|> amqp) -> do
-      let t =
-            T
-              { subjects
-              , amqp
-              , redis
-              , publicKey
-              , secretKey
-              , minTokenTime
-              , bumpMinTokenTime
-              }
-          handlers = accessToken t :<|> (\_claims () -> bumpMinTokenTime)
-      f (t, handlers, minTokenTime, (), ())
+    with (redisConfig :<|> amqpConfig) $ \(redis :<|> amqp) ->
+      f $
+      T
+        { subjects
+        , amqp
+        , redis
+        , publicKey
+        , secretKey
+        , minTokenTime
+        , bumpMinTokenTime
+        }
+  rpcHandlers t = accessToken t :<|> (\_claims () -> bumpMinTokenTime t)
+  valuesPublished = minTokenTime
+  eventProducers _ = ()
+  eventConsumers _ = ()
