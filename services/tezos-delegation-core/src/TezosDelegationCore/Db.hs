@@ -65,9 +65,8 @@ data BillT f = Bill
   { id :: C f UUID
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
-  , time :: C f Time
-  , paidAt :: C f (Maybe Time)
   , createdAt :: C f Time
+  , paidAt :: C f (Maybe Time)
   } deriving (Generic, Beamable)
 
 type Bill = BillT Identity
@@ -332,7 +331,7 @@ billsOutstanding :: Tezos.ImplicitAddress -> Pg [Bill]
 billsOutstanding delegate_ =
   runSelectReturningList $
   select $
-  orderBy_ (\Bill {time} -> asc_ time) $
+  orderBy_ (\Bill {createdAt} -> asc_ createdAt) $
   filter_
     (\Bill {delegate, paidAt} ->
        DelegateAddress (val_ delegate_) ==. delegate &&. paidAt ==. val_ Nothing) $

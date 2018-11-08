@@ -54,17 +54,18 @@ defaultArgs_ =
 platformFee :: Rational
 platformFee = 0.5
 
-billPaymentTime :: Time Day
+billPaymentTime :: Duration
 billPaymentTime = day 5
 
 cycleConsumer :: T -> Consumers CycleEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; dividends are paid out when the delegator pays its bill. This happens
 -- in the payment consumer.
+-- TODO: check late bills
 cycleConsumer t =
   let nextCycle = Db.runLogged t selectNextCycle
       getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
-      f Tezos.CycleEvent {number = cycleNo, time} = do
+      f Tezos.CycleEvent {number = cycleNo, time = cycleTime} = do
         Db.runLogged t (wasCycleAlreadyHandled cycleNo) >>= (`when` return ())
         delegates <- Db.runLogged t $ delegatesTrackedAtCycle cycleNo
         rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNo delegates
@@ -105,11 +106,8 @@ cycleConsumer t =
                        billId
                        (DelegateAddress delegate)
                        paymentOwed
-                       True
-                       False
                        time
-                       (timeAdd billPaymentTime time)
-                       time
+                       Nothing
                    ])
                 Db.onConflictDefault
             Db.runInsert $
@@ -145,7 +143,7 @@ cycleConsumer t =
           Db.runInsert $
           Db.insert
             (cycles schema)
-            (Db.insertValues [Cycle cycleNo time time])
+            (Db.insertValues [Cycle cycleNo cycleTime time])
             Db.onConflictDefault
    in (nextCycle, f)
 

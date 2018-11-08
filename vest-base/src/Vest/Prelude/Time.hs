@@ -56,10 +56,13 @@ sec :: Rational -> Duration
 sec = fromRational
 
 ms :: Rational -> Duration
-ms = fromRational . (1e3 *)
+ms = fromRational . (/ 1e3)
+
+day :: Rational -> Duration
+day = fromRational . (86400 *)
 
 durationMicros :: Duration -> Int
-durationMicros t = round $ toRational $ t * 1e6
+durationMicros t = round $ 1e6 * toRational t
 
 timeout :: Duration -> IO a -> IO (Either TimeoutException a)
   -- ^ returns Left TimeoutException if f does not complete within the given time

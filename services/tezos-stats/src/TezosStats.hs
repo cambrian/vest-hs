@@ -22,7 +22,7 @@ data Config = Config
   { webSocketConfig :: WebSocket.Config
   -- , amqpConfig :: Amqp.Config
   -- , redisConfig :: RedisConfig
-  , streamDelayMillis :: Natural
+  , streamDelayMillis :: Natural -- do you really need this??
   } deriving (Generic, FromJSON)
 
 data Args = Args
@@ -97,7 +97,8 @@ operation T {rawStubData, streamDelayMillis} opHash = do
       async $
         mapM_
           (\x ->
-             threadDelay (ms (streamDelayMillis % 1)) >> writeStream writer x)
+             threadDelay (ms $ toRational streamDelayMillis) >>
+             writeStream writer x)
           streamOpList >>
         closeStream writer
       return stream
