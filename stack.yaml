@@ -17,6 +17,7 @@ extra-deps:
 - stm-containers-1.1.0.2
 - text-format-0.3.2
 - text-replace-0.0.0.3
+- vector-space-0.15
 - yaml-0.10.2.0
 # Remove this when hindent > 5.2.7 is published to hackage (for configurable extensions).
 - github: commercialhaskell/hindent

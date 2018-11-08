@@ -13,7 +13,7 @@ type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
 
 data RewardInfoRequest = RewardInfoRequest
   { cycleNumber :: Word64
-  , delegates :: [Tezos.ImplicitAccount]
+  , delegates :: [Tezos.ImplicitAddress]
   } deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
 type RewardInfoEndpoint

@@ -1,6 +1,7 @@
 module Vest.Prelude.UUID
   ( module Reexports
   , UUID'
+  , nextUUID
   , nextUUID'
   ) where
 
@@ -12,8 +13,11 @@ import Vest.Prelude.Core
 
 type UUID' t = Tagged t UUID
 
+nextUUID :: IO UUID
+nextUUID = UUID.V4.nextRandom
+
 nextUUID' :: IO (UUID' t)
-nextUUID' = UUID.V4.nextRandom >>- Tagged
+nextUUID' = Tagged <$> nextUUID
 
 -- UUIDs are tagged text, but we tack on Id to disambiguate the tagging.
 instance {-# OVERLAPPING #-} (KnownSymbol (AppendSymbol s "Id")) =>

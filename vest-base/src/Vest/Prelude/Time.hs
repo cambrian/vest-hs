@@ -8,7 +8,7 @@ import Data.Aeson.Types
 import Data.Time.Clock as Vest.Prelude.Time (NominalDiffTime, UTCTime)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
-import Time.Rational (KnownDivRat)
+import Time.Rational (KnownDivRat, KnownRat)
 import Time.Timestamp as Vest.Prelude.Time
 import Time.Units as Vest.Prelude.Time hiding (timeout)
 import qualified Time.Units
@@ -136,3 +136,8 @@ natSeconds ::
      forall seconds. KnownNat seconds
   => Time Second
 natSeconds = sec $ fromIntegral $ natVal (Proxy :: Proxy seconds)
+
+instance (KnownRat unit) => VectorDivisible (Time unit) where
+  a ^/^ b =
+    let r = a /:/ b
+     in fromIntegral (numerator r) % fromIntegral (denominator r)

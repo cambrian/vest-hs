@@ -2,11 +2,11 @@ module TezosHotWallet
   ( module TezosHotWallet
   ) where
 
--- import TezosHotWallet.Api as TezosHotWallet
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import qualified Db
 import qualified Http
+import TezosHotWallet.Api as TezosHotWallet
 import TezosHotWallet.Internal as TezosHotWallet
 import qualified Transport.Amqp as Amqp
 import Vest
@@ -57,7 +57,7 @@ handlers = ()
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
-  type EventsProduced T = ()
+  type EventsProduced T = PaymentEvents
   type EventsConsumed T = ()
   type RpcSpec T = Api
   defaultArgs = defaultArgs_

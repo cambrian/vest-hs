@@ -164,7 +164,7 @@ getRewardInfoSingle connection rewardBlockHash snapshotBlockHash delegateId = do
       }
 
 getRewardInfo ::
-     Http.T -> IndexOf CycleEvent -> [ImplicitAccount] -> IO [RewardInfo]
+     Http.T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
 getRewardInfo connection cycleNumber delegateIds = do
   let rewardBlockCycle = bakingCycle (fromIntegral cycleNumber)
       snapshotBlockCycle = snapshotCycle (fromIntegral cycleNumber)
