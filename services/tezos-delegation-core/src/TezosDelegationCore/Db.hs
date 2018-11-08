@@ -21,7 +21,7 @@ deriving instance Read Cycle
 deriving instance Show Cycle
 
 instance Table CycleT where
-  data PrimaryKey CycleT f = CycleNumber (C f Word64)
+  data PrimaryKey CycleT f = CycleNumber{cycleNumber :: C f Word64}
                              deriving (Generic, Beamable)
   primaryKey Cycle {number} = CycleNumber number
 
@@ -30,10 +30,6 @@ deriving instance Eq (PrimaryKey CycleT Identity)
 deriving instance Read (PrimaryKey CycleT Identity)
 
 deriving instance Show (PrimaryKey CycleT Identity)
-
-cycleNumber :: PrimaryKey CycleT f -> C f Word64
--- ^ TODO: replace with lens?
-cycleNumber (CycleNumber n) = n
 
 data DelegateT f = Delegate
   { address :: C f Tezos.ImplicitAddress
@@ -64,11 +60,12 @@ deriving instance Read (PrimaryKey DelegateT Identity)
 
 deriving instance Show (PrimaryKey DelegateT Identity)
 
+-- | Not accepting partial payments at the moment. Would be relatively simple to extend.
+-- (replace @open with a @sizeFulfilled column)
 data BillT f = Bill
   { id :: C f UUID
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
-  , fulfilled :: C f (FixedQty XTZ)
   , open :: C f Bool
   , late :: C f Bool
   , timestamp :: C f Timestamp
@@ -102,7 +99,6 @@ data RewardT f = Reward
   , stakingBalace :: C f (FixedQty XTZ)
   , delegatedBalance :: C f (FixedQty XTZ)
   , bill :: PrimaryKey BillT f
-  , timestamp :: C f Timestamp
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -129,11 +125,12 @@ deriving instance Read (PrimaryKey RewardT Identity)
 deriving instance Show (PrimaryKey RewardT Identity)
 
 data DividendT f = Dividend
-  { id :: C f UUID
-  , delegator :: C f Tezos.OriginatedAddress
+  { delegator :: C f Tezos.OriginatedAddress
   , delegate :: PrimaryKey DelegateT f
+  , cycle :: PrimaryKey CycleT f
   , size :: C f (FixedQty XTZ)
-  , timestamp :: C f Timestamp
+  , bill :: PrimaryKey BillT f
+  , payout :: PrimaryKey PayoutT (Nullable f)
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -146,9 +143,12 @@ deriving instance Read Dividend
 deriving instance Show Dividend
 
 instance Table DividendT where
-  data PrimaryKey DividendT f = DividendId (C f UUID)
+  data PrimaryKey DividendT f = DividendPKey (C f
+                                              Tezos.OriginatedAddress)
+                                           (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
                                 deriving (Generic, Beamable)
-  primaryKey Dividend {id} = DividendId id
+  primaryKey Dividend {delegator, delegate, cycle} =
+    DividendPKey delegator delegate cycle
 
 deriving instance Eq (PrimaryKey DividendT Identity)
 
@@ -156,10 +156,40 @@ deriving instance Read (PrimaryKey DividendT Identity)
 
 deriving instance Show (PrimaryKey DividendT Identity)
 
-data RefundT f = Refund
+data PayoutT f = Payout
   { id :: C f UUID
-  , delegate :: PrimaryKey DelegateT f
+  , createdAt :: C f Timestamp
+  } deriving (Generic, Beamable)
+
+type Payout = PayoutT Identity
+
+deriving instance Eq Payout
+
+deriving instance Read Payout
+
+deriving instance Show Payout
+
+instance Table PayoutT where
+  data PrimaryKey PayoutT f = PayoutId{payoutId :: C f UUID}
+                              deriving (Generic, Beamable)
+  primaryKey Payout {id} = PayoutId id
+
+deriving instance Eq (PrimaryKey PayoutT Identity)
+
+deriving instance Read (PrimaryKey PayoutT Identity)
+
+deriving instance Show (PrimaryKey PayoutT Identity)
+
+deriving instance Eq (PrimaryKey PayoutT (Nullable Identity))
+
+deriving instance Read (PrimaryKey PayoutT (Nullable Identity))
+
+deriving instance Show (PrimaryKey PayoutT (Nullable Identity))
+
+data RefundT f = Refund
+  { payment :: PrimaryKey PaymentT f
   , size :: C f (FixedQty XTZ)
+  , payout :: PrimaryKey PayoutT f
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
@@ -172,9 +202,9 @@ deriving instance Read Refund
 deriving instance Show Refund
 
 instance Table RefundT where
-  data PrimaryKey RefundT f = RefundId (C f UUID)
+  data PrimaryKey RefundT f = RefundPayment (PrimaryKey PaymentT f)
                               deriving (Generic, Beamable)
-  primaryKey Refund {id} = RefundId id
+  primaryKey Refund {payment} = RefundPayment payment
 
 deriving instance Eq (PrimaryKey RefundT Identity)
 
@@ -185,7 +215,7 @@ deriving instance Show (PrimaryKey RefundT Identity)
 data DelegationT f = Delegation
   { delegator :: C f Tezos.OriginatedAddress
   , delegate :: PrimaryKey DelegateT f
-  , dividendCycle :: PrimaryKey CycleT f
+  , rewardCycle :: PrimaryKey CycleT f
   , size :: C f (FixedQty XTZ)
   , dividend :: PrimaryKey DividendT f
   , createdAt :: C f Timestamp
@@ -204,8 +234,8 @@ instance Table DelegationT where
                                                   Tezos.OriginatedAddress)
                                                (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
                                   deriving (Generic, Beamable)
-  primaryKey Delegation {delegator, delegate, dividendCycle} =
-    DelegationPKey delegator delegate dividendCycle
+  primaryKey Delegation {delegator, delegate, rewardCycle} =
+    DelegationPKey delegator delegate rewardCycle
 
 deriving instance Eq (PrimaryKey DelegationT Identity)
 
@@ -213,70 +243,42 @@ deriving instance Read (PrimaryKey DelegationT Identity)
 
 deriving instance Show (PrimaryKey DelegationT Identity)
 
-data ConfirmedTxT f = ConfirmedTx
-  { id :: C f UUID
-  , hash :: C f Tezos.OperationHash
-  , index :: C f Word64
+-- | Represents payments processed.
+data PaymentT f = Payment
+  { idx :: C f Word64
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)
 
-type ConfirmedTx = ConfirmedTxT Identity
+type Payment = PaymentT Identity
 
-deriving instance Eq ConfirmedTx
+deriving instance Eq Payment
 
-deriving instance Read ConfirmedTx
+deriving instance Read Payment
 
-deriving instance Show ConfirmedTx
+deriving instance Show Payment
 
-instance Table ConfirmedTxT where
-  data PrimaryKey ConfirmedTxT f = ConfirmedTxHashId (C f UUID)
-                                   deriving (Generic, Beamable)
-  primaryKey ConfirmedTx {id} = ConfirmedTxHashId id
+instance Table PaymentT where
+  data PrimaryKey PaymentT f = PaymentIndex (C f Word64)
+                               deriving (Generic, Beamable)
+  primaryKey Payment {idx} = PaymentIndex idx
 
-deriving instance Eq (PrimaryKey ConfirmedTxT Identity)
+deriving instance Eq (PrimaryKey PaymentT Identity)
 
-deriving instance Read (PrimaryKey ConfirmedTxT Identity)
+deriving instance Read (PrimaryKey PaymentT Identity)
 
-deriving instance Show (PrimaryKey ConfirmedTxT Identity)
-
-data ConfirmedPaymentT f = ConfirmedPayment
-  { hash :: C f Tezos.OperationHash
-  , delegate :: PrimaryKey DelegateT f
-  , size :: C f (FixedQty XTZ)
-  , index :: C f Word64
-  , createdAt :: C f Timestamp
-  } deriving (Generic, Beamable)
-
-type ConfirmedPayment = ConfirmedPaymentT Identity
-
-deriving instance Eq ConfirmedPayment
-
-deriving instance Read ConfirmedPayment
-
-deriving instance Show ConfirmedPayment
-
-instance Table ConfirmedPaymentT where
-  data PrimaryKey ConfirmedPaymentT f = ConfirmedPaymentHash (C f
-                                                              Tezos.OperationHash)
-                                        deriving (Generic, Beamable)
-  primaryKey ConfirmedPayment {hash} = ConfirmedPaymentHash hash
-
-deriving instance Eq (PrimaryKey ConfirmedPaymentT Identity)
-
-deriving instance Read (PrimaryKey ConfirmedPaymentT Identity)
-
-deriving instance Show (PrimaryKey ConfirmedPaymentT Identity)
+deriving instance Show (PrimaryKey PaymentT Identity)
 
 data Schema f = Schema
   { cycles :: f (TableEntity CycleT)
   , delegates :: f (TableEntity DelegateT)
   , rewards :: f (TableEntity RewardT)
   , bills :: f (TableEntity BillT)
+  , payouts :: f (TableEntity PayoutT)
   , dividends :: f (TableEntity DividendT)
   , refunds :: f (TableEntity RefundT)
+  , payouts :: f (TableEntity PayoutT)
   , delegations :: f (TableEntity DelegationT)
-  , confirmedTxs :: f (TableEntity ConfirmedTxT)
-  , confirmedPayments :: f (TableEntity ConfirmedPaymentT)
+  , payments :: f (TableEntity PaymentT)
   } deriving (Generic)
 
 instance Database Postgres Schema
@@ -284,6 +286,7 @@ instance Database Postgres Schema
 schema :: DatabaseSettings Postgres Schema
 schema = defaultDbSettings
 
+-- TODO: reduce duplication?
 selectNextCycle :: Connection -> IO Word64
 selectNextCycle conn = do
   let selectMaxCycleNumber =
@@ -309,3 +312,44 @@ delegatesTrackedAtCycle conn cycle = do
           ((val_ cycle >=.) . cycleNumber . firstManagedCycle)
           (all_ $ delegates schema)
   runBeamPostgres conn $ runSelectReturningList selectDelgates
+
+selectNextPayment :: Connection -> IO Word64
+selectNextPayment conn = do
+  let selectMaxPaymentIdx =
+        select $ aggregate_ max_ $ idx <$> all_ (payments schema)
+  m <- runBeamPostgres conn $ runSelectReturningOne selectMaxPaymentIdx
+  return $
+    case m of
+      Nothing -> 0
+      Just Nothing -> 0
+      Just (Just num) -> num + 1
+
+wasPaymentAlreadyHandled :: Connection -> Word64 -> IO Bool
+wasPaymentAlreadyHandled conn paymentIdx = do
+  let selectPayment = lookup_ (payments schema) $ PaymentIndex paymentIdx
+  runBeamPostgres conn $ isJust <$> runSelectReturningOne selectPayment
+
+billsOutstanding :: Connection -> Tezos.ImplicitAddress -> IO [Bill]
+billsOutstanding conn delegate_ = do
+  let selectBills =
+        select $
+        orderBy_ (\Bill {timestamp} -> asc_ timestamp) $
+        filter_
+          (\Bill {delegate, open} ->
+             DelegateAddress (val_ delegate_) ==. delegate &&. open ==.
+             val_ True) $
+        all_ $ bills schema
+  runBeamPostgres conn $ runSelectReturningList selectBills
+
+dividendsForBill :: Connection -> UUID -> IO [Dividend]
+dividendsForBill conn billId = do
+  let selectDividends =
+        select $
+        filter_ (\Dividend {bill} -> BillId (val_ billId) ==. bill) $
+        all_ $ dividends schema
+  runBeamPostgres conn $ runSelectReturningList selectDividends
+
+isPlatformDelegate :: Connection -> Tezos.Address -> IO Bool
+isPlatformDelegate conn addr = do
+  let selectDelegate = lookup_ (delegates schema) $ DelegateAddress $ retag addr
+  runBeamPostgres conn $ isJust <$> runSelectReturningOne selectDelegate
