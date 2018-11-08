@@ -39,11 +39,11 @@ instance (Deserializable 'Pretty a) =>
 -- TODO: Find a better home for me?
 gapFilledStream ::
      Indexable a
-  => Stream QueueBuffer a
-  -> (IndexOf a -> IO a)
+  => (IndexOf a -> IO a)
   -> IndexOf a
+  -> Stream QueueBuffer a
   -> IO (Stream QueueBuffer a)
-gapFilledStream stream materializer startIndex = do
+gapFilledStream materializer startIndex stream = do
   (writer, masterStream) <- newStream
   let f a idx =
         if idx < index a

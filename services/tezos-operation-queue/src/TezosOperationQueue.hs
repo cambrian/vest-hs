@@ -54,9 +54,6 @@ type Api = InjectEndpoint
 inject :: T -> Tezos.SignedOperationContents -> IO ()
 inject _ _ = return ()
 
-handlers :: Handlers Api
-handlers = inject
-
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
@@ -66,4 +63,9 @@ instance Service T where
   defaultArgs = defaultArgs_
   init Args {configFile} f = do
     Config {webSocketConfig} <- Yaml.decodeFileThrow configFile
-    with webSocketConfig (\webSocket -> f $ T {webSocket})
+    with
+      webSocketConfig
+      (\webSocket -> do
+         let t = T {webSocket}
+             handlers = inject t
+         f (t, handlers, (), (), ()))

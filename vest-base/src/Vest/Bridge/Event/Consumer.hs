@@ -58,13 +58,14 @@ instance ( Serializable fmt (IndexOf a)
         lockId = retag $ eventName <> "/consumer/" <> Tagged (namespace @t)
     async $
       withDistributedLock t lockId $ do
-        (writer, stream) <- newStream
         let materialize =
               makeClient
                 t
                 (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt server transport name a)))
+        (writer, stream) <- newStream
         subscribeEvents
           (eventTransport @transport t)
           eventName
           (writeStream writer <=< deserializeUnsafe' @fmt)
-        getStartIndex >>= gapFilledStream stream materialize >>= tapStream_ f
+        startIndex <- getStartIndex
+        gapFilledStream materialize startIndex stream >>= consumeStream f

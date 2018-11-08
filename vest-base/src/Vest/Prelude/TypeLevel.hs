@@ -14,7 +14,7 @@ import Data.Type.Bool as Vest.Prelude.TypeLevel
 import GHC.TypeLits as Vest.Prelude.TypeLevel (AppendSymbol)
 import Vest.Prelude.Core
 
--- Union of two APIs. Adapted from Servant.
+-- Type level alternative. Used to construct lists of heterogeneous types
 data a :<|> b =
   a :<|> b
   deriving (Eq, Show, Functor, Traversable, Foldable, Bounded)

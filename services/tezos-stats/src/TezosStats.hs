@@ -102,9 +102,6 @@ operation T {rawStubData, streamDelayMillis} opHash = do
         closeStream writer
       return stream
 
-handlers :: Handlers Api
-handlers = overview :<|> bakersFn :<|> implicit :<|> operation
-
 type AuxiliaryTypes
    = Raw Baker
      :<|> Raw DelegateFraction
@@ -126,6 +123,7 @@ instance Service T where
     Config {webSocketConfig, streamDelayMillis} <-
       Yaml.decodeFileThrow configFile
     rawStubData <- readFile stubDataFile
-    with
-      webSocketConfig
-      (\webSocket -> f $ T {webSocket, rawStubData, streamDelayMillis})
+    with webSocketConfig $ \webSocket -> do
+      let t = T {webSocket, rawStubData, streamDelayMillis}
+          handlers = overview t :<|> bakersFn t :<|> implicit t :<|> operation t
+      f (t, handlers, (), (), ())

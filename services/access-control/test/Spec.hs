@@ -66,7 +66,8 @@ instance Service TestServer where
     with Amqp.localConfig $ \amqp -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey testServerSeed
-      f $ TestServer {amqp, accessControlClient}
+      let t = TestServer {amqp, accessControlClient}
+      f (t, const return :<|> const return, (), (), ())
 
 data TestClient = TestClient
   { amqp :: Amqp.T
@@ -98,7 +99,8 @@ instance Service TestClient where
     with Amqp.localConfig $ \amqp -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey testClientSeed
-      f $ TestClient {amqp, accessControlClient}
+      let t = TestClient {amqp, accessControlClient}
+      f (t, (), (), (), ())
 
 generatePublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file
@@ -136,55 +138,23 @@ testForbidden t =
     let call = makeClient t (Proxy :: Proxy ForbiddenEndpoint)
     show <$> call ()
 
-accessControlServiceConfig :: TestServiceConfig AccessControl.T
-accessControlServiceConfig =
-  TestServiceConfig
-    { testServiceArgs =
-        AccessControl.Args
-          { AccessControl.configFile = configFile
-          , AccessControl.subjectsFile = subjectsFile
-          , AccessControl.seedFile = seedFile
-          }
-    , testServiceHandlers = AccessControl.handlers
-    , testServiceValues = AccessControl.makeValues
-    , testServiceEventsProduced = const $ return ()
-    , testServiceEventsConsumed = return ()
-    }
-
-handler :: TestServer -> AccessControl.Auth.Claims -> () -> IO ()
-handler _ _ _ = return ()
-
-testServerConfig :: TestServiceConfig TestServer
-testServerConfig =
-  TestServiceConfig
-    { testServiceArgs = ()
-    , testServiceHandlers = handler :<|> handler
-    , testServiceValues = const $ return ()
-    , testServiceEventsProduced = const $ return ()
-    , testServiceEventsConsumed = return ()
-    }
-
-testClientConfig :: TestServiceConfig TestClient
-testClientConfig =
-  TestServiceConfig
-    { testServiceArgs = ()
-    , testServiceHandlers = ()
-    , testServiceValues = const $ return ()
-    , testServiceEventsProduced = const $ return ()
-    , testServiceEventsConsumed = return ()
-    }
-
 generateDataFiles :: TestTree
 generateDataFiles =
   testGroup "Generate data files" [generatePublicKey, generateSubjects]
 
 tests :: TestTree
 tests =
-  testWithService @AccessControl.T accessControlServiceConfig $
+  testWithService
+    @AccessControl.T
+    (AccessControl.Args
+       { AccessControl.configFile = configFile
+       , AccessControl.subjectsFile = subjectsFile
+       , AccessControl.seedFile = seedFile
+       }) $
   const $
-  testWithService @TestServer testServerConfig $
+  testWithService @TestServer () $
   const $
-  testWithService testClientConfig $ \testClient ->
+  testWithService () $ \testClient ->
     testGroup "Tests" [testPermitted testClient, testForbidden testClient]
 
 main :: IO ()

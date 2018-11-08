@@ -6,7 +6,6 @@ module Test
   , testWithService
   , ignoreIO
   , TestService
-  , TestServiceConfig(..)
   ) where
 
 import Vest
@@ -29,33 +28,12 @@ testCaseRaw name path =
 
 type TestService a = (Async' "ServiceThread" Void, a)
 
-data TestServiceConfig a = TestServiceConfig
-  { testServiceArgs :: ServiceArgs a
-  , testServiceHandlers :: Handlers (RpcSpec a)
-  , testServiceValues :: a -> IO (Values (ValueSpec a))
-  , testServiceEventsProduced :: a -> IO (Producers (EventsProduced a))
-  , testServiceEventsConsumed :: a -> Consumers (EventsConsumed a)
-  }
-
 instance Service a => Resource (TestService a) where
-  type ResourceConfig (TestService a) = TestServiceConfig a
-  make TestServiceConfig { testServiceArgs = args
-                         , testServiceHandlers = handlers
-                         , testServiceValues = vars
-                         , testServiceEventsProduced = eventsProduced
-                         , testServiceEventsConsumed = eventsConsumed
-                         } = do
+  type ResourceConfig (TestService a) = ServiceArgs a
+  make args = do
     serviceVar <- newEmptyTMVarIO
     mainThread <- myThreadId
-    serviceThread <-
-      async' $
-      run
-        args
-        handlers
-        vars
-        eventsProduced
-        eventsConsumed
-        (atomically . putTMVar serviceVar)
+    serviceThread <- async' $ run args (atomically . putTMVar serviceVar)
     exceptionWatcher <-
       async $ do
         threadResult <- waitCatch (untag serviceThread)
@@ -77,13 +55,13 @@ testWithResource config = Tasty.withResource (make @a config) (cleanup @a)
 
 testWithService ::
      forall a. Service a
-  => TestServiceConfig a
+  => ServiceArgs a
   -> (IO a -> TestTree)
   -> TestTree
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
-testWithService config f =
+testWithService args f =
   Tasty.withResource
-    (make @(TestService a) config)
+    (make @(TestService a) args)
     (cleanup @(TestService a))
     (f . fmap snd)
 

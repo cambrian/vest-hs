@@ -51,9 +51,6 @@ defaultArgs_ =
 
 type Api = ()
 
-handlers :: Handlers Api
-handlers = ()
-
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
@@ -68,9 +65,9 @@ instance Service T where
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
     reachedSteadyState <- newEmptyTMVarIO
-    with
-      (dbConfig :<|> amqpConfig :<|> redisConfig :<|> tezosConfig)
-      (\(db :<|> amqp :<|> redis :<|> tezos) -> do
-         accessControlClient <-
-           AccessControl.Client.make amqp accessControlPublicKey seed
-         f $ T {db, amqp, redis, tezos, accessControlClient, reachedSteadyState})
+    with (dbConfig :<|> amqpConfig :<|> redisConfig :<|> tezosConfig) $ \(db :<|> amqp :<|> redis :<|> tezos) -> do
+      accessControlClient <-
+        AccessControl.Client.make amqp accessControlPublicKey seed
+      let t =
+            T {db, amqp, redis, tezos, accessControlClient, reachedSteadyState}
+      f (t, (), (), panic "unimplemented", ())

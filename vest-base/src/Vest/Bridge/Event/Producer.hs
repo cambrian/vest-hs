@@ -26,7 +26,7 @@ type HasUniqueEventNames spec = EventNames spec ~ NubEventNames spec
 
 type family Producers spec where
   Producers () = ()
-  Producers (Event_ _ t _ _ a) = (Stream QueueBuffer a, t -> IndexOf a -> IO a)
+  Producers (Event_ _ _ _ _ a) = (Stream QueueBuffer a, IndexOf a -> IO a)
   Producers (a
              :<|> b) = (Producers a
                         :<|> Producers b)

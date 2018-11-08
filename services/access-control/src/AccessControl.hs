@@ -54,9 +54,6 @@ accessToken T {subjects, secretKey} publicKey = do
       signedToken = sign' secretKey (show' token)
   return signedToken
 
-handlers :: Handlers (RpcSpec T)
-handlers = accessToken :<|> (\T {bumpMinTokenTime} _ () -> bumpMinTokenTime)
-
 makeValues :: T -> IO (Values (ValueSpec T))
 makeValues = return . minTokenTime
 
@@ -76,14 +73,16 @@ instance Service T where
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
-    with (redisConfig :<|> amqpConfig) $ \(redis :<|> amqp) ->
-      f $
-      T
-        { subjects
-        , amqp
-        , redis
-        , publicKey
-        , secretKey
-        , minTokenTime
-        , bumpMinTokenTime
-        }
+    with (redisConfig :<|> amqpConfig) $ \(redis :<|> amqp) -> do
+      let t =
+            T
+              { subjects
+              , amqp
+              , redis
+              , publicKey
+              , secretKey
+              , minTokenTime
+              , bumpMinTokenTime
+              }
+          handlers = accessToken t :<|> (\_claims () -> bumpMinTokenTime)
+      f (t, handlers, minTokenTime, (), ())

@@ -26,10 +26,10 @@ type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 type family Handlers spec where
   Handlers () = ()
-  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Direct res)) = t -> AuthClaims auth -> req -> IO res
-  Handlers (Endpoint_ _ _ ('Auth auth) t _ _ req ('Streaming res)) = t -> AuthClaims auth -> req -> IO (Stream ValueBuffer res)
-  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Direct res)) = t -> req -> IO res
-  Handlers (Endpoint_ _ _ 'NoAuth t _ _ req ('Streaming res)) = t -> req -> IO (Stream ValueBuffer res)
+  Handlers (Endpoint_ _ _ ('Auth auth) _ _ _ req ('Direct res)) = AuthClaims auth -> req -> IO res
+  Handlers (Endpoint_ _ _ ('Auth auth) _ _ _ req ('Streaming res)) = AuthClaims auth -> req -> IO (Stream ValueBuffer res)
+  Handlers (Endpoint_ _ _ 'NoAuth _ _ _ req ('Direct res)) = req -> IO res
+  Handlers (Endpoint_ _ _ 'NoAuth _ _ _ req ('Streaming res)) = req -> IO (Stream ValueBuffer res)
   Handlers (a
             :<|> b) = (Handlers a
                        :<|> Handlers b)
@@ -82,7 +82,7 @@ serve_ ::
      -- ^ x is typically res or Streamly.Serial res.
      -- res itself may be StreamingResponse a in the case of a streaming sender.
   -> t
-  -> (t -> AuthClaims auth -> req -> IO x)
+  -> (AuthClaims auth -> req -> IO x)
   -> IO ()
 serve_ sender t handler =
   serveRaw (rpcTransport @transport t) rawRoute asyncHandle
@@ -95,7 +95,7 @@ serve_ sender t handler =
               atomically (verifyRequest (authVerifier @auth t) headers reqText) >>=
               fromRightOrThrowLeft
             req <- deserializeUnsafe' @fmt reqText
-            sender (sendToClient . RpcResponse) (handler t claims req))
+            sender (sendToClient . RpcResponse) (handler claims req))
         [ Handler $ \(x :: AuthException) -> do
             sendToClient $ RpcResponseClientException $ show x
             log t Warn $ show x
@@ -123,14 +123,7 @@ instance ( HasNamespace t
          ) =>
          Server t (Endpoint_ _timeout fmt 'NoAuth t transport route req ('Direct res)) where
   serve t _ handler =
-    serve_
-      @fmt
-      @()
-      @transport
-      @route
-      directSender
-      t
-      (\t () req -> handler t req)
+    serve_ @fmt @() @transport @route directSender t (const handler)
 
 instance ( HasNamespace t
          , HasLogger t
@@ -150,7 +143,7 @@ instance ( HasNamespace t
       @route
       (streamingSender $ natSeconds @timeout)
       t
-      (\t () req -> handler t req)
+      (const handler)
 
 instance ( HasNamespace t
          , HasLogger t

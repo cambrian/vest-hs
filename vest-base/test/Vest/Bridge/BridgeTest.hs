@@ -79,17 +79,16 @@ withT f = do
     with webSocketConfig $ \webSocket ->
       with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket, redis})
 
-echoDirect :: T -> a -> IO a
-echoDirect _ = return
+echoDirect :: a -> IO a
+echoDirect = return
 
-echoStreaming :: (Eq a) => T -> [a] -> IO (Stream ValueBuffer a)
-echoStreaming _ xs =
-  streamFromList xs >>= mapMStream (<$ threadDelay (sec 0.01))
+echoStreaming :: (Eq a) => [a] -> IO (Stream ValueBuffer a)
+echoStreaming xs = streamFromList xs >>= mapMStream (<$ threadDelay (sec 0.01))
 
 handlers :: Handlers (TestRpcApi Amqp.T)
 handlers =
   echoDirect :<|> echoDirect :<|> echoStreaming :<|> echoStreaming :<|>
-  (\_ () -> threadDelay (sec 0.01))
+  const (threadDelay (sec 0.01))
 
 withRpcClient ::
      forall transport spec a. (HasRpcTransport transport T, Client T spec)

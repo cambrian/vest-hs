@@ -37,13 +37,13 @@ type Api
      :<|> VoidEndpoint
      :<|> VoidStreamEndpoint
 
-addInts :: T -> AddIntsRequest -> IO Int
-addInts _ AddIntsRequest {a, b} = do
+addInts :: AddIntsRequest -> IO Int
+addInts AddIntsRequest {a, b} = do
   threadDelay (ms 30)
   return (a + b)
 
-echoThrice :: T -> Int -> IO (Stream ValueBuffer Int)
-echoThrice _ x = do
+echoThrice :: Int -> IO (Stream ValueBuffer Int)
+echoThrice x = do
   (writer, stream) <- newStream
   async $
     mapM_ (\n -> threadDelay (ms 30) >> writeStream writer n) [x .. x + 2] >>
@@ -51,22 +51,21 @@ echoThrice _ x = do
   return stream
 
 concatTextAuth ::
-     T
-  -> VerifierClaims DummyAuth.T
+     VerifierClaims DummyAuth.T
   -> ConcatTextAuthRequest
   -> IO ConcatTextAuthResponse
-concatTextAuth _ _ ConcatTextAuthRequest {a, b} =
+concatTextAuth _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
 echoThriceAuth ::
-     T -> VerifierClaims DummyAuth.T -> Text -> IO (Stream ValueBuffer Text)
-echoThriceAuth _ _ = streamFromList . replicate 3
+     VerifierClaims DummyAuth.T -> Text -> IO (Stream ValueBuffer Text)
+echoThriceAuth _ = streamFromList . replicate 3
 
-unit :: T -> () -> IO ()
-unit _ _ = return ()
+unit :: () -> IO ()
+unit _ = return ()
 
-unitStream :: T -> () -> IO (Stream ValueBuffer ())
-unitStream _ _ = streamFromList $ replicate 3 ()
+unitStream :: () -> IO (Stream ValueBuffer ())
+unitStream _ = streamFromList $ replicate 3 ()
 
 handlers :: Handlers Api
 handlers =
@@ -83,4 +82,5 @@ instance Service T where
   type EventsConsumed T = ()
   defaultArgs = defaultArgs_
   init Args {port} f =
-    with (WebSocket.localConfigOn port) (\webSocket -> f $ T {webSocket})
+    with (WebSocket.localConfigOn port) $ \webSocket ->
+      f (T {webSocket}, handlers, (), (), ())

@@ -25,39 +25,25 @@ class ( Data (ServiceArgs a)
   type EventsProduced a
   type EventsConsumed a
   defaultArgs :: ServiceArgs a
-  init :: ServiceArgs a -> (a -> IO b) -> IO b
-  run ::
+  init ::
        ServiceArgs a
-    -> Handlers (RpcSpec a)
-    -> (a -> IO (Values (ValueSpec a)))
-    -> (a -> IO (Producers (EventsProduced a)))
-    -> (a -> Consumers (EventsConsumed a))
-    -> (a -> IO b)
-    -> IO Void
-  -- ^ This function runs a service with the provided streams, handlers, and body function.
-  run args handlers makeValues makeEventProducers makeEventConsumers f =
-    init args $ \a -> do
+    -> (( a
+        , Handlers (RpcSpec a)
+        , Values (ValueSpec a)
+        , Producers (EventsProduced a)
+        , Consumers (EventsConsumed a)) -> IO b)
+    -> IO b
+  run :: ServiceArgs a -> (a -> IO b) -> IO Void
+  -- ^ This function runs a service with an arbitrary body function.
+  run args f =
+    init args $ \(a, handlers, values, producers, consumers) -> do
       serve a (Proxy :: Proxy (RpcSpec a)) handlers
-      variables <- makeValues a
-      publish a (Proxy :: Proxy (ValueSpec a)) variables
-      eventProducers <- makeEventProducers a
-      produce a (Proxy :: Proxy (EventsProduced a)) eventProducers
-      consume a (Proxy :: Proxy (EventsConsumed a)) $ makeEventConsumers a
+      publish a (Proxy :: Proxy (ValueSpec a)) values
+      produce a (Proxy :: Proxy (EventsProduced a)) producers
+      consume a (Proxy :: Proxy (EventsConsumed a)) consumers
       f a
       blockForever
-  start ::
-       Handlers (RpcSpec a)
-    -> (a -> IO (Values (ValueSpec a)))
-    -> (a -> IO (Producers (EventsProduced a)))
-    -> (a -> Consumers (EventsConsumed a))
-    -> IO Void
-  start handlers makeValues makeEventProducers makeEventConsumers = do
+  start :: IO Void
+  start = do
     args_ <- cmdArgs $ defaultArgs @a
-    run
-      @a
-      args_
-      handlers
-      makeValues
-      makeEventProducers
-      makeEventConsumers
-      return
+    run @a args_ return

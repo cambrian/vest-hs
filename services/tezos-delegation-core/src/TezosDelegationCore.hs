@@ -53,9 +53,6 @@ defaultArgs_ =
 
 type Api = ()
 
-handlers :: Handlers Api
-handlers = ()
-
 platformFee :: Rational
 platformFee = 0.5
 
@@ -228,9 +225,8 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    with
-      (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig)
-      (\(dbPool :<|> amqp :<|> redis) -> do
-         accessControlClient <-
-           AccessControl.Client.make amqp accessControlPublicKey seed
-         f $ T {dbPool, amqp, redis, accessControlClient})
+    with (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig) $ \(dbPool :<|> amqp :<|> redis) -> do
+      accessControlClient <-
+        AccessControl.Client.make amqp accessControlPublicKey seed
+      let t = T {dbPool, amqp, redis, accessControlClient}
+      f (t, (), (), (), panic "unimplemented")
