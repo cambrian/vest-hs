@@ -33,13 +33,13 @@ data NotifyBlock = NotifyBlock
   , level :: Int
   , proto :: Int
   , predecessor :: Text
-  , timestamp :: Text
+  , timestamp :: UTCTime
   , validation_pass :: Int
   , operations_hash :: Text
   , fitness :: [Text]
   , context :: Text
   , protocol_data :: Text
-  } deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+  } deriving (Eq, Ord, Show, Read, Generic, ToJSON, FromJSON)
 
 type MonitorBlocks = "monitor" :> "heads" :> "main" :> Streaming NotifyBlock
 
@@ -121,6 +121,19 @@ data Delegation = Delegation
 
 $(deriveTypeScript defaultOptions ''Delegation)
 
+data OriginationResult = OriginationResult
+  { originated_contracts :: Maybe [Text] -- Other fields omitted.
+  } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''OriginationResult)
+
+data OriginationMetadata = OriginationMetadata
+  { balance_updates :: Value
+  , operation_result :: OriginationResult
+  } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''OriginationMetadata)
+
 data Origination = Origination
   { kind :: Text
   , source :: Text
@@ -134,6 +147,7 @@ data Origination = Origination
   , delegatable :: Maybe Bool
   , delegate :: Maybe Text
   , script :: Maybe Value
+  , metadata :: OriginationMetadata
   } deriving (Eq, Show, Read, Generic, Hashable, ToJSON, FromJSON)
 
 $(deriveTypeScript defaultOptions ''Origination)
@@ -212,7 +226,7 @@ data BlockHeader = BlockHeader
   { level :: Int
   , proto :: Int
   , predecessor :: Text
-  , timestamp :: Text
+  , timestamp :: UTCTime
   , validation_pass :: Int
   , operations_hash :: Text
   , fitness :: Array
@@ -234,6 +248,9 @@ data Block = Block
 type GetBlock = WithChainBlock (Direct Block)
 
 type GetBlockHash = WithChainBlock ("hash" :> Direct Text)
+
+type GetBlockLevel
+   = WithChainBlock ("helpers" :> "current_level" :> Direct LevelInfo)
 
 type GetBlockSnapshotIndices
    = WithChainBlock ("context" :> "raw" :> "json" :> "rolls" :> "owner" :> "snapshot" :> Capture "cycle" Int :> Direct [Int])

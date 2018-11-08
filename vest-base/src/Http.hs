@@ -7,7 +7,8 @@ import qualified GHC.Base
 import Network.HTTP.Client hiding (Proxy)
 import Network.HTTP.Client.TLS
 import Servant.API as Reexports hiding (Stream)
-import Servant.Client
+import Servant.Client hiding (ServantError(..))
+import Servant.Client as Reexports (ServantError(..))
 import Vest.Prelude.Core
 import Vest.Prelude.Resource
 import Vest.Prelude.Stream
@@ -53,7 +54,8 @@ instance Resource T where
                {managerResponseTimeout = responseTimeoutNone}
            HttpsType ->
              tlsManagerSettings {managerResponseTimeout = responseTimeoutNone})
-    -- ^ Override default timeout to none, and manually handle timeouts per request.
+    -- ^ Override default timeout to none. Timeouts for HTTP requests should be explicitly
+    -- specified in the code (and ideally at the handler level).
     return T {schemeType, host, port, path, manager}
   -- closeManager is apparently deprecated, since managers close on their own when they are no
   -- longer needed. Unclear how that works but okay.
@@ -81,19 +83,12 @@ call requester T { schemeType
           (fromIntegral port)
           (unpack path)))
 
-direct_ :: Maybe (Time Millisecond) -> ClientM result -> T -> IO result
-direct_ timeoutMaybe requester t = do
-  let run = do
-        errorOrResult <- call requester t
-        case errorOrResult of
-          Left error -> throw error
-          Right result -> return result
-  case timeoutMaybe of
-    Just timeoutValue -> timeout timeoutValue run >>= fromRightOrThrowLeft
-    Nothing -> run
-
 direct :: ClientM result -> T -> IO result
-direct = direct_ $ Just defaultRequestTimeout
+direct requester t = do
+  errorOrResult <- call requester t
+  case errorOrResult of
+    Left error -> throw error
+    Right result -> return result
 
 resultLoop ::
      ThreadId
@@ -114,35 +109,24 @@ resultLoop caller push close pull = do
 -- Only returns a stream when the first result has been received.
 -- TODO: Figure out how to pass an exception thrower fn to resultLoop.
 -- TODO: Consider encoding streaming/direct with the API route definitions.
-streaming_ ::
-     Maybe (Time Millisecond)
-  -> ClientM (ResultStream result)
-  -> T
-  -> IO (Stream QueueBuffer result)
-streaming_ timeoutMaybe requester t = do
-  let run = do
-        (writer, stream) <- newStream
-        receivedFirst <- newEmptyMVar
-        caller <- myThreadId
-        let pushNotify x =
-              void $ do
-                writeStream writer x
-                tryPutMVar receivedFirst ()
-        async $ do
-          errorOrResult <- call requester t
-          case errorOrResult of
-            Left error -> closeStream writer >> evilThrowTo caller error
-            Right (ResultStream results) ->
-              results $ resultLoop caller pushNotify $ closeStream writer
-        takeMVar receivedFirst
-        return stream
-  case timeoutMaybe of
-    Just timeoutValue -> timeout timeoutValue run >>= fromRightOrThrowLeft
-    Nothing -> run
-
 streaming ::
      ClientM (ResultStream result) -> T -> IO (Stream QueueBuffer result)
-streaming = streaming_ $ Just defaultRequestTimeout
+streaming requester t = do
+  (writer, stream) <- newStream
+  receivedFirst <- newEmptyTMVarIO
+  caller <- myThreadId
+  let pushNotify x =
+        void $ do
+          writeStream writer x
+          atomically $ tryPutTMVar receivedFirst ()
+  async $ do
+    errorOrResult <- call requester t
+    case errorOrResult of
+      Left error -> closeStream writer >> evilThrowTo caller error
+      Right (ResultStream results) ->
+        results $ resultLoop caller pushNotify $ closeStream writer
+  atomically $ takeTMVar receivedFirst
+  return stream
 
 -- Renaming to make things less opaque for the user.
 request :: HasClient ClientM api => Proxy api -> Client ClientM api

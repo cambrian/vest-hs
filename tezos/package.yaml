@@ -15,6 +15,7 @@ dependencies:
 - aeson-typescript      >= 0.1
 - base                  >= 4.10
 - bytestring            >= 0.10
+- retry                 >= 0.7
 - unordered-containers  >= 0.2
 - vest-base
 
