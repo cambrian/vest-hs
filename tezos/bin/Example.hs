@@ -16,6 +16,11 @@ main = do
   ignoreIO $
     getRewardInfo connection 26 [Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv"] >>=
     print
-  materializeBlockEvent connection 100000 >>= print
-  streamBlockEventsDurable connection >>= consumeStream print
-  -- ^ TODO: Turn these into tests where possible.
+  materializeBlockEventDurable connection (stderrLogger Debug) 100000 >>= print
+  blockEventStream <-
+    streamNewBlockEventsDurable connection (stderrLogger Debug)
+  cycleEventStream <- toCycleEventStream blockEventStream 42
+  async $ tapStream_ print blockEventStream
+  async $ tapStream_ print cycleEventStream
+  waitStream blockEventStream
+  waitStream cycleEventStream

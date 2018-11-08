@@ -14,6 +14,7 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Http.T
   , accessControlClient :: AccessControl.Client.T
+  , reachedSteadyState :: TMVar ()
   } deriving (HasNamespace)
 
 instance HasRedisConnection T where

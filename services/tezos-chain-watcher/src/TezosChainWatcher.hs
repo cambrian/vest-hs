@@ -67,6 +67,7 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
+    reachedSteadyState <- newEmptyTMVarIO
     with4
       dbConfig
       amqpConfig
@@ -75,4 +76,4 @@ instance Service T where
       (\(db, amqp, redis, tezos) -> do
          accessControlClient <-
            AccessControl.Client.make amqp accessControlPublicKey seed
-         f $ T {db, amqp, redis, tezos, accessControlClient})
+         f $ T {db, amqp, redis, tezos, accessControlClient, reachedSteadyState})

@@ -22,6 +22,7 @@ instance Semigroup Logger where
 instance Monoid Logger where
   mempty = Logger $ const $ const $ return ()
 
+-- TODO: Add colorized output.
 stderrLogger :: LogLevel -> Logger
 stderrLogger level = Logger $ \lvl msg -> unless (lvl < level) $ putErrText msg
 
