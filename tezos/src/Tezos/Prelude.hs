@@ -48,6 +48,7 @@ data Transaction = Transaction
   { hash :: OperationHash
   , from :: Account
   , to :: Account
+  , fee :: FixedQty XTZ
   , size :: FixedQty XTZ
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 

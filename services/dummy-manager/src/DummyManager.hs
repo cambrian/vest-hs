@@ -44,10 +44,10 @@ addInts _ AddIntsRequest {a, b} = do
 
 echoThrice :: T -> Int -> IO (Stream ValueBuffer Int)
 echoThrice _ x = do
-  (pusher, stream) <- newStream
+  (writer, stream) <- newStream
   async $
-    mapM_ (\n -> threadDelay (ms 30) >> writeStream pusher n) [x .. x + 2] >>
-    closeStream pusher
+    mapM_ (\n -> threadDelay (ms 30) >> writeStream writer n) [x .. x + 2] >>
+    closeStream writer
   return stream
 
 concatTextAuth ::

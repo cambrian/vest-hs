@@ -1,109 +1,21 @@
-import Http
-import Test
-import Tezos hiding (Operation(..))
-import Tezos.Node
+import qualified Http
+import Test (ignoreIO)
+import Tezos
 import Vest
 
-publicTezosConfig :: ResourceConfig T
+publicTezosConfig :: ResourceConfig Http.T
 publicTezosConfig =
-  Config {schemeType = HttpsType, host = "rpc.tezrpc.me", port = 443, path = ""}
-
-printMainHeadConstants :: T -> IO ()
-printMainHeadConstants connection =
-  direct
-    (request (Proxy :: Proxy GetConstants) mainChain headBlockHash)
-    connection >>=
-  print
-
-printMainHeadContractsCount :: T -> IO ()
-printMainHeadContractsCount connection =
-  direct
-    (request (Proxy :: Proxy ListContracts) mainChain headBlockHash)
-    connection >>=
-  (print . length)
-
-printContractManager :: Text -> T -> IO ()
-printContractManager contract connection =
-  direct
-    (request
-       (Proxy :: Proxy GetContractManager)
-       mainChain
-       headBlockHash
-       contract)
-    connection >>=
-  print
-
-printContractBalance :: Text -> T -> IO ()
-printContractBalance contract connection =
-  direct
-    (request
-       (Proxy :: Proxy GetContractBalance)
-       mainChain
-       headBlockHash
-       contract)
-    connection >>=
-  print
-
-printFrozenBalanceCycles :: Text -> T -> IO ()
-printFrozenBalanceCycles delegate connection =
-  direct
-    (request
-       (Proxy :: Proxy ListFrozenBalanceCycles)
-       mainChain
-       headBlockHash
-       delegate)
-    connection >>=
-  print
-
-printDelegatedContracts :: Text -> T -> IO ()
-printDelegatedContracts delegate connection =
-  direct
-    (request
-       (Proxy :: Proxy ListDelegatedContracts)
-       mainChain
-       headBlockHash
-       delegate)
-    connection >>=
-  print
-
-printMainBlock :: Text -> T -> IO ()
-printMainBlock block connection =
-  direct
-    (request (Proxy :: Proxy GetBlockOperations) mainChain block)
-    connection >>=
-  (print .
-   filter
-     (\case
-        DelegationOp _ -> True
-        TransactionOp _ -> True
-        OriginationOp _ -> True
-        _ -> False) .
-   concatMap contents . concat)
-
-printMonitorBlocks :: T -> IO ()
-printMonitorBlocks connection = do
-  monitorStream <- streaming (request (Proxy :: Proxy MonitorBlocks)) connection
-  tapStream_ print monitorStream
+  Http.Config
+    {schemeType = Http.HttpsType, host = "rpc.tezrpc.me", port = 443, path = ""}
 
 main :: IO ()
 main = do
   connection <- make publicTezosConfig
-  ignoreIO $ printMainHeadConstants connection
-  ignoreIO $ printMainHeadContractsCount connection
-  ignoreIO $
-    printContractManager "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
-  ignoreIO $
-    printContractBalance "KT1Xnjog1ou1HNHQNsD9nVi3ddkb9YQ5f28k" connection
-  ignoreIO $
-    printFrozenBalanceCycles "tz1Zhv3RkfU2pHrmaiDyxp7kFZpZrUCu1CiF" connection
-  ignoreIO $
-    printDelegatedContracts "tz1Zhv3RkfU2pHrmaiDyxp7kFZpZrUCu1CiF" connection
-  ignoreIO $
-    printMainBlock
-      "BLpySJC2wRULnED2Y8nPkH7nUzASeorvft1iBMC2KhQbD79rw7r"
-      connection
   -- Compare with https://api1.tzscan.io/v2/rewards_split
   -- tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv?cycle=20&p=0
-  getRewardInfo connection 26 [Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv"] >>=
+  ignoreIO $
+    getRewardInfo connection 26 [Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv"] >>=
     print
-  ignoreIO $ printMonitorBlocks connection
+  materializeBlockEvent connection 100000 >>= print
+  streamBlockEventsDurable connection >>= consumeStream print
+  -- ^ TODO: Turn these into tests where possible.

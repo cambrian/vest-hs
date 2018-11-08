@@ -99,6 +99,7 @@ data TransactionT f = Transaction
   { hash :: PrimaryKey OperationT f
   , from :: C f Tezos.Account
   , to :: C f Tezos.Account
+  , fee :: C f (FixedQty XTZ)
   , size :: C f (FixedQty XTZ)
   , createdAt :: C f Timestamp
   } deriving (Generic, Beamable)

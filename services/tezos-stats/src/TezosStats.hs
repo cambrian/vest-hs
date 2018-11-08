@@ -93,13 +93,13 @@ operation T {rawStubData, streamDelayMillis} opHash = do
   case HashMap.lookup opHash (operationResponses stubData) of
     Nothing -> throw $ InvalidCallException "no such operation hash"
     Just streamOpList -> do
-      (pusher, stream) <- newStream
+      (writer, stream) <- newStream
       async $
         mapM_
           (\x ->
-             threadDelay (ms (streamDelayMillis % 1)) >> writeStream pusher x)
+             threadDelay (ms (streamDelayMillis % 1)) >> writeStream writer x)
           streamOpList >>
-        closeStream pusher
+        closeStream writer
       return stream
 
 handlers :: Handlers Api
