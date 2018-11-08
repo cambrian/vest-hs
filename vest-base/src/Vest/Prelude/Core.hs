@@ -64,6 +64,7 @@ import Data.Aeson as Vest.Prelude.Core
   )
 import Data.Aeson (withText)
 import Data.Aeson.Types (FromJSONKeyFunction(..), defaultOptions, toJSONKeyText)
+import Data.AffineSpace as Vest.Prelude.Core
 import qualified Data.ByteString.Base64 as Base64
 import Data.Data as Vest.Prelude.Core (Data(..))
 import Data.STRef as Vest.Prelude.Core
@@ -215,3 +216,14 @@ getHostPid = do
 -- | Consider using units of measure for this
 class VectorDivisible a where
   (^/^) :: a -> a -> Rational
+
+-- | Is there a reason these instances aren't provided by default??
+instance Num a => AdditiveGroup a where
+  zeroV = 0
+  (^+^) = (+)
+  negateV = negate
+  (^-^) = (-)
+-- | Compiler doesn't like this
+-- instance Num a => VectorSpace a where
+--   type Scalar a = a
+--   (*^) = (*)

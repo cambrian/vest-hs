@@ -2,83 +2,95 @@ module Vest.Prelude.Time
   ( module Vest.Prelude.Time
   ) where
 
+import qualified Control.Concurrent
 import qualified Control.Exception as Evil (Exception)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
-import Data.Time.Clock as Vest.Prelude.Time (NominalDiffTime, UTCTime)
-import Data.Time.Clock (getCurrentTime)
-import Data.Time.Clock.System (SystemTime(..), systemToUTCTime, utcToSystemTime)
-import Time.Rational (KnownDivRat, KnownRat)
-import Time.Timestamp as Vest.Prelude.Time
-import Time.Units as Vest.Prelude.Time hiding (timeout)
-import qualified Time.Units
+import Data.Fixed
+import Data.Time.Calendar (Day(..))
+import Data.Time.Clock
+  ( NominalDiffTime
+  , UTCTime(..)
+  , addUTCTime
+  , diffUTCTime
+  , getCurrentTime
+  )
+import qualified System.Timeout
+import qualified Text.ParserCombinators.ReadP as ReadP
+import qualified Text.ParserCombinators.ReadPrec as ReadPrec
+import Text.Read
 import Vest.Prelude.Core
 
 instance TypeScript UTCTime where
   getTypeScriptType _ = "string"
 
-deriving instance Generic Timestamp
+-- | TODO: doctest this
+instance Read NominalDiffTime where
+  readPrec = do
+    n <- readPrec @Pico
+    ReadPrec.lift $ ReadP.char 's'
+    return $ fromRational $ toRational n
 
-instance ToJSON Timestamp
+type Time = UTCTime
 
-instance FromJSON Timestamp
+type Duration = NominalDiffTime
 
-newtype TimeoutException unit =
-  TimeoutException (Time unit)
-  deriving (Eq, Ord, Generic)
-  deriving anyclass (Hashable)
+newtype TimeoutException =
+  TimeoutException Duration
+  deriving (Eq, Read, Show, Generic)
+  deriving anyclass (Evil.Exception, ToJSON, FromJSON)
 
-deriving instance
-         KnownUnitName unit => Read (TimeoutException unit)
+instance VectorSpace Duration where
+  type Scalar Duration = Rational
+  a *^ t = fromRational a * t
 
-deriving instance
-         KnownUnitName unit => Show (TimeoutException unit)
+instance VectorDivisible Duration where
+  a ^/^ b = toRational a / toRational b
 
-instance (Typeable unit, KnownUnitName unit) =>
-         Evil.Exception (TimeoutException unit)
+instance AffineSpace Time where
+  type Diff Time = Duration
+  (.-.) = diffUTCTime
+  (.+^) = flip addUTCTime
 
-instance KnownUnitName unit => ToJSON (TimeoutException unit)
+sec :: Rational -> Duration
+sec = fromRational
 
-instance KnownUnitName unit => FromJSON (TimeoutException unit)
+ms :: Rational -> Duration
+ms = fromRational . (1e3 *)
 
-timeout ::
-     KnownDivRat unit Microsecond
-  => Time unit -- ^ time
-  -> IO a -- ^ IO action
-  -> IO (Either (TimeoutException unit) a) -- ^ returns Nothing if no result is available within
-                                           -- the given time
-timeout t action =
-  Time.Units.timeout t action >>- \case
+durationMicros :: Duration -> Int
+durationMicros t = round $ toRational $ t * 1e6
+
+timeout :: Duration -> IO a -> IO (Either TimeoutException a)
+  -- ^ returns Left TimeoutException if f does not complete within the given time
+timeout t f =
+  System.Timeout.timeout (durationMicros t) f >>- \case
     Just a -> Right a
     Nothing -> Left $ TimeoutException t
 
+threadDelay :: Duration -> IO ()
+threadDelay = Control.Concurrent.threadDelay . durationMicros
+
 timeoutRenewable ::
-     KnownDivRat unit Microsecond
-  => Time unit
-  -> IO a
-  -> IO (Time unit -> IO (), IO (Either (TimeoutException unit) a))
-timeoutRenewable t action = do
-  let micros = toNum @Microsecond
-  delay <- newDelay $ micros t
+     Duration -> IO a -> IO (Duration -> IO (), IO (Either TimeoutException a))
+timeoutRenewable t f = do
+  delay <- newDelay $ durationMicros t
   resultMVar <- newEmptyMVar
   void . async $ do
     atomically $ waitDelay delay
     putMVar resultMVar Nothing
   void . async $ do
-    result <- action
+    result <- f
     cancelDelay delay
     putMVar resultMVar (Just result)
-  let renew newTimeout = updateDelay delay $ micros newTimeout
+  let renew newTimeout = updateDelay delay $ durationMicros newTimeout
   let result =
         readMVar resultMVar >>- \case
           Nothing -> Left $ TimeoutException t
           Just a -> Right a
   return (renew, result)
 
-throwIfTimeout ::
-     (Typeable unit, KnownUnitName unit)
-  => Either (TimeoutException unit) a
-  -> IO a
+throwIfTimeout :: Either TimeoutException a -> IO a
 throwIfTimeout (Left exn) = throw exn
 throwIfTimeout (Right a) = return a
 
@@ -87,19 +99,19 @@ data ZeroIntervalException =
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Hashable, Exception)
 
+timeMin :: Time
+timeMin = UTCTime (ModifiedJulianDay 0) 0
+
 intervalRenewable ::
-     (KnownDivRat unit Microsecond, KnownDivRat unit Second)
-  => Time unit
-  -> IO ()
-  -> IO (IO' "RenewInterval" (), IO' "CancelInterval" ())
+     Duration -> IO () -> IO (IO' "RenewInterval" (), IO' "CancelInterval" ())
 -- ^ Begins by waiting; does not execute immediately. Interval cannot be zero; the function will
 -- throw at runtime.
 intervalRenewable interval action = do
-  when (interval == Time 0) $ throw ZeroIntervalException
-  nextBeat <- newTVarIO (Timestamp 0)
+  when (interval == 0) $ throw ZeroIntervalException
+  nextBeat <- newTVarIO timeMin
   let renew = do
         time <- now
-        atomically $ writeTVar nextBeat (timeAdd interval time)
+        atomically $ writeTVar nextBeat $ time .+^ interval
   renew
   intervalThread <-
     async . forever $ do
@@ -108,36 +120,15 @@ intervalRenewable interval action = do
       if time > nextBeatTime
         then do
           void $ async action
-          atomically $ writeTVar nextBeat (timeAdd interval nextBeatTime)
+          atomically $ writeTVar nextBeat $ nextBeatTime .+^ interval
           threadDelay interval
-        else threadDelay (snd $ timeDiff @Second time nextBeatTime)
+        else threadDelay $ nextBeatTime .-. time
   return (Tagged renew, Tagged $ uninterruptibleCancel intervalThread)
 
--- UTCTime <--> Timestamp
--- TODO: Keep nanos.
-utcTimeFromTimestamp :: Timestamp -> UTCTime
-utcTimeFromTimestamp (Timestamp seconds) =
-  systemToUTCTime $
-  MkSystemTime {systemSeconds = truncate seconds, systemNanoseconds = 0}
-
-timestampFromUTCTime :: UTCTime -> Timestamp
-timestampFromUTCTime utcTime =
-  let MkSystemTime {systemSeconds} = utcToSystemTime utcTime
-   in fromUnixTime systemSeconds
-
-nominalDiffTimeFromTime ::
-     (KnownDivRat unit Second) => Time unit -> NominalDiffTime
-nominalDiffTimeFromTime = fromRational . toNum @Second
-
-now :: IO Timestamp
-now = getCurrentTime >>- timestampFromUTCTime
+now :: IO Time
+now = getCurrentTime
 
 natSeconds ::
      forall seconds. KnownNat seconds
-  => Time Second
-natSeconds = sec $ fromIntegral $ natVal (Proxy :: Proxy seconds)
-
-instance (KnownRat unit) => VectorDivisible (Time unit) where
-  a ^/^ b =
-    let r = a /:/ b
-     in fromIntegral (numerator r) % fromIntegral (denominator r)
+  => Duration
+natSeconds = fromIntegral $ natVal (Proxy :: Proxy seconds)

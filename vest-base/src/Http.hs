@@ -18,8 +18,8 @@ data HttpClientException =
   HttpClientException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-defaultRequestTimeout :: Time Millisecond
-defaultRequestTimeout = ms 5000
+defaultRequestTimeout :: Duration
+defaultRequestTimeout = sec 5
 
 -- Added because Scheme does not derive certain useful instances.
 data SchemeType

@@ -27,18 +27,6 @@ instance FromField a => FromField (Tagged t a) where
 
 instance FromField a => FromBackendRow Postgres (Tagged t a)
 
--- In theory you could implement this directly on Timestamp without having to create a UTCTime but
--- that's a bunch of work for what's only a smallish win.
--- No type is provided for Time/interval yet because postgresql-simple doesn't support DiffTime or
--- NominalDiffTime and implementing it would be complicated.
-instance HasSqlValueSyntax be UTCTime => HasSqlValueSyntax be Timestamp where
-  sqlValueSyntax = sqlValueSyntax . utcTimeFromTimestamp
-
-instance FromField Timestamp where
-  fromField f bs = timestampFromUTCTime <$> fromField f bs
-
-instance FromBackendRow Postgres Timestamp
-
 instance (HasSqlValueSyntax be Integer, KnownSymbol a, Money.GoodScale scale) =>
          HasSqlValueSyntax be (Money.Discrete' a scale) where
   sqlValueSyntax =

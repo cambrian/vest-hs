@@ -14,7 +14,7 @@ data PaymentEvent = PaymentEvent
   , hash :: Tezos.OperationHash
   , from :: Tezos.Address
   , size :: FixedQty XTZ
-  , timestamp :: Timestamp
+  , time :: Time
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 instance Indexable PaymentEvent where

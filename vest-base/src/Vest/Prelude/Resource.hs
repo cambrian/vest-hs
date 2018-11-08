@@ -17,7 +17,7 @@ class Resource a where
   -- ^ TODO: Retry on exception.
 
 data PoolConfig a = PoolConfig
-  { idleTime :: Time Second
+  { idleTime :: Duration
   , numResources :: Word
   -- ^ numResources is technically per-stripe, but we just use 1 stripe.
   , resourceConfig :: ResourceConfig a
@@ -31,7 +31,7 @@ instance Resource a => Resource (Pool a) where
       (make resourceConfig)
       cleanup
       1
-      (nominalDiffTimeFromTime idleTime)
+      idleTime
       (fromIntegral numResources)
   cleanup = destroyAllResources
 

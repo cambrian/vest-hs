@@ -22,17 +22,17 @@ data DistributedLock = DistributedLock
 data DistributedLockConfig = DistributedLockConfig
   { redis :: Connection
   , lockId :: Text' "LockId"
-  , renewInterval :: Time Second
-  , pollInterval :: Time Millisecond
+  , renewInterval :: Duration
+  , pollInterval :: Duration
   }
 
 defaultDistributedLock :: Connection -> Text' "LockId" -> DistributedLockConfig
 defaultDistributedLock redis lockId =
   DistributedLockConfig
-    {redis, lockId, renewInterval = sec 5, pollInterval = ms 5000}
+    {redis, lockId, renewInterval = sec 5, pollInterval = sec 5}
 
 -- | Wait for an event on the given key but un-block eventually in case of a network glitch.
-waitThenPoll :: PubSubController -> ByteString -> Time Millisecond -> IO ()
+waitThenPoll :: PubSubController -> ByteString -> Duration -> IO ()
 waitThenPoll pubSub redisKey pollInterval = do
   done <- newEmptyTMVarIO
   let channel = "__keyspace@0__:" <> redisKey
@@ -43,8 +43,7 @@ waitThenPoll pubSub redisKey pollInterval = do
   atomically $ takeTMVar done
   removeKeySubscription
 
-acquire ::
-     PubSubController -> ByteString -> Integer -> Time Millisecond -> Redis ()
+acquire :: PubSubController -> ByteString -> Integer -> Duration -> Redis ()
 acquire pubSub redisKey ttlSeconds pollInterval = do
   txResult <-
     multiExec $ do
@@ -66,7 +65,7 @@ instance Resource DistributedLock where
   -- ^ Blocks until lock is acquired.
   make DistributedLockConfig {redis, lockId, renewInterval, pollInterval} = do
     let redisKey = encodeUtf8 $ untag lockId
-        ttlSeconds = toNum @Second @Integer (2 *:* renewInterval)
+        ttlSeconds = round $ toRational $ 2 *^ renewInterval
     pubSub <- newPubSubController [] []
     threadId <- myThreadId
     async $

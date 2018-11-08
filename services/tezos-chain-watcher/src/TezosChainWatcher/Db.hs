@@ -11,8 +11,8 @@ data BlockT f = Block
   , hash :: C f Tezos.BlockHash
   , cycleNumber :: C f Word64
   , fee :: C f (FixedQty XTZ)
-  , timestamp :: C f Timestamp
-  , createdAt :: C f Timestamp
+  , time :: C f Time
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Block = BlockT Identity
@@ -44,7 +44,7 @@ data OperationT f = Operation
   { hash :: C f Tezos.OperationHash
   , blockNumber :: PrimaryKey BlockT f
   , kind :: C f OperationKind
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Operation = OperationT Identity
@@ -71,7 +71,7 @@ data OriginationT f = Origination
   { hash :: PrimaryKey OperationT f
   , originator :: C f Tezos.ImplicitAddress
   , originated :: C f Tezos.OriginatedAddress
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Origination = OriginationT Identity
@@ -101,7 +101,7 @@ data TransactionT f = Transaction
   , to :: C f Tezos.Address
   , fee :: C f (FixedQty XTZ)
   , size :: C f (FixedQty XTZ)
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Transaction = TransactionT Identity

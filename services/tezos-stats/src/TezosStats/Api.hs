@@ -9,19 +9,19 @@ import qualified TezosStats.Internal as TezosStats
 import qualified Transport.WebSocket as WebSocket
 import Vest
 
-data TimestampSize = TimestampSize
-  { timestamp :: UTCTime
+data TimeSize = TimeSize
+  { time :: Time
   , size :: Integer' XTZ
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
-$(deriveTypeScript defaultOptions ''TimestampSize)
+$(deriveTypeScript defaultOptions ''TimeSize)
 
-data TimestampRate = TimestampRate
-  { timestamp :: UTCTime
+data TimeRate = TimeRate
+  { time :: Time
   , rate :: Double
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
-$(deriveTypeScript defaultOptions ''TimestampRate)
+$(deriveTypeScript defaultOptions ''TimeRate)
 
 data DelegateFraction = DelegateFraction
   { delegate :: Tezos.ImplicitAddress
@@ -33,11 +33,11 @@ $(deriveTypeScript defaultOptions ''DelegateFraction)
 data OverviewResponse = OverviewResponse
   { bakerCount :: Int
   , totalRewards :: Integer' XTZ
-  , bondsOverTime :: [TimestampSize]
-  , totalDelegationsOverTime :: [TimestampSize]
-  , interestRatesOverTime :: [TimestampRate]
+  , bondsOverTime :: [TimeSize]
+  , totalDelegationsOverTime :: [TimeSize]
+  , interestRatesOverTime :: [TimeRate]
   , delegateDistribution :: [DelegateFraction]
-  , retrieved :: UTCTime
+  , retrieved :: Time
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''OverviewResponse)
@@ -54,15 +54,15 @@ data Baker = Baker
   , totalDelegations :: Integer' XTZ
   , overDelegated :: Bool
   , cyclesOutstanding :: Int
-  , interestRatesOverTime :: [TimestampRate]
-  , rewardsOverTime :: [TimestampSize]
+  , interestRatesOverTime :: [TimeRate]
+  , rewardsOverTime :: [TimeSize]
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''Baker)
 
 data BakersResponse = BakersResponse
   { bakers :: [Baker]
-  , retrieved :: UTCTime
+  , retrieved :: Time
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''BakersResponse)
@@ -91,7 +91,7 @@ data LedgerOperation = LedgerOperation
   , from :: Maybe Tezos.Address -- From account can be either originated or implicit.
   , size :: Integer' XTZ
   , blockHash :: Maybe Tezos.BlockHash
-  , timestamp :: UTCTime
+  , time :: Time
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''LedgerOperation)
@@ -108,7 +108,7 @@ $(deriveTypeScript defaultOptions ''OriginatedAddress)
 data ImplicitResponse = ImplicitResponse
   { balance :: Integer' XTZ
   , originated :: [OriginatedAddress]
-  , retrieved :: UTCTime
+  , retrieved :: Time
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''ImplicitResponse)
@@ -121,7 +121,7 @@ data OperationResponse = OperationResponse
   , error :: Bool
   , confirmations :: Maybe Int
   , blockHash :: Maybe Tezos.BlockHash
-  , retrieved :: UTCTime
+  , retrieved :: Time
   } deriving (Eq, Ord, Show, Read, Generic, FromJSON, ToJSON)
 
 $(deriveTypeScript defaultOptions ''OperationResponse)

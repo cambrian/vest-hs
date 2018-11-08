@@ -12,7 +12,7 @@ data Token = Token
   { publicKey :: PublicKey
   , name :: Text
   , permissions :: HashSet Permission.T
-  , time :: Timestamp
+  , time :: Time
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 data Subject = Subject
@@ -26,7 +26,7 @@ data T = T
   , redis :: RedisConnection
   , publicKey :: PublicKey
   , secretKey :: SecretKey
-  , minTokenTime :: Stream ValueBuffer Timestamp
+  , minTokenTime :: Stream ValueBuffer Time
   , bumpMinTokenTime :: IO ()
   } deriving (HasNamespace)
 

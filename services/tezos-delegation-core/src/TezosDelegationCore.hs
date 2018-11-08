@@ -51,22 +51,20 @@ defaultArgs_ =
   summary "tezos-delegation-core v0.1.0" &=
   program "tezos-delegation-core"
 
-type Api = ()
-
 platformFee :: Rational
 platformFee = 0.5
 
 billPaymentTime :: Time Day
 billPaymentTime = day 5
 
-makeCycleConsumer :: T -> Consumers CycleEvents
+cycleConsumer :: T -> Consumers CycleEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; dividends are paid out when the delegator pays its bill. This happens
 -- in the payment consumer.
-makeCycleConsumer t =
+cycleConsumer t =
   let nextCycle = Db.runLogged t selectNextCycle
       getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
-      f Tezos.CycleEvent {number = cycleNo, timestamp} = do
+      f Tezos.CycleEvent {number = cycleNo, time} = do
         Db.runLogged t (wasCycleAlreadyHandled cycleNo) >>= (`when` return ())
         delegates <- Db.runLogged t $ delegatesTrackedAtCycle cycleNo
         rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNo delegates
@@ -109,7 +107,7 @@ makeCycleConsumer t =
                        paymentOwed
                        True
                        False
-                       timestamp
+                       time
                        (timeAdd billPaymentTime time)
                        time
                    ])
@@ -147,12 +145,12 @@ makeCycleConsumer t =
           Db.runInsert $
           Db.insert
             (cycles schema)
-            (Db.insertValues [Cycle cycleNo timestamp time])
+            (Db.insertValues [Cycle cycleNo time time])
             Db.onConflictDefault
    in (nextCycle, f)
 
-makePaymentConsumer :: T -> Consumers PaymentEvents
-makePaymentConsumer t =
+paymentConsumer :: T -> Consumers PaymentEvents
+paymentConsumer t =
   let nextPayment = Db.runLogged t selectNextPayment
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
       f PaymentEvent {idx, from, size} = do
@@ -218,7 +216,8 @@ instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = CycleEvents
-  type RpcSpec T = Api
+                          :<|> PaymentEvents
+  type RpcSpec T = ()
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
     Config {dbConfig, amqpConfig, redisConfig} <-
@@ -232,4 +231,4 @@ instance Service T where
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()
-  eventConsumers _ = panic "unimplemented"
+  eventConsumers t = cycleConsumer t :<|> paymentConsumer t

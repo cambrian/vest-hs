@@ -33,7 +33,7 @@ data NotifyBlock = NotifyBlock
   , level :: Int
   , proto :: Int
   , predecessor :: Text
-  , timestamp :: UTCTime
+  , time :: Time
   , validation_pass :: Int
   , operations_hash :: Text
   , fitness :: [Text]
@@ -226,7 +226,7 @@ data BlockHeader = BlockHeader
   { level :: Int
   , proto :: Int
   , predecessor :: Text
-  , timestamp :: UTCTime
+  , time :: Time
   , validation_pass :: Int
   , operations_hash :: Text
   , fitness :: Array

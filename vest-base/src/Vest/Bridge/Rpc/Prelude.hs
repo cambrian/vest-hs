@@ -5,7 +5,6 @@ module Vest.Bridge.Rpc.Prelude
 import qualified Control.Exception as Evil
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
-import Time.Units (KnownUnitName)
 import Vest.Prelude
 
 type Route = Text' "Route"
@@ -71,7 +70,7 @@ type Endpoint = Endpoint_ DefaultTimeoutSeconds 'Haskell
 
 type EndpointJson = Endpoint_ DefaultTimeoutSeconds 'JSON
 
-timeoutsPerHeartbeat :: Ratio Natural
+timeoutsPerHeartbeat :: Rational
 timeoutsPerHeartbeat = 2
 
 class (RpcTransport transport) =>
@@ -97,12 +96,7 @@ data StreamingResponse a
 
 $(deriveTypeScript defaultOptions ''StreamingResponse)
 
-newtype HeartbeatLostException unit =
-  HeartbeatLostException (Time unit)
-  deriving (Eq, Ord)
-
-deriving instance
-         (KnownUnitName unit) => Show (HeartbeatLostException unit)
-
-instance (Typeable unit, KnownUnitName unit) =>
-         Evil.Exception (HeartbeatLostException unit)
+newtype HeartbeatLostException =
+  HeartbeatLostException Duration
+  deriving (Eq, Read, Show, Generic)
+  deriving anyclass (Evil.Exception, ToJSON, FromJSON)

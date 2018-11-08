@@ -109,8 +109,8 @@ type AuxiliaryTypes
      :<|> Raw LedgerOperation
      :<|> Raw LedgerOperationType
      :<|> Raw OriginatedAddress
-     :<|> Raw TimestampRate
-     :<|> Raw TimestampSize
+     :<|> Raw TimeRate
+     :<|> Raw TimeSize
 
 instance Service T where
   type ServiceArgs T = Args

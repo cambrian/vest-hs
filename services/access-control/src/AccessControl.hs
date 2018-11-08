@@ -54,9 +54,6 @@ accessToken T {subjects, secretKey} publicKey = do
       signedToken = sign' secretKey (show' token)
   return signedToken
 
-makeValues :: T -> IO (Values (ValueSpec T))
-makeValues = return . minTokenTime
-
 instance Service T where
   type ServiceArgs T = Args
   type RpcSpec T = TokenEndpoint

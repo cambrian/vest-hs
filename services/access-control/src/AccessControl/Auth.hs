@@ -31,7 +31,7 @@ data Signer = Signer
 
 data Verifier permission = Verifier
   { accessControlPublicKey :: PublicKey
-  , readMinTokenTime :: STM Timestamp
+  , readMinTokenTime :: STM Time
   }
 
 instance (Permission.Is p) => RequestVerifier (Verifier p) where

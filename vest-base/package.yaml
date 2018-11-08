@@ -34,7 +34,6 @@ dependencies:
 - http-client             >= 0.5
 - http-client-tls         >= 0.3
 - http-types              >= 0.12
-- o-clock                 >= 1.0
 - monad-parallel          >= 0.7
 - mtl                     >= 2.2
 - network                 >= 2.6
@@ -59,7 +58,7 @@ dependencies:
 - tasty-expected-failure  >= 0.11
 - tasty-golden            >= 2.3
 - text                    >= 1.2
-- time                    >= 1.8  # Only for SQL formatting time.
+- time                    >= 1.8
 - transformers            >= 0.5
 - unix                    >= 2.7
 - unordered-containers    >= 0.2

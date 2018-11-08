@@ -4,31 +4,31 @@
     "totalRewards": 4300,
     "bondsOverTime": [
       {
-        "timestamp": "2007-04-05T14:30Z",
+        "time": "2007-04-05T14:30Z",
         "size": 4000
       },
       {
-        "timestamp": "2007-05-05T14:30Z",
+        "time": "2007-05-05T14:30Z",
         "size": 5000
       }
     ],
     "totalDelegationsOverTime": [
       {
-        "timestamp": "2007-04-05T14:30Z",
+        "time": "2007-04-05T14:30Z",
         "size": 10000
       },
       {
-        "timestamp": "2007-05-05T14:30Z",
+        "time": "2007-05-05T14:30Z",
         "size": 15000
       }
     ],
     "interestRatesOverTime": [
       {
-        "timestamp": "2007-04-05T14:30Z",
+        "time": "2007-04-05T14:30Z",
         "rate": 0.0952
       },
       {
-        "timestamp": "2007-05-05T14:30Z",
+        "time": "2007-05-05T14:30Z",
         "rate": 0.1039
       }
     ],
@@ -57,21 +57,21 @@
         "cyclesOutstanding": 1,
         "interestRatesOverTime": [
           {
-            "timestamp": "2007-04-05T14:30Z",
+            "time": "2007-04-05T14:30Z",
             "rate": 0.0952
           },
           {
-            "timestamp": "2007-05-05T14:30Z",
+            "time": "2007-05-05T14:30Z",
             "rate": 0.1039
           }
         ],
         "rewardsOverTime": [
           {
-            "timestamp": "2007-04-05T14:30Z",
+            "time": "2007-04-05T14:30Z",
             "size": 1000
           },
           {
-            "timestamp": "2007-05-05T14:30Z",
+            "time": "2007-05-05T14:30Z",
             "size": 1200
           }
         ]
@@ -87,21 +87,21 @@
         "cyclesOutstanding": 2,
         "interestRatesOverTime": [
           {
-            "timestamp": "2007-04-05T14:30Z",
+            "time": "2007-04-05T14:30Z",
             "rate": 0.0952
           },
           {
-            "timestamp": "2007-05-05T14:30Z",
+            "time": "2007-05-05T14:30Z",
             "rate": 0.1039
           }
         ],
         "rewardsOverTime": [
           {
-            "timestamp": "2007-04-05T14:30Z",
+            "time": "2007-04-05T14:30Z",
             "size": 700
           },
           {
-            "timestamp": "2007-05-05T14:30Z",
+            "time": "2007-05-05T14:30Z",
             "size": 1400
           }
         ]
@@ -127,7 +127,7 @@
               "from": "SanjayPublicKeyHash",
               "size": 1337,
               "blockHash": "SomeBlockHash",
-              "timestamp": "2007-04-20T04:20Z"
+              "time": "2007-04-20T04:20Z"
             }
           ]
         }

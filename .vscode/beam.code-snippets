@@ -4,7 +4,7 @@
     "body": [
       "data ${1:Table}T f = ${1}",
       "  { ${2:primaryKey} :: C f ${3:Type}",
-      "  , createdAt :: C f Timestamp",
+      "  , createdAt :: C f Time",
       "  } deriving (Generic, Beamable)",
       "",
       "type ${1} = ${1}T Identity",

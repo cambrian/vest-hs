@@ -8,8 +8,8 @@ import Vest
 
 data CycleT f = Cycle
   { number :: C f Word64
-  , timestamp :: C f Timestamp
-  , createdAt :: C f Timestamp
+  , time :: C f Time
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Cycle = CycleT Identity
@@ -37,7 +37,7 @@ data DelegateT f = Delegate
   , description :: C f Text
   , firstManagedCycle :: PrimaryKey CycleT f
   , priceTiers :: C f (PgJSON [(FixedQty XTZ, Rational)])
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Delegate = DelegateT Identity
@@ -60,17 +60,14 @@ deriving instance Read (PrimaryKey DelegateT Identity)
 
 deriving instance Show (PrimaryKey DelegateT Identity)
 
--- | Not accepting partial payments at the moment. Would be relatively simple to extend.
--- (replace @open with a @sizeFulfilled column)
+-- | Not accepting partial payments at the moment.
 data BillT f = Bill
   { id :: C f UUID
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
-  , open :: C f Bool
-  , late :: C f Bool
-  , timestamp :: C f Timestamp
-  , dueAt :: C f Timestamp
-  , createdAt :: C f Timestamp
+  , time :: C f Time
+  , paidAt :: C f (Maybe Time)
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Bill = BillT Identity
@@ -99,7 +96,7 @@ data RewardT f = Reward
   , stakingBalace :: C f (FixedQty XTZ)
   , delegatedBalance :: C f (FixedQty XTZ)
   , bill :: PrimaryKey BillT f
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Reward = RewardT Identity
@@ -129,7 +126,7 @@ data DividendT f = Dividend
   , size :: C f (FixedQty XTZ)
   , bill :: PrimaryKey BillT f
   , payout :: PrimaryKey PayoutT (Nullable f)
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Dividend = DividendT Identity
@@ -155,7 +152,7 @@ deriving instance Show (PrimaryKey DividendT Identity)
 
 data PayoutT f = Payout
   { id :: C f UUID
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Payout = PayoutT Identity
@@ -187,7 +184,7 @@ data RefundT f = Refund
   { payment :: PrimaryKey PaymentT f
   , size :: C f (FixedQty XTZ)
   , payout :: PrimaryKey PayoutT f
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Refund = RefundT Identity
@@ -215,7 +212,7 @@ data DelegationT f = Delegation
   , rewardCycle :: PrimaryKey CycleT f
   , size :: C f (FixedQty XTZ)
   , dividend :: PrimaryKey DividendT f
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Delegation = DelegationT Identity
@@ -243,7 +240,7 @@ deriving instance Show (PrimaryKey DelegationT Identity)
 -- | Represents payments processed.
 data PaymentT f = Payment
   { idx :: C f Word64
-  , createdAt :: C f Timestamp
+  , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Payment = PaymentT Identity
@@ -335,10 +332,10 @@ billsOutstanding :: Tezos.ImplicitAddress -> Pg [Bill]
 billsOutstanding delegate_ =
   runSelectReturningList $
   select $
-  orderBy_ (\Bill {timestamp} -> asc_ timestamp) $
+  orderBy_ (\Bill {time} -> asc_ time) $
   filter_
-    (\Bill {delegate, open} ->
-       DelegateAddress (val_ delegate_) ==. delegate &&. open ==. val_ True) $
+    (\Bill {delegate, paidAt} ->
+       DelegateAddress (val_ delegate_) ==. delegate &&. paidAt ==. val_ Nothing) $
   all_ $ bills schema
 
 dividendsForBill :: UUID -> Pg [Dividend]

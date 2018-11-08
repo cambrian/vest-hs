@@ -31,7 +31,7 @@ data RewardInfo = RewardInfo
 
 data CycleEvent = CycleEvent
   { number :: Word64
-  , timestamp :: Timestamp
+  , time :: Time
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 instance Indexable CycleEvent where
@@ -63,7 +63,7 @@ data BlockEvent = BlockEvent
   , hash :: BlockHash
   , cycleNumber :: Word64
   , fee :: FixedQty XTZ
-  , timestamp :: Timestamp
+  , time :: Time
   , operations :: [Operation]
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 

@@ -110,7 +110,7 @@ callStreaming ::
   -> IO a
 callStreaming t req f = do
   let timeout_ = natSeconds @timeout
-      twoHeartbeats = 2 *:* timeoutsPerHeartbeat *:* timeout_
+      twoHeartbeats = 2 *^ timeoutsPerHeartbeat *^ timeout_
       rawRoute = serialize' @'Pretty $ namespaced @server (Proxy :: Proxy route)
   (resultPusher, results) <- newStream
   (renewHeartbeatTimer, heartbeatLostOrDone) <-

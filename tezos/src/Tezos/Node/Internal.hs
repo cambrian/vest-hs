@@ -198,7 +198,7 @@ toOperation hash nodeOp =
 
 toBlockEvent :: Block -> IO BlockEvent
 toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
-  let BlockHeader {level = number, timestamp = utcTime} = header
+  let BlockHeader {level = number, time} = header
       BlockMetadata {level = LevelInfo {cycle = cycleNumber}} = metadata
   operations <-
     concatMapM
@@ -211,7 +211,7 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
       , hash = Tagged hash
       , cycleNumber = fromIntegral cycleNumber
       , fee = opFee
-      , timestamp = timestampFromUTCTime utcTime
+      , time
       , operations
       }
 

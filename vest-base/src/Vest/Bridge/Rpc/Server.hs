@@ -56,14 +56,14 @@ directSender send = (>>= send)
 
 streamingSender ::
      Eq res
-  => Time Second
+  => Duration
   -> (StreamingResponse res -> IO ())
   -> IO (Stream ValueBuffer res)
   -> IO ()
 streamingSender timeout send xs = do
   send Heartbeat
   (Tagged postponeHeartbeat, Tagged cancelHeartbeats) <-
-    intervalRenewable (timeoutsPerHeartbeat *:* timeout) (send Heartbeat)
+    intervalRenewable (timeoutsPerHeartbeat *^ timeout) (send Heartbeat)
   xs >>= consumeStream (\x -> postponeHeartbeat >> send (Result x))
   cancelHeartbeats
   send EndOfResults

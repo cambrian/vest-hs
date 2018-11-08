@@ -66,7 +66,7 @@ toCycleEventStream ::
 toCycleEventStream blockEventStream lastSeen = do
   lastSeenVar <- newTVarIO lastSeen
   filterMapMStream
-    (\BlockEvent {cycleNumber, timestamp} -> do
+    (\BlockEvent {cycleNumber, time} -> do
        let lastCycleNumber = cycleNumber - 1
        lastSeen <- readTVarIO lastSeenVar
        if lastCycleNumber == lastSeen
@@ -75,5 +75,5 @@ toCycleEventStream blockEventStream lastSeen = do
            when (lastCycleNumber /= lastSeen + 1) $
              throw UnexpectedResultException
            atomically $ swapTVar lastSeenVar lastCycleNumber
-           return $ Just $ CycleEvent {number = lastCycleNumber, timestamp})
+           return $ Just $ CycleEvent {number = lastCycleNumber, time})
     blockEventStream

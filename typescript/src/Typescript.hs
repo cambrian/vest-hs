@@ -20,7 +20,7 @@ toTsTypeText' :: (TypeScript a) => Proxy a -> Text' t
 toTsTypeText' = Tagged . pack . getTypeScriptType
 
 -- JS has unexpected semantics for a timeout value of zero, so we clamp timeouts to a millisecond.
-toTotalMillis :: Time Second -> Int
+toTotalMillis :: Duration -> Int
 toTotalMillis (Time 0) = 1
 toTotalMillis timeout =
   2 * toNum @Millisecond @Int (timeoutsPerHeartbeat *:* timeout)

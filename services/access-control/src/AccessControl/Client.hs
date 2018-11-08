@@ -16,7 +16,7 @@ data T = T
   , publicKey :: PublicKey
   , secretKey :: SecretKey
   , readToken :: STM AccessControl.SignedToken
-  , readMinTokenTime :: STM Timestamp
+  , readMinTokenTime :: STM Time
   }
 
 make :: Amqp.T -> PublicKey -> ByteString -> IO T
