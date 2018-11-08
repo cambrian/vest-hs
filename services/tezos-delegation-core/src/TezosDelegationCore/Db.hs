@@ -93,8 +93,8 @@ deriving instance Read (PrimaryKey BillT Identity)
 deriving instance Show (PrimaryKey BillT Identity)
 
 data RewardT f = Reward
-  { delegate :: PrimaryKey DelegateT f
-  , cycle :: PrimaryKey CycleT f
+  { cycle :: PrimaryKey CycleT f
+  , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
   , stakingBalace :: C f (FixedQty XTZ)
   , delegatedBalance :: C f (FixedQty XTZ)
@@ -111,12 +111,10 @@ deriving instance Read Reward
 deriving instance Show Reward
 
 instance Table RewardT where
-  data PrimaryKey RewardT f = RewardDelegateAndCycle (PrimaryKey
-                                                      DelegateT
-                                                      f)
-                                                   (PrimaryKey CycleT f)
+  data PrimaryKey RewardT f = RewardPKey (PrimaryKey CycleT f)
+                                       (PrimaryKey DelegateT f)
                               deriving (Generic, Beamable)
-  primaryKey Reward {delegate, cycle} = RewardDelegateAndCycle delegate cycle
+  primaryKey Reward {cycle, delegate} = RewardPKey cycle delegate
 
 deriving instance Eq (PrimaryKey RewardT Identity)
 
@@ -125,9 +123,9 @@ deriving instance Read (PrimaryKey RewardT Identity)
 deriving instance Show (PrimaryKey RewardT Identity)
 
 data DividendT f = Dividend
-  { delegator :: C f Tezos.OriginatedAddress
+  { cycle :: PrimaryKey CycleT f
   , delegate :: PrimaryKey DelegateT f
-  , cycle :: PrimaryKey CycleT f
+  , delegator :: C f Tezos.OriginatedAddress
   , size :: C f (FixedQty XTZ)
   , bill :: PrimaryKey BillT f
   , payout :: PrimaryKey PayoutT (Nullable f)
@@ -143,12 +141,11 @@ deriving instance Read Dividend
 deriving instance Show Dividend
 
 instance Table DividendT where
-  data PrimaryKey DividendT f = DividendPKey (C f
-                                              Tezos.OriginatedAddress)
-                                           (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
+  data PrimaryKey DividendT f = DividendPKey (PrimaryKey CycleT f)
+                                           (PrimaryKey DelegateT f) (C f Tezos.OriginatedAddress)
                                 deriving (Generic, Beamable)
-  primaryKey Dividend {delegator, delegate, cycle} =
-    DividendPKey delegator delegate cycle
+  primaryKey Dividend {cycle, delegate, delegator} =
+    DividendPKey cycle delegate delegator
 
 deriving instance Eq (PrimaryKey DividendT Identity)
 
@@ -287,69 +284,72 @@ schema :: DatabaseSettings Postgres Schema
 schema = defaultDbSettings
 
 -- TODO: reduce duplication?
-selectNextCycle :: Connection -> IO Word64
-selectNextCycle conn = do
-  let selectMaxCycleNumber =
-        select $ aggregate_ max_ $ number <$> all_ (cycles schema)
-  m <- runBeamPostgres conn $ runSelectReturningOne selectMaxCycleNumber
+selectNextCycle :: Pg Word64
+selectNextCycle = do
+  m <-
+    runSelectReturningOne $
+    select $ aggregate_ max_ $ number <$> all_ (cycles schema)
   return $
     case m of
       Nothing -> 0
       Just Nothing -> 0
       Just (Just num) -> num + 1
 
-wasCycleAlreadyHandled :: Connection -> Word64 -> IO Bool
-wasCycleAlreadyHandled conn cycle = do
-  let selectCycle = lookup_ (cycles schema) $ CycleNumber cycle
-  runBeamPostgres conn $ isJust <$> runSelectReturningOne selectCycle
+wasCycleAlreadyHandled :: Word64 -> Pg Bool
+wasCycleAlreadyHandled cycle =
+  isJust <$> runSelectReturningOne (lookup_ (cycles schema) $ CycleNumber cycle)
 
-delegatesTrackedAtCycle :: Connection -> Word64 -> IO [Tezos.ImplicitAddress]
-delegatesTrackedAtCycle conn cycle = do
-  let selectDelgates =
-        select $
-        address <$>
-        filter_
-          ((val_ cycle >=.) . cycleNumber . firstManagedCycle)
-          (all_ $ delegates schema)
-  runBeamPostgres conn $ runSelectReturningList selectDelgates
+delegatesTrackedAtCycle :: Word64 -> Pg [Tezos.ImplicitAddress]
+delegatesTrackedAtCycle cycle =
+  runSelectReturningList $
+  select $
+  address <$>
+  filter_
+    ((val_ cycle >=.) . cycleNumber . firstManagedCycle)
+    (all_ $ delegates schema)
 
-selectNextPayment :: Connection -> IO Word64
-selectNextPayment conn = do
-  let selectMaxPaymentIdx =
-        select $ aggregate_ max_ $ idx <$> all_ (payments schema)
-  m <- runBeamPostgres conn $ runSelectReturningOne selectMaxPaymentIdx
+wasRewardAlreadyProcessed :: Word64 -> Tezos.ImplicitAddress -> Pg Bool
+wasRewardAlreadyProcessed cycle delegate =
+  isJust <$>
+  runSelectReturningOne
+    (lookup_ (rewards schema) $
+     RewardPKey (CycleNumber cycle) (DelegateAddress delegate))
+
+selectNextPayment :: Pg Word64
+selectNextPayment = do
+  m <-
+    runSelectReturningOne $
+    select $ aggregate_ max_ $ idx <$> all_ (payments schema)
   return $
     case m of
       Nothing -> 0
       Just Nothing -> 0
       Just (Just num) -> num + 1
 
-wasPaymentAlreadyHandled :: Connection -> Word64 -> IO Bool
-wasPaymentAlreadyHandled conn paymentIdx = do
-  let selectPayment = lookup_ (payments schema) $ PaymentIndex paymentIdx
-  runBeamPostgres conn $ isJust <$> runSelectReturningOne selectPayment
+wasPaymentAlreadyHandled :: Word64 -> Pg Bool
+wasPaymentAlreadyHandled paymentIdx =
+  isJust <$>
+  runSelectReturningOne (lookup_ (payments schema) $ PaymentIndex paymentIdx)
 
-billsOutstanding :: Connection -> Tezos.ImplicitAddress -> IO [Bill]
-billsOutstanding conn delegate_ = do
-  let selectBills =
-        select $
-        orderBy_ (\Bill {timestamp} -> asc_ timestamp) $
-        filter_
-          (\Bill {delegate, open} ->
-             DelegateAddress (val_ delegate_) ==. delegate &&. open ==.
-             val_ True) $
-        all_ $ bills schema
-  runBeamPostgres conn $ runSelectReturningList selectBills
+billsOutstanding :: Tezos.ImplicitAddress -> Pg [Bill]
+billsOutstanding delegate_ =
+  runSelectReturningList $
+  select $
+  orderBy_ (\Bill {timestamp} -> asc_ timestamp) $
+  filter_
+    (\Bill {delegate, open} ->
+       DelegateAddress (val_ delegate_) ==. delegate &&. open ==. val_ True) $
+  all_ $ bills schema
 
-dividendsForBill :: Connection -> UUID -> IO [Dividend]
-dividendsForBill conn billId = do
-  let selectDividends =
-        select $
-        filter_ (\Dividend {bill} -> BillId (val_ billId) ==. bill) $
-        all_ $ dividends schema
-  runBeamPostgres conn $ runSelectReturningList selectDividends
+dividendsForBill :: UUID -> Pg [Dividend]
+dividendsForBill billId =
+  runSelectReturningList $
+  select $
+  filter_ (\Dividend {bill} -> BillId (val_ billId) ==. bill) $
+  all_ $ dividends schema
 
-isPlatformDelegate :: Connection -> Tezos.Address -> IO Bool
-isPlatformDelegate conn addr = do
-  let selectDelegate = lookup_ (delegates schema) $ DelegateAddress $ retag addr
-  runBeamPostgres conn $ isJust <$> runSelectReturningOne selectDelegate
+isPlatformDelegate :: Tezos.Address -> Pg Bool
+isPlatformDelegate addr =
+  isJust <$>
+  runSelectReturningOne
+    (lookup_ (delegates schema) $ DelegateAddress $ retag addr)
