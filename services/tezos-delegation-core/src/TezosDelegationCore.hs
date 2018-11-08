@@ -228,11 +228,9 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    with3
-      (PoolConfig (sec 30) 5 dbConfig)
-      amqpConfig
-      redisConfig
-      (\(dbPool, amqp, redis) -> do
+    with
+      (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig)
+      (\(dbPool :<|> amqp :<|> redis) -> do
          accessControlClient <-
            AccessControl.Client.make amqp accessControlPublicKey seed
          f $ T {dbPool, amqp, redis, accessControlClient})

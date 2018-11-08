@@ -76,7 +76,7 @@ instance Service T where
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
-    with2 redisConfig amqpConfig $ \(redis, amqp) ->
+    with (redisConfig :<|> amqpConfig) $ \(redis :<|> amqp) ->
       f $
       T
         { subjects
