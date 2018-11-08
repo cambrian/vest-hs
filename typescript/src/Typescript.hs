@@ -24,7 +24,7 @@ toTotalMillis :: Duration -> Int
 toTotalMillis timeout =
   if timeout <= 0
     then 1
-    else round $ 1000 * toRational (2 *^ timeoutsPerHeartbeat *^ timeout)
+    else durationMillis $ 2 *^ timeoutsPerHeartbeat *^ timeout
   -- Timeout after 2 heartbeats.
 
 -- Used to iterate over the nested API structure, run a (possibly monadic) function on the proxied

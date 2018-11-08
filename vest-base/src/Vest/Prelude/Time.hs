@@ -64,6 +64,9 @@ day = fromRational . (86400 *)
 durationMicros :: Duration -> Int
 durationMicros t = round $ 1e6 * toRational t
 
+durationMillis :: Duration -> Int
+durationMillis t = round $ 1e3 * toRational t
+
 timeout :: Duration -> IO a -> IO (Either TimeoutException a)
   -- ^ returns Left TimeoutException if f does not complete within the given time
 timeout t f =
