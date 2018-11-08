@@ -21,9 +21,10 @@ toTsTypeText' = Tagged . pack . getTypeScriptType
 
 -- JS has unexpected semantics for a timeout value of zero, so we clamp timeouts to a millisecond.
 toTotalMillis :: Duration -> Int
-toTotalMillis (Time 0) = 1
 toTotalMillis timeout =
-  2 * toNum @Millisecond @Int (timeoutsPerHeartbeat *:* timeout)
+  if timeout <= 0
+    then 1
+    else round $ 1000 * toRational (2 *^ timeoutsPerHeartbeat *^ timeout)
   -- Timeout after 2 heartbeats.
 
 -- Used to iterate over the nested API structure, run a (possibly monadic) function on the proxied
