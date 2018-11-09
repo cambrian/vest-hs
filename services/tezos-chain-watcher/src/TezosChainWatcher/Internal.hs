@@ -14,7 +14,8 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Http.T
   , accessControlClient :: AccessControl.Client.T
-  , reachedSteadyState :: TMVar ()
+  , lastProcessedBlockNumber :: TMVar Word64
+  , lastProcessedCycleNumber :: TMVar Word64
   } deriving (HasNamespace)
 
 instance HasRedisConnection T where

@@ -127,6 +127,6 @@ instance Service T where
     with webSocketConfig $ \webSocket ->
       f $ T {webSocket, rawStubData, streamDelayMillis}
   rpcHandlers t = overview t :<|> bakersFn t :<|> implicit t :<|> operation t
-  valuesPublished _ = ()
-  eventProducers _ = ()
+  makeValuePublishers _ = return ()
+  makeEventProducers _ = return ()
   eventConsumers _ = ()

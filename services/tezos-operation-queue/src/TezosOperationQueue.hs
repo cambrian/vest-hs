@@ -65,6 +65,6 @@ instance Service T where
     Config {webSocketConfig} <- Yaml.decodeFileThrow configFile
     with webSocketConfig $ \webSocket -> f $ T {webSocket}
   rpcHandlers = inject
-  valuesPublished _ = ()
-  eventProducers _ = ()
+  makeValuePublishers _ = return ()
+  makeEventProducers _ = return ()
   eventConsumers _ = ()

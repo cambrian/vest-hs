@@ -158,10 +158,8 @@ selectNextBlockNumber = do
     select $ aggregate_ max_ $ number <$> all_ (blocks schema)
   return $
     case m of
-      Nothing -> 1 -- First useful block for our purposes is block 1 rather than 0 (cycle 0 ends
-                   -- at block 4096, rather than block 4095).
-      Just Nothing -> 1
       Just (Just num) -> num + 1
+      _ -> fromIntegral Tezos.firstBlockNumber
 
 -- TODO: Reduce duplication.
 selectNextCycleNumber :: Pg Word64
@@ -171,10 +169,8 @@ selectNextCycleNumber = do
     select $ aggregate_ max_ $ cycleNumber <$> all_ (blocks schema)
   return $
     case m of
-      Nothing -> 1 -- First useful block for our purposes is block 1 rather than 0 (cycle 0 ends
-                   -- at block 4096, rather than block 4095).
-      Just Nothing -> 1
       Just (Just num) -> num + 1
+      _ -> 0
 
 originationToOp :: Origination -> Tezos.Operation
 originationToOp Origination { hash = OperationHash opHash

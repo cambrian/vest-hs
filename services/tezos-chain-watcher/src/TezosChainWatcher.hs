@@ -54,35 +54,19 @@ defaultArgs_ =
 type Api = ()
 
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
-materializeBlockEvent t blockNumber =
+materializeBlockEvent t blockNumber = do
+  atomically $
+    readTMVar (lastProcessedBlockNumber t) >>= check . (blockNumber <=)
   Db.runLogged t (selectBlockEventByNumber blockNumber) >>= fromRightOrThrowLeft >>=
-  fromJustUnsafe BugException
+    fromJustUnsafe BugException
 
+-- | TODO: Consider making the retry-blocking based on block number.
 materializeCycleEvent :: T -> IndexOf Tezos.CycleEvent -> IO Tezos.CycleEvent
-materializeCycleEvent t blockNumber =
-  Db.runLogged t (selectCycleEventByNumber blockNumber) >>=
-  fromJustUnsafe BugException
-
--- TODO: Tap block events and persist. Also change the steady state thing to be the last processed
--- block/cycle number, so we block on implicit materialization until the DB has caught up.
-makeProducers ::
-     T
-  -> IO (Producers (BlockEvents
-                    :<|> CycleEvents))
-makeProducers t = do
-  let T {tezos} = t
-  nextBlockNumber <- Db.runLogged t selectNextBlockNumber
-  nextCycleNumber <- Db.runLogged t selectNextCycleNumber
-  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable tezos (logger t)
-  blockEventStream <-
-    gapFilledStream
-      (Tezos.materializeBlockEventDurable tezos (logger t))
-      nextBlockNumber
-      rawBlockEventStream
-  cycleEventStream <- Tezos.toCycleEventStream blockEventStream nextCycleNumber
-  return $
-    (blockEventStream, materializeBlockEvent t) :<|>
-    (cycleEventStream, materializeCycleEvent t)
+materializeCycleEvent t cycleNumber = do
+  atomically $
+    readTMVar (lastProcessedCycleNumber t) >>= check . (cycleNumber <=)
+  Db.runLogged t (selectCycleEventByNumber cycleNumber) >>=
+    fromJustUnsafe BugException
 
 instance Service T where
   type ServiceArgs T = Args
@@ -97,15 +81,53 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    reachedSteadyState <- newEmptyTMVarIO
+    lastProcessedBlockNumber <- newEmptyTMVarIO
+    lastProcessedCycleNumber <- newEmptyTMVarIO
     with
       (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig :<|>
        tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $
-        T {dbPool, amqp, redis, tezos, accessControlClient, reachedSteadyState}
+        T
+          { dbPool
+          , amqp
+          , redis
+          , tezos
+          , accessControlClient
+          , lastProcessedBlockNumber
+          , lastProcessedCycleNumber
+          }
   rpcHandlers _ = ()
-  valuesPublished _ = ()
-  eventProducers = panic "unimplemented"
+  makeValuePublishers _ = return ()
+  makeEventProducers t = do
+    nextBlockNumber <- Db.runLogged t selectNextBlockNumber
+    nextCycleNumber <- Db.runLogged t selectNextCycleNumber
+    rawBlockEventStream <-
+      Tezos.streamNewBlockEventsDurable (tezos t) (logger t)
+    blockEventStream <-
+      gapFilledStream
+        (Tezos.materializeBlockEventDurable (tezos t) (logger t))
+        nextBlockNumber
+        rawBlockEventStream
+    -- Persist block events and update block counter.
+    tapStream_
+      (\blockEvent -> do
+         createdAt <- now
+         Db.runLoggedTransaction t (persistBlockEvent createdAt blockEvent)
+         let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
+         void . atomically $
+           swapTMVar (lastProcessedBlockNumber t) newBlockNumber)
+      blockEventStream
+    cycleEventStream <-
+      Tezos.toCycleEventStream blockEventStream nextCycleNumber
+    -- Update cycle counter.
+    tapStream_
+      (\Tezos.CycleEvent {number = newCycleNumber} ->
+         void . atomically $
+         swapTMVar (lastProcessedCycleNumber t) newCycleNumber)
+      cycleEventStream
+    return $
+      (blockEventStream, materializeBlockEvent t) :<|>
+      (cycleEventStream, materializeCycleEvent t)
   eventConsumers _ = ()

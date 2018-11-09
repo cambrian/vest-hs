@@ -9,7 +9,7 @@ module Tezos.Node
 import Control.Retry
 import qualified Http
 import Tezos.Node.Internal
-import Tezos.Node.Internal as Reexports (blocksPerCycle)
+import Tezos.Node.Internal as Reexports (blocksPerCycle, firstBlockNumber)
 import Tezos.Node.Prelude
 import Tezos.Prelude
 import Vest hiding (hash)
