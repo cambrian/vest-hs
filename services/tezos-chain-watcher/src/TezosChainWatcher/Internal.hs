@@ -5,6 +5,7 @@ module TezosChainWatcher.Internal
 import qualified AccessControl.Client
 import qualified Db
 import qualified Http
+import qualified Tezos
 import qualified Transport.Amqp as Amqp
 import Vest
 
@@ -16,6 +17,8 @@ data T = T
   , accessControlClient :: AccessControl.Client.T
   , lastProcessedBlockNumber :: TMVar Word64
   , lastProcessedCycleNumber :: TMVar Word64
+  , blockEventStream :: Stream QueueBuffer Tezos.BlockEvent
+  , cycleEventStream :: Stream QueueBuffer Tezos.CycleEvent
   } deriving (HasNamespace)
 
 instance HasRedisConnection T where

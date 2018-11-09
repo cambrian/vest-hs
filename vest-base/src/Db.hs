@@ -4,7 +4,9 @@ module Db
   , HasConnection(..)
   , InvalidStateException(..)
   , runLogged
+  , runLogged_
   , runLoggedTransaction
+  , runLoggedTransaction_
   ) where
 
 import Database.Beam as Reexports hiding (insert)
@@ -67,13 +69,23 @@ class HasConnection t where
 instance HasConnection Connection where
   withConnection conn f = f conn
 
-runLogged :: (HasLogger t, HasConnection t) => t -> Pg a -> IO a
-runLogged t f =
-  withConnection t $ \c -> runBeamPostgresDebug (log t Debug . pack) c f
+instance HasConnection (Pool Connection) where
+  withConnection = withResource
 
-runLoggedTransaction :: (HasLogger t, HasConnection t) => t -> Pg a -> IO a
--- ^ TODO: also log transaction open/close
-runLoggedTransaction t f =
+runLogged_ :: (HasLogger s, HasConnection t) => s -> t -> Pg a -> IO a
+runLogged_ s t f =
+  withConnection t $ \c -> runBeamPostgresDebug (log s Debug . pack) c f
+
+runLogged :: (HasLogger t, HasConnection t) => t -> Pg a -> IO a
+runLogged t = runLogged_ t t
+
+runLoggedTransaction_ ::
+     (HasLogger s, HasConnection t) => s -> t -> Pg a -> IO a
+-- ^ TODO: Also log transaction open/close.
+runLoggedTransaction_ s t f =
   withConnection t $ \c ->
     withTransactionSerializable c $
-    runBeamPostgresDebug (log t Debug . pack) c f
+    runBeamPostgresDebug (log s Debug . pack) c f
+
+runLoggedTransaction :: (HasLogger t, HasConnection t) => t -> Pg a -> IO a
+runLoggedTransaction t = runLoggedTransaction_ t t

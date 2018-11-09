@@ -5,7 +5,7 @@ module TezosChainWatcher.Db
 import Db
 import qualified GHC.Base
 import qualified Tezos
-import Vest
+import Vest hiding (from, hash, to)
 
 data BlockT f = Block
   { number :: C f Word64
@@ -47,10 +47,10 @@ instance HasSqlValueSyntax be GHC.Base.String =>
 
 instance FromField OperationKind where
   fromField f bs = do
-    x <- deserialize @'Haskell <$> fromField f bs
-    case x of
+    valMaybe <- deserialize @'Haskell <$> fromField f bs
+    case valMaybe of
       Nothing -> returnError ConversionFailed f "could not parse OperationKind"
-      Just x -> pure x
+      Just val -> pure val
 
 instance FromBackendRow Postgres OperationKind
 
@@ -184,15 +184,14 @@ transactionToOp Transaction {hash = OperationHash opHash, from, to, fee, size} =
   Tezos.TransactionOp $ Tezos.Transaction opHash from to fee size
 
 toBlockEventOperation :: Operation -> Pg (Maybe Tezos.Operation)
-toBlockEventOperation Operation {hash = opHash, kind} =
+toBlockEventOperation Operation {hash, kind} =
   case kind of
     OriginationKind -> do
       originationMaybe <-
         runSelectReturningOne $
         select $
         filter_
-          (\Origination {hash = OperationHash rowOpHash} ->
-             rowOpHash ==. val_ opHash) $
+          (\Origination {hash = OperationHash opHash} -> opHash ==. val_ hash) $
         all_ (originations schema)
       return $ originationToOp <$> originationMaybe
     TransactionKind -> do
@@ -200,11 +199,10 @@ toBlockEventOperation Operation {hash = opHash, kind} =
         runSelectReturningOne $
         select $
         filter_
-          (\Transaction {hash = OperationHash rowOpHash} ->
-             rowOpHash ==. val_ opHash) $
+          (\Transaction {hash = OperationHash opHash} -> opHash ==. val_ hash) $
         all_ (transactions schema)
       return $ transactionToOp <$> transactionMaybe
-    OtherKind -> return $ Just $ Tezos.Other opHash
+    OtherKind -> return $ Just $ Tezos.Other hash
 
 selectBlockEventByNumber ::
      Word64 -> Pg (Either InvalidStateException (Maybe Tezos.BlockEvent))

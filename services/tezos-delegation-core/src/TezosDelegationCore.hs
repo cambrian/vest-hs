@@ -227,6 +227,6 @@ instance Service T where
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {dbPool, amqp, redis, accessControlClient}
   rpcHandlers _ = ()
-  makeValuePublishers _ = return ()
-  makeEventProducers _ = return ()
+  valuesPublished _ = ()
+  eventProducers _ = ()
   eventConsumers t = cycleConsumer t :<|> paymentConsumer t

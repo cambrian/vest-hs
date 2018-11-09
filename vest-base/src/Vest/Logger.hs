@@ -30,3 +30,6 @@ class HasLogger a where
   logger :: a -> Logger
   log :: a -> LogLevel -> Text -> IO ()
   log = log_ . logger
+
+instance HasLogger Logger where
+  logger = identity

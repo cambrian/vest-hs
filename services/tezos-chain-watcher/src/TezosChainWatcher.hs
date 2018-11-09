@@ -51,7 +51,11 @@ defaultArgs_ =
   summary "tezos-chain-watcher v0.1.0" &=
   program "tezos-chain-watcher"
 
-type Api = ()
+type Api = RewardInfoEndpoint
+
+rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
+rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
+  Tezos.getRewardInfo tezos cycleNumber delegates
 
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
@@ -67,6 +71,43 @@ materializeCycleEvent t cycleNumber = do
     readTMVar (lastProcessedCycleNumber t) >>= check . (cycleNumber <=)
   Db.runLogged t (selectCycleEventByNumber cycleNumber) >>=
     fromJustUnsafe BugException
+
+makeEventStreams ::
+     Pool Db.Connection
+  -> Http.T
+  -> Logger
+  -> TMVar Word64
+  -> TMVar Word64
+  -> IO ( Stream QueueBuffer Tezos.BlockEvent
+        , Stream QueueBuffer Tezos.CycleEvent)
+makeEventStreams dbPool tezos initLogger lastProcessedBlockNumber lastProcessedCycleNumber = do
+  nextBlockNumber <- Db.runLogged_ initLogger dbPool selectNextBlockNumber
+  nextCycleNumber <- Db.runLogged_ initLogger dbPool selectNextCycleNumber
+  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable tezos initLogger
+  blockEventStream <-
+    gapFilledStream
+      (Tezos.materializeBlockEventDurable tezos initLogger)
+      nextBlockNumber
+      rawBlockEventStream
+  -- Async persist block events and update block counter.
+  tapStream_
+    (\blockEvent -> do
+       createdAt <- now
+       Db.runLoggedTransaction_
+         initLogger
+         dbPool
+         (persistBlockEvent createdAt blockEvent)
+       let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
+       void . atomically $ swapTMVar lastProcessedBlockNumber newBlockNumber)
+    blockEventStream
+  -- Dynamically generate cycle stream from block stream.
+  cycleEventStream <- Tezos.toCycleEventStream blockEventStream nextCycleNumber
+  -- Async update cycle counter.
+  tapStream_
+    (\Tezos.CycleEvent {number = newCycleNumber} ->
+       void . atomically $ swapTMVar lastProcessedCycleNumber newCycleNumber)
+    cycleEventStream
+  return (blockEventStream, cycleEventStream)
 
 instance Service T where
   type ServiceArgs T = Args
@@ -88,6 +129,14 @@ instance Service T where
        tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
+      (blockEventStream, cycleEventStream) <-
+        makeEventStreams
+          dbPool
+          tezos
+          (stderrLogger Debug)
+          lastProcessedBlockNumber
+          lastProcessedCycleNumber
+      -- ^ TODO: How to keep this logger in sync with the one on the service?
       f $
         T
           { dbPool
@@ -97,37 +146,12 @@ instance Service T where
           , accessControlClient
           , lastProcessedBlockNumber
           , lastProcessedCycleNumber
+          , blockEventStream
+          , cycleEventStream
           }
-  rpcHandlers _ = ()
-  makeValuePublishers _ = return ()
-  makeEventProducers t = do
-    nextBlockNumber <- Db.runLogged t selectNextBlockNumber
-    nextCycleNumber <- Db.runLogged t selectNextCycleNumber
-    rawBlockEventStream <-
-      Tezos.streamNewBlockEventsDurable (tezos t) (logger t)
-    blockEventStream <-
-      gapFilledStream
-        (Tezos.materializeBlockEventDurable (tezos t) (logger t))
-        nextBlockNumber
-        rawBlockEventStream
-    -- Persist block events and update block counter.
-    tapStream_
-      (\blockEvent -> do
-         createdAt <- now
-         Db.runLoggedTransaction t (persistBlockEvent createdAt blockEvent)
-         let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
-         void . atomically $
-           swapTMVar (lastProcessedBlockNumber t) newBlockNumber)
-      blockEventStream
-    cycleEventStream <-
-      Tezos.toCycleEventStream blockEventStream nextCycleNumber
-    -- Update cycle counter.
-    tapStream_
-      (\Tezos.CycleEvent {number = newCycleNumber} ->
-         void . atomically $
-         swapTMVar (lastProcessedCycleNumber t) newCycleNumber)
-      cycleEventStream
-    return $
-      (blockEventStream, materializeBlockEvent t) :<|>
-      (cycleEventStream, materializeCycleEvent t)
+  rpcHandlers = rewardInfo
+  valuesPublished _ = ()
+  eventProducers t =
+    (blockEventStream t, materializeBlockEvent t) :<|>
+    (cycleEventStream t, materializeCycleEvent t)
   eventConsumers _ = ()

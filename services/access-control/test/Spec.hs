@@ -68,8 +68,8 @@ instance Service TestServer where
         AccessControl.Client.make amqp accessControlPublicKey testServerSeed
       f $ TestServer {amqp, accessControlClient}
   rpcHandlers _ = const return :<|> const return
-  makeValuePublishers _ = return ()
-  makeEventProducers _ = return ()
+  valuesPublished _ = ()
+  eventProducers _ = ()
   eventConsumers _ = ()
 
 data TestClient = TestClient
@@ -104,8 +104,8 @@ instance Service TestClient where
         AccessControl.Client.make amqp accessControlPublicKey testClientSeed
       f $ TestClient {amqp, accessControlClient}
   rpcHandlers _ = ()
-  makeValuePublishers _ = return ()
-  makeEventProducers _ = return ()
+  valuesPublished _ = ()
+  eventProducers _ = ()
   eventConsumers _ = ()
 
 generatePublicKey :: TestTree

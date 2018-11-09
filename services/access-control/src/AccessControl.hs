@@ -82,6 +82,6 @@ instance Service T where
         , bumpMinTokenTime
         }
   rpcHandlers t = accessToken t :<|> (\_claims () -> bumpMinTokenTime t)
-  makeValuePublishers t = return $ minTokenTime t
-  makeEventProducers _ = return ()
+  valuesPublished = minTokenTime
+  eventProducers _ = ()
   eventConsumers _ = ()
