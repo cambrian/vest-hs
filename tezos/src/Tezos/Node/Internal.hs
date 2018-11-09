@@ -225,7 +225,6 @@ recoveryCases logger =
       (\b e r -> log_ logger Debug $ pack $ defaultLogMsg b e r)
   ]
 
--- | Raw version without built-in retry.
 materializeBlockEvent_ :: Http.T -> Int -> IO BlockEvent
 materializeBlockEvent_ connection blockNumber = do
   blockHash <- getBlockHash connection blockNumber

@@ -9,7 +9,7 @@ import qualified Transport.Amqp as Amqp
 import Vest
 
 data T = T
-  { db :: Db.Connection
+  { dbPool :: Pool Db.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , tezos :: Http.T
@@ -30,4 +30,7 @@ instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient
 
 instance HasLogger T where
-  logger _ = stderrLogger Warn
+  logger _ = stderrLogger Debug
+
+instance Db.HasConnection T where
+  withConnection t = withResource $ dbPool t

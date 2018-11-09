@@ -3,7 +3,8 @@ module TezosChainWatcher.Db
   ) where
 
 import Db
-import qualified Tezos.Prelude as Tezos
+import qualified GHC.Base
+import qualified Tezos
 import Vest
 
 data BlockT f = Block
@@ -39,6 +40,19 @@ data OperationKind
   | TransactionKind
   | OtherKind
   deriving (Eq, Read, Show)
+
+instance HasSqlValueSyntax be GHC.Base.String =>
+         HasSqlValueSyntax be OperationKind where
+  sqlValueSyntax = autoSqlValueSyntax
+
+instance FromField OperationKind where
+  fromField f bs = do
+    x <- deserialize @'Haskell <$> fromField f bs
+    case x of
+      Nothing -> returnError ConversionFailed f "could not parse OperationKind"
+      Just x -> pure x
+
+instance FromBackendRow Postgres OperationKind
 
 data OperationT f = Operation
   { hash :: C f Tezos.OperationHash
@@ -125,12 +139,165 @@ deriving instance Read (PrimaryKey TransactionT Identity)
 
 deriving instance Show (PrimaryKey TransactionT Identity)
 
-data T f = T
+data Schema f = Schema
   { blocks :: f (TableEntity BlockT)
   , operations :: f (TableEntity OperationT)
   , originations :: f (TableEntity OriginationT)
   , transactions :: f (TableEntity TransactionT)
   } deriving (Generic)
 
-schema :: DatabaseSettings be T
+instance Database Postgres Schema
+
+schema :: DatabaseSettings Postgres Schema
 schema = defaultDbSettings
+
+selectNextBlockNumber :: Pg Word64
+selectNextBlockNumber = do
+  m <-
+    runSelectReturningOne $
+    select $ aggregate_ max_ $ number <$> all_ (blocks schema)
+  return $
+    case m of
+      Nothing -> 1 -- First useful block for our purposes is block 1 rather than 0 (cycle 0 ends
+                   -- at block 4096, rather than block 4095).
+      Just Nothing -> 1
+      Just (Just num) -> num + 1
+
+-- TODO: Reduce duplication.
+selectNextCycleNumber :: Pg Word64
+selectNextCycleNumber = do
+  m <-
+    runSelectReturningOne $
+    select $ aggregate_ max_ $ cycleNumber <$> all_ (blocks schema)
+  return $
+    case m of
+      Nothing -> 1 -- First useful block for our purposes is block 1 rather than 0 (cycle 0 ends
+                   -- at block 4096, rather than block 4095).
+      Just Nothing -> 1
+      Just (Just num) -> num + 1
+
+originationToOp :: Origination -> Tezos.Operation
+originationToOp Origination { hash = OperationHash opHash
+                            , originator
+                            , originated
+                            } =
+  Tezos.OriginationOp $ Tezos.Origination opHash originator originated
+
+transactionToOp :: Transaction -> Tezos.Operation
+transactionToOp Transaction {hash = OperationHash opHash, from, to, fee, size} =
+  Tezos.TransactionOp $ Tezos.Transaction opHash from to fee size
+
+toBlockEventOperation :: Operation -> Pg (Maybe Tezos.Operation)
+toBlockEventOperation Operation {hash = opHash, kind} =
+  case kind of
+    OriginationKind -> do
+      originationMaybe <-
+        runSelectReturningOne $
+        select $
+        filter_
+          (\Origination {hash = OperationHash rowOpHash} ->
+             rowOpHash ==. val_ opHash) $
+        all_ (originations schema)
+      return $ originationToOp <$> originationMaybe
+    TransactionKind -> do
+      transactionMaybe <-
+        runSelectReturningOne $
+        select $
+        filter_
+          (\Transaction {hash = OperationHash rowOpHash} ->
+             rowOpHash ==. val_ opHash) $
+        all_ (transactions schema)
+      return $ transactionToOp <$> transactionMaybe
+    OtherKind -> return $ Just $ Tezos.Other opHash
+
+selectBlockEventByNumber ::
+     Word64 -> Pg (Either InvalidStateException (Maybe Tezos.BlockEvent))
+selectBlockEventByNumber queryNumber = do
+  blockMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\block -> number block ==. val_ queryNumber) $ all_ (blocks schema)
+  case blockMaybe of
+    Nothing -> return $ Right Nothing
+    Just Block {number, hash, cycleNumber, fee, time} -> do
+      blockOps <-
+        runSelectReturningList $
+        select $
+        filter_ (\op -> blockNumber op ==. BlockNumber (val_ queryNumber)) $
+        all_ (operations schema)
+      operations <- catMaybes <$> mapM toBlockEventOperation blockOps
+      if length blockOps /= length operations
+        then return $ Left InvalidStateException
+        else return $
+             Right . Just $
+             Tezos.BlockEvent {number, hash, cycleNumber, fee, time, operations}
+
+selectCycleEventByNumber :: Word64 -> Pg (Maybe Tezos.CycleEvent)
+selectCycleEventByNumber queryNumber = do
+  firstBlockInNextCycle <-
+    runSelectReturningOne $
+    select $
+    filter_ (\block -> cycleNumber block ==. val_ (queryNumber + 1)) $
+    all_ (blocks schema)
+  return $
+    (\Block {time} -> Tezos.CycleEvent queryNumber time) <$>
+    firstBlockInNextCycle
+
+-- TODO: Reduce verbose duplication. Also, batching?
+persistOp :: Word64 -> Time -> Tezos.Operation -> Pg ()
+persistOp blockNumber createdAt op =
+  case op of
+    Tezos.OriginationOp Tezos.Origination {hash, originator, originated} -> do
+      runInsert $
+        insert
+          (operations schema)
+          (insertValues
+             [ Operation
+                 hash
+                 (BlockNumber blockNumber)
+                 OriginationKind
+                 createdAt
+             ])
+          onConflictDefault
+      runInsert $
+        insert
+          (originations schema)
+          (insertValues
+             [Origination (OperationHash hash) originator originated createdAt])
+          onConflictDefault
+    Tezos.TransactionOp Tezos.Transaction {hash, from, to, fee, size} -> do
+      runInsert $
+        insert
+          (operations schema)
+          (insertValues
+             [ Operation
+                 hash
+                 (BlockNumber blockNumber)
+                 TransactionKind
+                 createdAt
+             ])
+          onConflictDefault
+      runInsert $
+        insert
+          (transactions schema)
+          (insertValues
+             [Transaction (OperationHash hash) from to fee size createdAt])
+          onConflictDefault
+    Tezos.Other hash ->
+      runInsert $
+      insert
+        (operations schema)
+        (insertValues
+           [Operation hash (BlockNumber blockNumber) OtherKind createdAt])
+        onConflictDefault
+
+persistBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
+persistBlockEvent createdAt blockEvent = do
+  let Tezos.BlockEvent {number, hash, cycleNumber, fee, time, operations} =
+        blockEvent
+  runInsert $
+    insert
+      (blocks schema)
+      (insertValues [Block number hash cycleNumber fee time createdAt])
+      onConflictDefault
+  mapM_ (persistOp number createdAt) operations

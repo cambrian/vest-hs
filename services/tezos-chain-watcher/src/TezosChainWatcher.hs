@@ -6,7 +6,9 @@ import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import qualified Db
 import qualified Http
+import qualified Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
+import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
 import qualified Transport.Amqp as Amqp
 import Vest
@@ -51,6 +53,37 @@ defaultArgs_ =
 
 type Api = ()
 
+materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
+materializeBlockEvent t blockNumber =
+  Db.runLogged t (selectBlockEventByNumber blockNumber) >>= fromRightOrThrowLeft >>=
+  fromJustUnsafe BugException
+
+materializeCycleEvent :: T -> IndexOf Tezos.CycleEvent -> IO Tezos.CycleEvent
+materializeCycleEvent t blockNumber =
+  Db.runLogged t (selectCycleEventByNumber blockNumber) >>=
+  fromJustUnsafe BugException
+
+-- TODO: Tap block events and persist. Also change the steady state thing to be the last processed
+-- block/cycle number, so we block on implicit materialization until the DB has caught up.
+makeProducers ::
+     T
+  -> IO (Producers (BlockEvents
+                    :<|> CycleEvents))
+makeProducers t = do
+  let T {tezos} = t
+  nextBlockNumber <- Db.runLogged t selectNextBlockNumber
+  nextCycleNumber <- Db.runLogged t selectNextCycleNumber
+  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable tezos (logger t)
+  blockEventStream <-
+    gapFilledStream
+      (Tezos.materializeBlockEventDurable tezos (logger t))
+      nextBlockNumber
+      rawBlockEventStream
+  cycleEventStream <- Tezos.toCycleEventStream blockEventStream nextCycleNumber
+  return $
+    (blockEventStream, materializeBlockEvent t) :<|>
+    (cycleEventStream, materializeCycleEvent t)
+
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
@@ -65,11 +98,14 @@ instance Service T where
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
     reachedSteadyState <- newEmptyTMVarIO
-    with (dbConfig :<|> amqpConfig :<|> redisConfig :<|> tezosConfig) $ \(db :<|> amqp :<|> redis :<|> tezos) -> do
+    with
+      (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig :<|>
+       tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      f $ T {db, amqp, redis, tezos, accessControlClient, reachedSteadyState}
+      f $
+        T {dbPool, amqp, redis, tezos, accessControlClient, reachedSteadyState}
   rpcHandlers _ = ()
   valuesPublished _ = ()
-  eventProducers _ = panic "unimplemented"
+  eventProducers = panic "unimplemented"
   eventConsumers _ = ()

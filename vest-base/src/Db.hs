@@ -2,21 +2,26 @@ module Db
   ( module Reexports
   , Config(..)
   , HasConnection(..)
+  , InvalidStateException(..)
   , runLogged
   , runLoggedTransaction
   ) where
 
 import Database.Beam as Reexports hiding (insert)
-import Database.Beam.Backend.SQL
+import Database.Beam.Backend.SQL as Reexports
 import Database.Beam.Postgres as Reexports
 import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
-import Database.PostgreSQL.Simple.FromField
+import Database.PostgreSQL.Simple.FromField as Reexports
 import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
 import GHC.Base (String)
 import qualified Money
 import Vest
+
+data InvalidStateException =
+  InvalidStateException
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 deriving instance Read a => Read (PgJSON a)
 

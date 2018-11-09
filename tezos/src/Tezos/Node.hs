@@ -1,5 +1,6 @@
 module Tezos.Node
-  ( getRewardInfo
+  ( module Reexports
+  , getRewardInfo
   , materializeBlockEventDurable
   , streamNewBlockEventsDurable
   , toCycleEventStream
@@ -8,6 +9,7 @@ module Tezos.Node
 import Control.Retry
 import qualified Http
 import Tezos.Node.Internal
+import Tezos.Node.Internal as Reexports (blocksPerCycle)
 import Tezos.Node.Prelude
 import Tezos.Prelude
 import Vest hiding (hash)
@@ -69,7 +71,7 @@ toCycleEventStream blockEventStream lastSeen = do
     (\BlockEvent {cycleNumber, time} -> do
        let lastCycleNumber = cycleNumber - 1
        lastSeen <- readTVarIO lastSeenVar
-       if lastCycleNumber == lastSeen
+       if lastCycleNumber <= lastSeen
          then return Nothing
          else do
            when (lastCycleNumber /= lastSeen + 1) $
