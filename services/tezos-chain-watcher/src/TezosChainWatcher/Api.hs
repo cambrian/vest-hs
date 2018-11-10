@@ -16,7 +16,7 @@ data MonitorOpResponse = MonitorOpResponse
 
 -- Eventually: Make this endpoint batch.
 type MonitorOpEndpoint
-   = Endpoint 'NoAuth T Amqp.T "monitorOp" Tezos.OperationHash ('Streaming MonitorOpResponse)
+   = Endpoint_ 60 'Haskell 'NoAuth T Amqp.T "monitorOp" Tezos.OperationHash ('Streaming MonitorOpResponse)
 
 data RewardInfoRequest = RewardInfoRequest
   { cycleNumber :: Word64

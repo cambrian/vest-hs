@@ -228,7 +228,6 @@ toBlockEventOperation Operation {hash, kind} =
       return $ transactionToOp <$> transactionMaybe
     OtherKind -> return $ Just $ Tezos.Other hash
 
--- TODO: Refactor using guard syntax.
 selectBlockEventByNumber ::
      Word64 -> Pg (Either InvalidStateException (Maybe Tezos.BlockEvent))
 selectBlockEventByNumber queryNumber = do

@@ -1,3 +1,4 @@
+-- TODO: Consider adding more data consistency checks in this service.
 module TezosChainWatcher
   ( module TezosChainWatcher
   ) where
@@ -51,15 +52,20 @@ defaultArgs_ =
   summary "tezos-chain-watcher v0.1.0" &=
   program "tezos-chain-watcher"
 
-tezosOpToBlockHash :: Tezos.Operation -> Tezos.OperationHash
-tezosOpToBlockHash (Tezos.OriginationOp Tezos.Origination {hash}) = hash
-tezosOpToBlockHash (Tezos.TransactionOp Tezos.Transaction {hash}) = hash
-tezosOpToBlockHash (Tezos.Other hash) = hash
+toOpHash :: Tezos.Operation -> Tezos.OperationHash
+toOpHash (Tezos.OriginationOp Tezos.Origination {hash}) = hash
+toOpHash (Tezos.TransactionOp Tezos.Transaction {hash}) = hash
+toOpHash (Tezos.Other hash) = hash
 
 -- TODO: Determine a good value for this.
 confirmationThreshold :: Word64
 confirmationThreshold = 5
 
+-- | Timeout (in blocks) for monitor responses if the op has not been seen yet.
+errorThreshold :: Word64
+errorThreshold = 5
+
+-- Params are (start block number, start block hash) and (current block number).
 monitorOpResponse ::
      Maybe (Word64, Tezos.BlockHash) -> Maybe Word64 -> MonitorOpResponse
 monitorOpResponse _ Nothing = MonitorOpResponse Rejected 0 Nothing
@@ -74,27 +80,48 @@ monitorOpResponse (Just (opBlockNumber, opBlockHash)) (Just currentBlockNumber) 
 
 -- This is perhaps more complicated than expected, since the first time we see an op can be the
 -- result of a database lookup OR a streaming event.
--- monitorOp ::
---      T -> Tezos.OperationHash -> IO (Stream ValueBuffer MonitorOpResponse)
--- monitorOp t opHash = do
---   let T {blockEventStream, lastProcessedBlockNumber} = t
---   blockNumberVar <- newEmptyTMVarIO
---   firstEventVar <- newEmptyTMVarIO
---   (writer, monitorStream) <- newStream
---   -- _ <- takeWhileMStream (\Tezos.BlockEvent {number, operations} -> do
---   --   let opHashes = fmap tezosOpToBlockHash operations
---   --   when (opHash `elem` opHashes) (atomically $ tryPutTMVar blockNumberVar number)
---   --   ) blockEventStream
---   -- Query DB in parallel and generate the first monitor event.
---   async $ do
---     blockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
---     case blockInfoMaybe of
---       Just (opBlockNumber, opBlockHash) -> do
---         currentBlockNumber <- atomically $ readTMVar lastProcessedBlockNumber
---         when (opBlockNumber > currentBlockNumber) throw BugException
---         void . atomically $ tryPutTMVar blockNumberVar opBlockNumber
---         writeStream writer
---   return monitorStream
+monitorOp ::
+     T -> Tezos.OperationHash -> IO (Stream ValueBuffer MonitorOpResponse)
+monitorOp t opHash = do
+  let T {blockEventStream, lastProcessedBlockNumber} = t
+  opBlockInfoVar <- newEmptyTMVarIO
+  startBlockNumberVar <- newEmptyTMVarIO
+  (writer, monitorStream) <- newStream
+  -- After the first monitor item, generate monitor items until EITHER (1) the confirmation
+  -- threshold is reached (relative to the operation block) OR (2) the error threshold is reached
+  -- (relative to the start block) without having seen the operation.
+  takeWhileMStream
+    (\Tezos.BlockEvent {hash, number, operations} -> do
+       startBlockNumber <- atomically $ readTMVar startBlockNumberVar
+        -- ^ Wait for first item to be streamed.
+       let opHashes = fmap toOpHash operations
+       when
+         (opHash `elem` opHashes)
+         (void . atomically $ tryPutTMVar opBlockInfoVar (number, hash))
+       opBlockInfoMaybe <- atomically $ tryReadTMVar opBlockInfoVar
+       case opBlockInfoMaybe of
+         Nothing ->
+           if number - startBlockNumber >= errorThreshold
+             then writeStream writer (monitorOpResponse Nothing Nothing) >>
+                  return False
+             else writeStream writer (monitorOpResponse Nothing (Just number)) >>
+                  return True
+         Just _ ->
+           writeStream writer (monitorOpResponse opBlockInfoMaybe (Just number)) >>
+           return True)
+    blockEventStream
+  -- Query DB in parallel and generate the first monitor item. The takeWhileMStream will not
+  -- generate further monitor items until the first item has been generated. (Note that this has to
+  -- be async so we do not miss stream events during the DB query).
+  async $ do
+    blockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
+    currentBlockNumber <- atomically (readTMVar lastProcessedBlockNumber)
+    sequence_ $ void . atomically . putTMVar opBlockInfoVar <$> blockInfoMaybe
+    writeStream writer $
+      monitorOpResponse blockInfoMaybe (Just currentBlockNumber)
+    atomically $ putTMVar startBlockNumberVar currentBlockNumber
+  return monitorStream
+
 rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
@@ -160,7 +187,8 @@ instance Service T where
   type EventsProduced T = BlockEvents
                           :<|> CycleEvents
   type EventsConsumed T = ()
-  type RpcSpec T = RewardInfoEndpoint
+  type RpcSpec T = MonitorOpEndpoint
+                   :<|> RewardInfoEndpoint
                    :<|> OriginatedMappingEndpoint
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
@@ -195,7 +223,7 @@ instance Service T where
           , blockEventStream
           , cycleEventStream
           }
-  rpcHandlers t = rewardInfo t :<|> originatedMapping t
+  rpcHandlers t = monitorOp t :<|> rewardInfo t :<|> originatedMapping t
   valuesPublished _ = ()
   eventProducers t =
     (blockEventStream t, materializeBlockEvent t) :<|>
