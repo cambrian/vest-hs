@@ -51,11 +51,56 @@ defaultArgs_ =
   summary "tezos-chain-watcher v0.1.0" &=
   program "tezos-chain-watcher"
 
-type Api = RewardInfoEndpoint
+tezosOpToBlockHash :: Tezos.Operation -> Tezos.OperationHash
+tezosOpToBlockHash (Tezos.OriginationOp Tezos.Origination {hash}) = hash
+tezosOpToBlockHash (Tezos.TransactionOp Tezos.Transaction {hash}) = hash
+tezosOpToBlockHash (Tezos.Other hash) = hash
 
+-- TODO: Determine a good value for this.
+confirmationThreshold :: Word64
+confirmationThreshold = 5
+
+monitorOpResponse ::
+     Maybe (Word64, Tezos.BlockHash) -> Maybe Word64 -> MonitorOpResponse
+monitorOpResponse _ Nothing = MonitorOpResponse Rejected 0 Nothing
+monitorOpResponse Nothing _ = MonitorOpResponse Pending 0 Nothing
+monitorOpResponse (Just (opBlockNumber, opBlockHash)) (Just currentBlockNumber) =
+  let confirmations = currentBlockNumber - opBlockNumber
+      status =
+        if confirmations >= confirmationThreshold
+          then Confirmed
+          else Pending
+   in MonitorOpResponse status confirmations (Just opBlockHash)
+
+-- This is perhaps more complicated than expected, since the first time we see an op can be the
+-- result of a database lookup OR a streaming event.
+-- monitorOp ::
+--      T -> Tezos.OperationHash -> IO (Stream ValueBuffer MonitorOpResponse)
+-- monitorOp t opHash = do
+--   let T {blockEventStream, lastProcessedBlockNumber} = t
+--   blockNumberVar <- newEmptyTMVarIO
+--   firstEventVar <- newEmptyTMVarIO
+--   (writer, monitorStream) <- newStream
+--   -- _ <- takeWhileMStream (\Tezos.BlockEvent {number, operations} -> do
+--   --   let opHashes = fmap tezosOpToBlockHash operations
+--   --   when (opHash `elem` opHashes) (atomically $ tryPutTMVar blockNumberVar number)
+--   --   ) blockEventStream
+--   -- Query DB in parallel and generate the first monitor event.
+--   async $ do
+--     blockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
+--     case blockInfoMaybe of
+--       Just (opBlockNumber, opBlockHash) -> do
+--         currentBlockNumber <- atomically $ readTMVar lastProcessedBlockNumber
+--         when (opBlockNumber > currentBlockNumber) throw BugException
+--         void . atomically $ tryPutTMVar blockNumberVar opBlockNumber
+--         writeStream writer
+--   return monitorStream
 rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
+
+originatedMapping :: T -> Tezos.ImplicitAddress -> IO [Tezos.OriginatedAddress]
+originatedMapping t = Db.runLogged t . selectOriginatedForImplicit
 
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
@@ -96,7 +141,7 @@ makeEventStreams dbPool tezos initLogger lastProcessedBlockNumber lastProcessedC
        Db.runLoggedTransaction_
          initLogger
          dbPool
-         (persistBlockEvent createdAt blockEvent)
+         (insertBlockEvent createdAt blockEvent)
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
        void . atomically $ swapTMVar lastProcessedBlockNumber newBlockNumber)
     blockEventStream
@@ -115,7 +160,8 @@ instance Service T where
   type EventsProduced T = BlockEvents
                           :<|> CycleEvents
   type EventsConsumed T = ()
-  type RpcSpec T = Api
+  type RpcSpec T = RewardInfoEndpoint
+                   :<|> OriginatedMappingEndpoint
   defaultArgs = defaultArgs_
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
     Config {dbConfig, amqpConfig, redisConfig, tezosConfig} <-
@@ -149,7 +195,7 @@ instance Service T where
           , blockEventStream
           , cycleEventStream
           }
-  rpcHandlers = rewardInfo
+  rpcHandlers t = rewardInfo t :<|> originatedMapping t
   valuesPublished _ = ()
   eventProducers t =
     (blockEventStream t, materializeBlockEvent t) :<|>

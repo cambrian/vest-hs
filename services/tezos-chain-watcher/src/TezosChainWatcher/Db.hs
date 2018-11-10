@@ -172,6 +172,30 @@ selectNextCycleNumber = do
       Just (Just num) -> num + 1
       _ -> 0
 
+selectBlockInfoForOpHash ::
+     Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
+selectBlockInfoForOpHash opHash =
+  runSelectReturningOne $
+  select $ do
+    op <-
+      filter_ (\Operation {hash} -> hash ==. val_ opHash) $
+      all_ (operations schema)
+    block <- all_ (blocks schema)
+    let BlockNumber opBlockNumber = blockNumber op
+    guard_ (opBlockNumber ==. number block)
+    let Block {number, hash} = block
+    pure (number, hash)
+
+selectOriginatedForImplicit ::
+     Tezos.ImplicitAddress -> Pg [Tezos.OriginatedAddress]
+selectOriginatedForImplicit implicitAddress = do
+  originations <-
+    runSelectReturningList $
+    select $
+    filter_ (\Origination {originator} -> originator ==. val_ implicitAddress) $
+    all_ (originations schema)
+  return $ originated <$> originations
+
 originationToOp :: Origination -> Tezos.Operation
 originationToOp Origination { hash = OperationHash opHash
                             , originator
@@ -204,6 +228,7 @@ toBlockEventOperation Operation {hash, kind} =
       return $ transactionToOp <$> transactionMaybe
     OtherKind -> return $ Just $ Tezos.Other hash
 
+-- TODO: Refactor using guard syntax.
 selectBlockEventByNumber ::
      Word64 -> Pg (Either InvalidStateException (Maybe Tezos.BlockEvent))
 selectBlockEventByNumber queryNumber = do
@@ -238,8 +263,8 @@ selectCycleEventByNumber queryNumber = do
     firstBlockInNextCycle
 
 -- TODO: Reduce verbose duplication. Also, batching?
-persistOp :: Word64 -> Time -> Tezos.Operation -> Pg ()
-persistOp blockNumber createdAt op =
+insertOp :: Word64 -> Time -> Tezos.Operation -> Pg ()
+insertOp blockNumber createdAt op =
   case op of
     Tezos.OriginationOp Tezos.Origination {hash, originator, originated} -> do
       runInsert $
@@ -285,8 +310,8 @@ persistOp blockNumber createdAt op =
            [Operation hash (BlockNumber blockNumber) OtherKind createdAt])
         onConflictDefault
 
-persistBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
-persistBlockEvent createdAt blockEvent = do
+insertBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
+insertBlockEvent createdAt blockEvent = do
   let Tezos.BlockEvent {number, hash, cycleNumber, fee, time, operations} =
         blockEvent
   runInsert $
@@ -294,4 +319,4 @@ persistBlockEvent createdAt blockEvent = do
       (blocks schema)
       (insertValues [Block number hash cycleNumber fee time createdAt])
       onConflictDefault
-  mapM_ (persistOp number createdAt) operations
+  mapM_ (insertOp number createdAt) operations
