@@ -114,11 +114,11 @@ monitorOp t opHash = do
   -- generate further monitor items until the first item has been generated. (Note that this has to
   -- be async so we do not miss stream events during the DB query).
   async $ do
-    blockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
+    opBlockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
     currentBlockNumber <- atomically (readTMVar lastProcessedBlockNumber)
-    sequence_ $ void . atomically . putTMVar opBlockInfoVar <$> blockInfoMaybe
+    sequence_ $ void . atomically . putTMVar opBlockInfoVar <$> opBlockInfoMaybe
     writeStream writer $
-      monitorOpResponse blockInfoMaybe (Just currentBlockNumber)
+      monitorOpResponse opBlockInfoMaybe (Just currentBlockNumber)
     atomically $ putTMVar startBlockNumberVar currentBlockNumber
   return monitorStream
 
