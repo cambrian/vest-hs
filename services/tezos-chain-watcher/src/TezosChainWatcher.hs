@@ -12,7 +12,7 @@ import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
 import qualified Transport.Amqp as Amqp
-import Vest
+import Vest hiding (hash)
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
@@ -62,15 +62,20 @@ confirmationThreshold :: Word64
 confirmationThreshold = 5
 
 -- | Timeout (in blocks) for monitor responses if the op has not been seen yet.
-errorThreshold :: Word64
-errorThreshold = 5
+rejectionThreshold :: Word64
+rejectionThreshold = 5
 
--- Params are (start block number, start block hash) and (current block number).
+-- Params are (start block number), (op block number, op block hash), and (current block number).
 monitorOpResponse ::
-     Maybe (Word64, Tezos.BlockHash) -> Maybe Word64 -> MonitorOpResponse
-monitorOpResponse _ Nothing = MonitorOpResponse Rejected 0 Nothing
-monitorOpResponse Nothing _ = MonitorOpResponse Pending 0 Nothing
-monitorOpResponse (Just (opBlockNumber, opBlockHash)) (Just currentBlockNumber) =
+     Word64 -> Maybe (Word64, Tezos.BlockHash) -> Word64 -> MonitorOpResponse
+monitorOpResponse startBlockNumber Nothing currentBlockNumber =
+  let numBlocksMonitored = currentBlockNumber - startBlockNumber
+      status =
+        if numBlocksMonitored >= rejectionThreshold
+          then Rejected
+          else Pending
+   in MonitorOpResponse status 0 Nothing
+monitorOpResponse _ (Just (opBlockNumber, opBlockHash)) currentBlockNumber =
   let confirmations = currentBlockNumber - opBlockNumber
       status =
         if confirmations >= confirmationThreshold
@@ -88,38 +93,34 @@ monitorOp t opHash = do
   startBlockNumberVar <- newEmptyTMVarIO
   (writer, monitorStream) <- newStream
   -- After the first monitor item, generate monitor items until EITHER (1) the confirmation
-  -- threshold is reached (relative to the operation block) OR (2) the error threshold is reached
-  -- (relative to the start block) without having seen the operation.
-  takeWhileMStream
-    (\Tezos.BlockEvent {hash, number, operations} -> do
-       startBlockNumber <- atomically $ readTMVar startBlockNumberVar
+  -- threshold is reached (relative to the operation block) OR (2) the rejection threshold is
+  -- reached (relative to the start block) without having seen the operation.
+  monitorItemGenerator <-
+    takeWhileMStream
+      (\Tezos.BlockEvent {hash, number, operations} -> do
+         startBlockNumber <- atomically $ readTMVar startBlockNumberVar
         -- ^ Wait for first item to be streamed.
-       let opHashes = fmap toOpHash operations
-       when
-         (opHash `elem` opHashes)
-         (void . atomically $ tryPutTMVar opBlockInfoVar (number, hash))
-       opBlockInfoMaybe <- atomically $ tryReadTMVar opBlockInfoVar
-       case opBlockInfoMaybe of
-         Nothing ->
-           if number - startBlockNumber >= errorThreshold
-             then writeStream writer (monitorOpResponse Nothing Nothing) >>
-                  return False
-             else writeStream writer (monitorOpResponse Nothing (Just number)) >>
-                  return True
-         Just _ ->
-           writeStream writer (monitorOpResponse opBlockInfoMaybe (Just number)) >>
-           return True)
-    blockEventStream
+         let opHashes = fmap toOpHash operations
+         when
+           (opHash `elem` opHashes)
+           (void . atomically $ tryPutTMVar opBlockInfoVar (number, hash))
+         opBlockInfoMaybe <- atomically $ tryReadTMVar opBlockInfoVar
+         let response =
+               monitorOpResponse startBlockNumber opBlockInfoMaybe number
+         writeStream writer response >> return (status response == Pending))
+      blockEventStream
   -- Query DB in parallel and generate the first monitor item. The takeWhileMStream will not
-  -- generate further monitor items until the first item has been generated. (Note that this has to
-  -- be async so we do not miss stream events during the DB query).
+  -- generate any monitor items until the first item has been generated. (Note that this has to be
+  -- async so we do not miss stream events during the DB query). Then wait for the takeWhile to
+  -- finish and close the monitorStream.
   async $ do
     opBlockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
     currentBlockNumber <- atomically (readTMVar lastProcessedBlockNumber)
     sequence_ $ void . atomically . putTMVar opBlockInfoVar <$> opBlockInfoMaybe
     writeStream writer $
-      monitorOpResponse opBlockInfoMaybe (Just currentBlockNumber)
+      monitorOpResponse currentBlockNumber opBlockInfoMaybe currentBlockNumber
     atomically $ putTMVar startBlockNumberVar currentBlockNumber
+    waitStream monitorItemGenerator >> closeStream writer
   return monitorStream
 
 rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
