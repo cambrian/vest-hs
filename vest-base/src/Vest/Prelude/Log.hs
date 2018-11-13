@@ -13,6 +13,8 @@ data LogLevel
   | Error
   deriving (Eq, Ord, Enum, Show, Read, Generic, ToJSON, FromJSON)
 
+type LogMessage a = (Time, LogLevel, a)
+
 log :: Show a => LogLevel -> a -> IO ()
 log level a = do
   time <- now
