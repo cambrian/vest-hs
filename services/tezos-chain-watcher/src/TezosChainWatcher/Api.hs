@@ -30,5 +30,3 @@ type OriginatedMappingEndpoint
    = Endpoint 'NoAuth T Amqp.T "originatedMapping" Tezos.ImplicitAddress ('Direct [Tezos.OriginatedAddress])
 
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
-
-type CycleEvents = Event T Amqp.T "cycles" Tezos.CycleEvent

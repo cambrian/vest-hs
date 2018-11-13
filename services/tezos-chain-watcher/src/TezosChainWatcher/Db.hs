@@ -161,17 +161,6 @@ selectNextBlockNumber = do
       Just (Just num) -> num + 1
       _ -> fromIntegral Tezos.firstBlockNumber
 
--- TODO: Reduce duplication.
-selectNextCycleNumber :: Pg Word64
-selectNextCycleNumber = do
-  m <-
-    runSelectReturningOne $
-    select $ aggregate_ max_ $ cycleNumber <$> all_ (blocks schema)
-  return $
-    case m of
-      Just (Just num) -> num + 1
-      _ -> 0
-
 selectBlockInfoForOpHash ::
      Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
 selectBlockInfoForOpHash opHash =
@@ -249,17 +238,6 @@ selectBlockEventByNumber queryNumber = do
         else return $
              Right . Just $
              Tezos.BlockEvent {number, hash, cycleNumber, fee, time, operations}
-
-selectCycleEventByNumber :: Word64 -> Pg (Maybe Tezos.CycleEvent)
-selectCycleEventByNumber queryNumber = do
-  firstBlockInNextCycle <-
-    runSelectReturningOne $
-    select $
-    filter_ (\block -> cycleNumber block ==. val_ (queryNumber + 1)) $
-    all_ (blocks schema)
-  return $
-    (\Block {time} -> Tezos.CycleEvent queryNumber time) <$>
-    firstBlockInNextCycle
 
 -- TODO: Reduce verbose duplication. Also, batching?
 insertOp :: Word64 -> Time -> Tezos.Operation -> Pg ()

@@ -88,7 +88,7 @@ monitorOpResponse _ (Just (opBlockNumber, opBlockHash)) currentBlockNumber =
 monitorOp ::
      T -> Tezos.OperationHash -> IO (Stream ValueBuffer MonitorOpResponse)
 monitorOp t opHash = do
-  let T {blockEventStream, lastProcessedBlockNumber} = t
+  let T {blockEventConsumerStream, lastConsumedBlockNumber} = t
   opBlockInfoVar <- newEmptyTMVarIO
   startBlockNumberVar <- newEmptyTMVarIO
   (writer, monitorStream) <- newStream
@@ -108,14 +108,14 @@ monitorOp t opHash = do
          let response =
                monitorOpResponse startBlockNumber opBlockInfoMaybe number
          writeStream writer response >> return (status response == Pending))
-      blockEventStream
+      blockEventConsumerStream
   -- Query DB in parallel and generate the first monitor item. The takeWhileMStream will not
   -- generate any monitor items until the first item has been generated. (Note that this has to be
   -- async so we do not miss stream events during the DB query). Then wait for the takeWhile to
   -- finish and close the monitorStream.
   async $ do
     opBlockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
-    currentBlockNumber <- atomically (readTMVar lastProcessedBlockNumber)
+    currentBlockNumber <- atomically (readTMVar lastConsumedBlockNumber)
     sequence_ $ void . atomically . putTMVar opBlockInfoVar <$> opBlockInfoMaybe
     writeStream writer $
       monitorOpResponse currentBlockNumber opBlockInfoMaybe currentBlockNumber
@@ -133,61 +133,44 @@ originatedMapping t = Db.runLogged t . selectOriginatedForImplicit
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
   atomically $
-    readTMVar (lastProcessedBlockNumber t) >>= check . (blockNumber <=)
+    readTMVar (lastProducedBlockNumber t) >>= check . (blockNumber <=)
   Db.runLogged t (selectBlockEventByNumber blockNumber) >>= fromRightOrThrowLeft >>=
     fromJustUnsafe BugException
 
--- | TODO: Consider making the retry-blocking based on block number.
-materializeCycleEvent :: T -> IndexOf Tezos.CycleEvent -> IO Tezos.CycleEvent
-materializeCycleEvent t cycleNumber = do
-  atomically $
-    readTMVar (lastProcessedCycleNumber t) >>= check . (cycleNumber <=)
-  Db.runLogged t (selectCycleEventByNumber cycleNumber) >>=
-    fromJustUnsafe BugException
-
-makeEventStreams ::
-     Pool Db.Connection
-  -> Http.T
-  -> Logger
-  -> TMVar Word64
-  -> TMVar Word64
-  -> IO ( Stream QueueBuffer Tezos.BlockEvent
-        , Stream QueueBuffer Tezos.CycleEvent)
-makeEventStreams dbPool tezos initLogger lastProcessedBlockNumber lastProcessedCycleNumber = do
-  nextBlockNumber <- Db.runLogged_ initLogger dbPool selectNextBlockNumber
-  nextCycleNumber <- Db.runLogged_ initLogger dbPool selectNextCycleNumber
-  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable tezos initLogger
+makeBlockEventStream :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
+makeBlockEventStream t = do
+  nextBlockNumber <- Db.runLogged t selectNextBlockNumber
+  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable (tezos t) (logger t)
   blockEventStream <-
     gapFilledStream
-      (Tezos.materializeBlockEventDurable tezos initLogger)
+      (Tezos.materializeBlockEventDurable (tezos t) (logger t))
       nextBlockNumber
       rawBlockEventStream
   -- Async persist block events and update block counter.
+  let T {lastProducedBlockNumber} = t
   tapStream_
     (\blockEvent -> do
        createdAt <- now
-       Db.runLoggedTransaction_
-         initLogger
-         dbPool
-         (insertBlockEvent createdAt blockEvent)
+       Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
-       void . atomically $ swapTMVar lastProcessedBlockNumber newBlockNumber)
+       void . atomically $ swapTMVar lastProducedBlockNumber newBlockNumber)
     blockEventStream
-  -- Dynamically generate cycle stream from block stream.
-  cycleEventStream <- Tezos.toCycleEventStream blockEventStream nextCycleNumber
-  -- Async update cycle counter.
-  tapStream_
-    (\Tezos.CycleEvent {number = newCycleNumber} ->
-       void . atomically $ swapTMVar lastProcessedCycleNumber newCycleNumber)
-    cycleEventStream
-  return (blockEventStream, cycleEventStream)
+  return blockEventStream
+
+blockEventConsumer :: T -> Consumers BlockEvents
+blockEventConsumer t =
+  let getInitialBlockNumber = Db.runLogged t selectNextBlockNumber
+      T {blockEventConsumerWriter = writer, lastConsumedBlockNumber} = t
+      updateBlockNumber Tezos.BlockEvent {number} =
+        atomically . swapTMVar lastConsumedBlockNumber $ number
+      consumeBlockEvent x = updateBlockNumber x >> writeStream writer x
+   in (getInitialBlockNumber, consumeBlockEvent)
 
 instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
   type EventsProduced T = BlockEvents
-                          :<|> CycleEvents
-  type EventsConsumed T = ()
+  type EventsConsumed T = BlockEvents
   type RpcSpec T = MonitorOpEndpoint
                    :<|> RewardInfoEndpoint
                    :<|> OriginatedMappingEndpoint
@@ -197,20 +180,14 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    lastProcessedBlockNumber <- newEmptyTMVarIO
-    lastProcessedCycleNumber <- newEmptyTMVarIO
+    lastProducedBlockNumber <- newEmptyTMVarIO
+    lastConsumedBlockNumber <- newEmptyTMVarIO
+    (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
     with
       (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig :<|>
        tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      (blockEventStream, cycleEventStream) <-
-        makeEventStreams
-          dbPool
-          tezos
-          (stderrLogger Debug)
-          lastProcessedBlockNumber
-          lastProcessedCycleNumber
       -- ^ TODO: How to keep this logger in sync with the one on the service?
       f $
         T
@@ -219,14 +196,12 @@ instance Service T where
           , redis
           , tezos
           , accessControlClient
-          , lastProcessedBlockNumber
-          , lastProcessedCycleNumber
-          , blockEventStream
-          , cycleEventStream
+          , lastProducedBlockNumber
+          , lastConsumedBlockNumber
+          , blockEventConsumerWriter
+          , blockEventConsumerStream
           }
   rpcHandlers t = monitorOp t :<|> rewardInfo t :<|> originatedMapping t
   valuesPublished _ = ()
-  eventProducers t =
-    (blockEventStream t, materializeBlockEvent t) :<|>
-    (cycleEventStream t, materializeCycleEvent t)
-  eventConsumers _ = ()
+  eventProducers t = (makeBlockEventStream t, materializeBlockEvent t)
+  eventConsumers = blockEventConsumer

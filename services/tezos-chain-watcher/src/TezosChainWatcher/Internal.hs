@@ -15,10 +15,10 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Http.T
   , accessControlClient :: AccessControl.Client.T
-  , lastProcessedBlockNumber :: TMVar Word64
-  , lastProcessedCycleNumber :: TMVar Word64
-  , blockEventStream :: Stream QueueBuffer Tezos.BlockEvent
-  , cycleEventStream :: Stream QueueBuffer Tezos.CycleEvent
+  , lastProducedBlockNumber :: TMVar Word64
+  , lastConsumedBlockNumber :: TMVar Word64
+  , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
+  , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
   } deriving (HasNamespace)
 
 instance HasRedisConnection T where
