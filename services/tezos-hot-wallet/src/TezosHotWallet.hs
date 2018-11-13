@@ -71,6 +71,6 @@ instance Service T where
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {db, amqp, redis, tezos, accessControlClient}
   rpcHandlers _ = ()
+  valuesPublished _ = ()
+  eventProducers _ = panic "unimplemented"
   eventConsumers _ = ()
-  makePublishedValues _ = return ()
-  makeProducedEvents _ = panic "unimplemented"

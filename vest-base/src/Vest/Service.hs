@@ -26,17 +26,17 @@ class ( Data (ServiceArgs a)
   defaultArgs :: ServiceArgs a
   init :: ServiceArgs a -> (a -> IO b) -> IO b
   rpcHandlers :: a -> Handlers (RpcSpec a)
+  valuesPublished :: a -> Values (ValueSpec a)
+  eventProducers :: a -> Producers (EventsProduced a)
   eventConsumers :: a -> Consumers (EventsConsumed a)
-  makePublishedValues :: a -> IO (Values (ValueSpec a))
-  makeProducedEvents :: a -> IO (Producers (EventsProduced a))
   run :: ServiceArgs a -> (a -> IO b) -> IO Void
   -- ^ This function runs a service with an arbitrary body function.
   run args f =
     init args $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
+      publish a (Proxy :: Proxy (ValueSpec a)) $ valuesPublished a
+      produce a (Proxy :: Proxy (EventsProduced a)) $ eventProducers a
       consume a (Proxy :: Proxy (EventsConsumed a)) $ eventConsumers a
-      publish a (Proxy :: Proxy (ValueSpec a)) <$> makePublishedValues a
-      produce a (Proxy :: Proxy (EventsProduced a)) <$> makeProducedEvents a
       f a
       blockForever
   start :: IO Void

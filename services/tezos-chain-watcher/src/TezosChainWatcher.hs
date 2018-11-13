@@ -225,9 +225,8 @@ instance Service T where
           , cycleEventStream
           }
   rpcHandlers t = monitorOp t :<|> rewardInfo t :<|> originatedMapping t
-  eventConsumers _ = ()
-  makePublishedValues _ = return ()
-  makeProducedEvents t =
-    return $
+  valuesPublished _ = ()
+  eventProducers t =
     (blockEventStream t, materializeBlockEvent t) :<|>
     (cycleEventStream t, materializeCycleEvent t)
+  eventConsumers _ = ()

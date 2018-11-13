@@ -24,9 +24,13 @@ type family NubEventNames spec where
 
 type HasUniqueEventNames spec = EventNames spec ~ NubEventNames spec
 
+-- | Producers is really ProducerConstructors or something like that,
+-- because initializing a producer generally means beginning db writes,
+-- we only want one producer to be initialized among all service instances.
+-- This means binding a producer constructor from within a locked context.
 type family Producers spec where
   Producers () = ()
-  Producers (Event_ _ _ _ _ a) = (Stream QueueBuffer a, IndexOf a -> IO a)
+  Producers (Event_ _ _ _ _ a) = IO (Stream QueueBuffer a, IndexOf a -> IO a)
   Producers (a
              :<|> b) = (Producers a
                         :<|> Producers b)
@@ -61,14 +65,15 @@ instance ( HasNamespace t
          , KnownEventName name
          ) =>
          Producer t (Event_ fmt t transport name a) where
-  produce t _ (stream, materializer) = do
-    serve
-      t
-      (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt t transport name a)))
-      materializer
+  produce t _ makeProducer =
     void . async $ do
       let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
           lockId = retag $ eventName <> "/producer"
       withDistributedLock t lockId $ do
+        (events, materializer) <- makeProducer
+        serve
+          t
+          (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt t transport name a)))
+          materializer
         send <- publishEvents (eventTransport @transport t) eventName
-        tapStream_ (send . serialize' @fmt) stream
+        consumeStream (send . serialize' @fmt) events
