@@ -64,4 +64,4 @@ instance ( HasNamespace t
           lockId = retag $ valueName <> "/publisher"
       withDistributedLock t lockId $ do
         send <- publishValue (valueTransport @transport t) valueName
-        tapStream_ (send . serialize' @fmt) stream
+        consumeStream (send . serialize' @fmt) stream
