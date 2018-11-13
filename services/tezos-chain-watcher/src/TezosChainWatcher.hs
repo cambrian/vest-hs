@@ -154,7 +154,7 @@ makeBlockEventStream t = do
        Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
        void . atomically $ swapTMVar lastProducedBlockNumber newBlockNumber
-       log Debug "Persisted block number " newBlockNumber)
+       log Debug "persisted block number " newBlockNumber)
     blockEventStream
   return blockEventStream
 

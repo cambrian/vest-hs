@@ -222,7 +222,7 @@ recoveryCases =
       (\b e r -> log Debug "Servant error" $ defaultLogMsg b e r)
   , logRetries
       (\(_ :: UnexpectedResultException) -> return True)
-      (\b e r -> log Debug "Unexpected result" $ defaultLogMsg b e r)
+      (\b e r -> log Debug "unexpected result" $ defaultLogMsg b e r)
   ]
 
 materializeBlockEvent_ :: Http.T -> Int -> IO BlockEvent
