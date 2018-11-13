@@ -11,23 +11,28 @@ import Vest.Prelude.TypeLevel
 
 class Resource a where
   type ResourceConfig a
-  make :: ResourceConfig a -> IO a
-  cleanup :: a -> IO ()
+  makeRaw :: ResourceConfig a -> IO a
+  makeRaw = make
+  cleanupRaw :: a -> IO ()
+  cleanupRaw = cleanup
   resourceName :: Text
   default resourceName :: Typeable a =>
     Text
   resourceName = moduleName @a <> "." <> constructorName @a
+  make :: ResourceConfig a -> IO a
+  make cfg = do
+    log Debug "resource acquiring" $ resourceName @a
+    r <- makeRaw cfg
+    log Debug "resource acquired" $ resourceName @a
+    return r
+  cleanup :: a -> IO ()
+  cleanup a = do
+    log Debug "resource releasing" $ resourceName @a
+    cleanupRaw a
+    log Debug "resource released" $ resourceName @a
+  {-# MINIMAL makeRaw, cleanupRaw | make, cleanup #-}
   with :: ResourceConfig a -> (a -> IO b) -> IO b
-  with config =
-    bracket
-      (do log Debug "Resource acquiring" $ resourceName @a
-          r <- make config
-          log Debug "Resource acquired" $ resourceName @a
-          return r)
-      (\r -> do
-         log Debug "Resource releasing" $ resourceName @a
-         cleanup r
-         log Debug "Resource released" $ resourceName @a)
+  with config = bracket (make config) cleanup
   -- ^ TODO: Retry on exception.
 
 data PoolConfig a = PoolConfig
