@@ -54,14 +54,10 @@ defaultArgs_ =
 platformFee :: Rational
 platformFee = 0.5
 
-billPaymentTime :: Duration
-billPaymentTime = day 5
-
 blockConsumer :: T -> Consumers BlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; dividends are paid out when the delegator pays its bill. This happens
 -- in the payment consumer.
--- TODO: check late bills
 blockConsumer t =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
       handleCycle blockNum cycleNum cycleTime = do
@@ -150,31 +146,32 @@ blockConsumer t =
           Db.runUpdate $
           Db.update
             (cycles schema)
-            (\cycle -> [latestBlock cycle Db.<-. Db.val_ blockNumber])
-            (\cycle -> number cycle Db.==. Db.val_ cycleNumber)
+            (\Cycle {latestBlock} -> [latestBlock Db.<-. Db.val_ blockNumber])
+            (\Cycle {number} -> number Db.==. Db.val_ cycleNumber)
    in (Db.runLogged t selectNextBlock, handleBlock)
 
 paymentConsumer :: T -> Consumers PaymentEvents
 paymentConsumer t =
   let nextPayment = Db.runLogged t selectNextPayment
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
-      f PaymentEvent {idx, from, size} = do
+      f PaymentEvent {idx, from, size, time = paymentTime} = do
         Db.runLogged t (wasPaymentAlreadyHandled idx) >>= (`when` return ())
         isPlatformDelegate_ <- Db.runLogged t $ isPlatformDelegate from
         time <- now
         when isPlatformDelegate_ $ do
           billsOutstanding_ <- Db.runLogged t $ billsOutstanding $ retag from -- TODO: better address management for union of implicit and originated addresses
-          let (billsPaid, refund) =
+          let (billIdsPaid, refund) =
                 foldr
-                  (\b@Bill {size} (paid, rem) ->
+                  (\Bill {id, size} (paid, rem) ->
                      if rem >= size
-                       then (b : paid, rem - size)
+                       then (id : paid, rem - size)
                        else (paid, rem))
                   ([], size)
                   billsOutstanding_
           dividendsPaid <-
             foldr (<>) [] <$>
-            mapM (\Bill {id} -> Db.runLogged t $ dividendsForBill id) billsPaid
+            mapM (Db.runLogged t . dividendsForBill) billIdsPaid
+          -- Issue dividends and record issuance
           -- TODO: could group dividends by delegator
           forM_ dividendsPaid $ \dividend@Dividend {delegator, size, payout} -> do
             when (isJust $ payoutId payout) $ return ()
@@ -191,6 +188,13 @@ paymentConsumer t =
                 Db.save
                   (dividends schema)
                   (dividend {payout = PayoutId $ Just id} :: Dividend)
+          -- Mark bills paid
+          Db.runLogged t $
+            Db.runUpdate $
+            Db.update
+              (bills schema)
+              (\Bill {paidAt} -> [paidAt Db.<-. Db.val_ (Just paymentTime)])
+              (\Bill {id} -> id `Db.in_` (Db.val_ <$> billIdsPaid))
           -- Issue refund if necessary
           when (refund > fixedQty @Mutez 0) $ do
             refundId <- nextUUID
