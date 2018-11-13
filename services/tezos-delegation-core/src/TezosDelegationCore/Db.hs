@@ -9,6 +9,8 @@ import Vest
 data CycleT f = Cycle
   { number :: C f Word64
   , time :: C f Time
+  , firstBlock :: C f Word64
+  , latestBlock :: C f Word64
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -280,16 +282,16 @@ schema :: DatabaseSettings Postgres Schema
 schema = defaultDbSettings
 
 -- TODO: reduce duplication?
-selectNextCycle :: Pg Word64
-selectNextCycle = do
+selectNextBlock :: Pg Word64
+selectNextBlock = do
   m <-
     runSelectReturningOne $
-    select $ aggregate_ max_ $ number <$> all_ (cycles schema)
+    select $
+    latestBlock <$> limit_ 1 (orderBy_ (desc_ . number) $ all_ $ cycles schema)
   return $
     case m of
       Nothing -> 0
-      Just Nothing -> 0
-      Just (Just num) -> num + 1
+      Just n -> n + 1
 
 wasCycleAlreadyHandled :: Word64 -> Pg Bool
 wasCycleAlreadyHandled cycle =

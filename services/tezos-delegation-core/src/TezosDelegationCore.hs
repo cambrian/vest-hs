@@ -57,18 +57,17 @@ platformFee = 0.5
 billPaymentTime :: Duration
 billPaymentTime = day 5
 
-cycleConsumer :: T -> Consumers CycleEvents
+blockConsumer :: T -> Consumers BlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; dividends are paid out when the delegator pays its bill. This happens
 -- in the payment consumer.
 -- TODO: check late bills
-cycleConsumer t =
-  let nextCycle = Db.runLogged t selectNextCycle
-      getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
-      f Tezos.CycleEvent {number = cycleNo, time = cycleTime} = do
-        Db.runLogged t (wasCycleAlreadyHandled cycleNo) >>= (`when` return ())
-        delegates <- Db.runLogged t $ delegatesTrackedAtCycle cycleNo
-        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNo delegates
+blockConsumer t =
+  let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
+      handleCycle blockNum cycleNum cycleTime = do
+        Db.runLogged t (wasCycleAlreadyHandled cycleNum) >>= (`when` return ())
+        delegates <- Db.runLogged t $ delegatesTrackedAtCycle cycleNum
+        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNum delegates
         time <- now
         forM_ rewardInfos $ \Tezos.RewardInfo { delegate
                                               , reward
@@ -76,7 +75,7 @@ cycleConsumer t =
                                               , delegatedBalance
                                               , delegations
                                               } -> do
-          Db.runLogged t (wasRewardAlreadyProcessed cycleNo delegate) >>=
+          Db.runLogged t (wasRewardAlreadyProcessed cycleNum delegate) >>=
             (`when` return ())
           let delegateReward size =
                 fixedOf Round $
@@ -115,7 +114,7 @@ cycleConsumer t =
                 (rewards schema)
                 (Db.insertValues
                    [ Reward
-                       (CycleNumber cycleNo)
+                       (CycleNumber cycleNum)
                        (DelegateAddress delegate)
                        reward
                        stakingBalance
@@ -130,7 +129,7 @@ cycleConsumer t =
                 (dividends schema)
                 (Db.insertValues
                    [ Dividend
-                       (CycleNumber cycleNo)
+                       (CycleNumber cycleNum)
                        (DelegateAddress delegate)
                        delegator
                        size
@@ -143,9 +142,17 @@ cycleConsumer t =
           Db.runInsert $
           Db.insert
             (cycles schema)
-            (Db.insertValues [Cycle cycleNo cycleTime time])
+            (Db.insertValues [Cycle cycleNum cycleTime blockNum blockNum time])
             Db.onConflictDefault
-   in (nextCycle, f)
+      handleBlock Tezos.BlockEvent {number = blockNumber, cycleNumber, time} = do
+        handleCycle blockNumber cycleNumber time
+        Db.runLogged t $
+          Db.runUpdate $
+          Db.update
+            (cycles schema)
+            (\cycle -> [latestBlock cycle Db.<-. Db.val_ blockNumber])
+            (\cycle -> number cycle Db.==. Db.val_ cycleNumber)
+   in (Db.runLogged t selectNextBlock, handleBlock)
 
 paymentConsumer :: T -> Consumers PaymentEvents
 paymentConsumer t =
@@ -213,7 +220,7 @@ instance Service T where
   type ServiceArgs T = Args
   type ValueSpec T = ()
   type EventsProduced T = ()
-  type EventsConsumed T = CycleEvents
+  type EventsConsumed T = BlockEvents
                           :<|> PaymentEvents
   type RpcSpec T = ()
   defaultArgs = defaultArgs_
@@ -229,4 +236,4 @@ instance Service T where
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()
-  eventConsumers t = cycleConsumer t :<|> paymentConsumer t
+  eventConsumers t = blockConsumer t :<|> paymentConsumer t
