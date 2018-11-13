@@ -215,14 +215,14 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
       , operations
       }
 
-recoveryCases :: Logger -> [RetryStatus -> Handler IO Bool]
-recoveryCases logger =
+recoveryCases :: [RetryStatus -> Handler IO Bool]
+recoveryCases =
   [ logRetries
       (\(_ :: Http.ServantError) -> return True)
-      (\b e r -> log_ logger Debug $ pack $ defaultLogMsg b e r)
+      (\b e r -> log Debug $ pack $ defaultLogMsg b e r)
   , logRetries
       (\(_ :: UnexpectedResultException) -> return True)
-      (\b e r -> log_ logger Debug $ pack $ defaultLogMsg b e r)
+      (\b e r -> log Debug $ pack $ defaultLogMsg b e r)
   ]
 
 materializeBlockEvent_ :: Http.T -> Int -> IO BlockEvent

@@ -16,8 +16,7 @@ main = do
   ignoreIO $
     getRewardInfo connection 26 [Tagged "tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv"] >>=
     print
-  blockEventStream <-
-    streamNewBlockEventsDurable connection (stderrLogger Debug)
+  blockEventStream <- streamNewBlockEventsDurable connection
   cycleEventStream <- toCycleEventStream blockEventStream 42
   async $ tapStream_ print blockEventStream
   async $ tapStream_ print cycleEventStream

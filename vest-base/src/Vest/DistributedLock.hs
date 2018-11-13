@@ -6,7 +6,6 @@ module Vest.DistributedLock
   ) where
 
 import Database.Redis
-import Vest.Logger
 import Vest.Prelude hiding (get)
 import Vest.Redis
 
@@ -86,17 +85,7 @@ instance Resource DistributedLock where
     void . runRedis redis $ del [redisKey]
 
 withDistributedLock ::
-     forall t a. (HasRedisConnection t, HasNamespace t, HasLogger t)
-  => t
-  -> Text' "LockId"
-  -> IO a
-  -> IO a
-withDistributedLock t lockId f =
+     HasRedisConnection t => t -> Text' "LockId" -> IO a -> IO a
+withDistributedLock t lockId =
   with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
-  const $ do
-    hostPid <- getHostPid
-    log t Debug $
-      "Acquired distributed lock " <> untag lockId <> ", by " <> namespace @t <>
-      " running on " <>
-      hostPid
-    f
+  const

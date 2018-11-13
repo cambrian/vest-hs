@@ -27,27 +27,25 @@ getRewardInfo connection cycleNumber delegateIds = do
     (getRewardInfoSingle connection rewardBlockHash snapshotBlockHash . untag)
     delegateIds
 
-materializeBlockEventDurable ::
-     Http.T -> Logger -> IndexOf BlockEvent -> IO BlockEvent
-materializeBlockEventDurable connection logger blockNumber =
+materializeBlockEventDurable :: Http.T -> IndexOf BlockEvent -> IO BlockEvent
+materializeBlockEventDurable connection blockNumber =
   recovering
     materializeRetryPolicy -- Configurable retry limit?
-    (recoveryCases logger)
+    recoveryCases
     (const $
-     log_ logger Debug ("Materializing block " <> show blockNumber <> ".") >>
+     log Debug ("Materializing block " <> show blockNumber <> ".") >>
      materializeBlockEvent_ connection (fromIntegral blockNumber))
 
 -- | Recovering when a chunked stream fails is messier than just polling every minute for a new
 -- block, so we opt for the latter solution when streaming block events.
-streamNewBlockEventsDurable ::
-     Http.T -> Logger -> IO (Stream QueueBuffer BlockEvent)
-streamNewBlockEventsDurable connection logger = do
+streamNewBlockEventsDurable :: Http.T -> IO (Stream QueueBuffer BlockEvent)
+streamNewBlockEventsDurable connection = do
   let streamFrom blockNumber writer = do
         recovering
           blockRetryPolicy -- Configurable retry limit?
-          (recoveryCases logger)
+          recoveryCases
           (const $
-           log_ logger Debug ("Streaming block " <> show blockNumber <> ".") >>
+           log Debug ("Streaming block " <> show blockNumber <> ".") >>
            materializeBlockEvent_ connection (fromIntegral blockNumber) >>=
            writeStream writer)
         -- ^ Eagerly runs (and probably fails the first time) each block, which is useful if we've

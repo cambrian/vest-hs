@@ -33,8 +33,5 @@ instance HasEventTransport Amqp.T T where
 instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient
 
-instance HasLogger T where
-  logger _ = stderrLogger Debug
-
 instance Db.HasConnection T where
   withConnection t = withResource $ dbPool t

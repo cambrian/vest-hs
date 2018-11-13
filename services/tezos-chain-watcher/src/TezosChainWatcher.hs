@@ -140,10 +140,10 @@ materializeBlockEvent t blockNumber = do
 makeBlockEventStream :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
 makeBlockEventStream t = do
   nextBlockNumber <- Db.runLogged t selectNextBlockNumber
-  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable (tezos t) (logger t)
+  rawBlockEventStream <- Tezos.streamNewBlockEventsDurable $ tezos t
   blockEventStream <-
     gapFilledStream
-      (Tezos.materializeBlockEventDurable (tezos t) (logger t))
+      (Tezos.materializeBlockEventDurable $ tezos t)
       nextBlockNumber
       rawBlockEventStream
   -- Async persist block events and update block counter.

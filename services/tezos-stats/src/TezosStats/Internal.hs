@@ -24,8 +24,5 @@ data T = T
 --   rpcTransport = amqp
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket
-
 -- instance AccessControlClient.Has T where
 --   accessControlClient = accessControlClient
-instance HasLogger T where
-  logger _ = stderrLogger Warn

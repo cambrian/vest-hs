@@ -30,6 +30,7 @@ type TestService a = (Async' "ServiceThread" Void, a)
 
 instance Service a => Resource (TestService a) where
   type ResourceConfig (TestService a) = ServiceArgs a
+  resourceName = "TestService " <> namespace @a
   make args = do
     serviceVar <- newEmptyTMVarIO
     mainThread <- myThreadId

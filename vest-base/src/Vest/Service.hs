@@ -4,13 +4,11 @@ module Vest.Service
 
 import System.Console.CmdArgs as Vest.Service
 import Vest.Bridge
-import Vest.Logger
 import Vest.Prelude hiding (takeWhile)
 
 -- | TODO: Can we put shared argument logic here, like reading secret key files?
 class ( Data (ServiceArgs a)
       , HasNamespace a
-      , HasLogger a
       , Server a (RpcSpec a)
       , Publisher a (ValueSpec a)
       , Producer a (EventsProduced a)

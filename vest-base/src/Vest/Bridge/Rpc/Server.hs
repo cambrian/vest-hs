@@ -7,7 +7,6 @@ module Vest.Bridge.Rpc.Server
 
 import Vest.Bridge.Rpc.Auth
 import Vest.Bridge.Rpc.Prelude
-import Vest.Logger
 import Vest.Prelude
 
 type family Routes spec where
@@ -76,7 +75,6 @@ serve_ ::
      , HasRpcTransport transport t
      , HasNamespace t
      , KnownSymbol route
-     , HasLogger t
      )
   => ((res -> IO ()) -> IO x -> IO ())
      -- ^ x is typically res or Streamly.Serial res.
@@ -98,16 +96,16 @@ serve_ sender t handler =
             sender (sendToClient . RpcResponse) (handler claims req))
         [ Handler $ \(x :: AuthException) -> do
             sendToClient $ RpcResponseClientException $ show x
-            log t Warn $ show x
+            log Warn x
         , Handler $ \(x :: InvalidCallException) -> do
             sendToClient $ RpcResponseClientException $ show x
-            log t Warn $ show x
+            log Warn x
         , Handler $ \(x :: DeserializeException fmt) -> do
             sendToClient $ RpcResponseClientException $ show x
-            log t Warn $ show x
+            log Warn x
         , Handler $ \(x :: SomeException) -> do
             sendToClient RpcResponseServerException
-            log t Error $ show x
+            log Error x
             -- ^ TODO: Send a generic 503 type message instead of `show x` and add logging.
             -- throw x
         ]
@@ -115,7 +113,6 @@ serve_ sender t handler =
         sendToClient = respond . serialize' @fmt @(RpcResponse res)
 
 instance ( HasNamespace t
-         , HasLogger t
          , HasRpcTransport transport t
          , Deserializable fmt req
          , Serializable fmt (RpcResponse res)
@@ -126,7 +123,6 @@ instance ( HasNamespace t
     serve_ @fmt @() @transport @route directSender t (const handler)
 
 instance ( HasNamespace t
-         , HasLogger t
          , HasRpcTransport transport t
          , KnownNat timeout
          , Deserializable fmt req
@@ -146,7 +142,6 @@ instance ( HasNamespace t
       (const handler)
 
 instance ( HasNamespace t
-         , HasLogger t
          , HasAuthVerifier auth t
          , HasRpcTransport transport t
          , Deserializable fmt req
@@ -157,7 +152,6 @@ instance ( HasNamespace t
   serve t _ = serve_ @fmt @auth @transport @route directSender t
 
 instance ( HasNamespace t
-         , HasLogger t
          , HasAuthVerifier auth t
          , HasRpcTransport transport t
          , KnownNat timeout

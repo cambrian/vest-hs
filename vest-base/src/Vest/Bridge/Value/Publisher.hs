@@ -5,7 +5,6 @@ module Vest.Bridge.Value.Publisher
 
 import Vest.Bridge.Value.Prelude
 import Vest.DistributedLock
-import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
@@ -50,7 +49,6 @@ instance ( HasUniqueValueNames (a
     publish t (Proxy :: Proxy b) bValues
 
 instance ( HasNamespace t
-         , HasLogger t
          , HasValueTransport transport t
          , HasRedisConnection t
          , Serializable fmt a

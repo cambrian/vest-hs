@@ -6,7 +6,6 @@ module Vest.Bridge.Event.Consumer
 import Vest.Bridge.Event.Prelude
 import Vest.Bridge.Rpc
 import Vest.DistributedLock
-import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
@@ -36,7 +35,6 @@ instance ( Serializable fmt (IndexOf a)
          , Deserializable fmt a
          , HasNamespace server
          , HasNamespace t
-         , HasLogger t
          , HasRpcTransport transport t
          , HasEventTransport transport t
          , HasRedisConnection t

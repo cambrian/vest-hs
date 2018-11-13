@@ -31,9 +31,6 @@ instance HasEventTransport Amqp.T T where
 instance HasRedisConnection T where
   redisConnection = redis
 
-instance HasLogger T where
-  logger _ = stderrLogger Debug
-
 type EchoIntsDirectEndpoint transport
    = Endpoint 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
 

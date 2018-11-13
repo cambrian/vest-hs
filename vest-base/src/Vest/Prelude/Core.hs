@@ -79,7 +79,7 @@ import Data.String.Conversions as Vest.Prelude.Core hiding
 import Data.Tagged as Vest.Prelude.Core hiding (witness)
 import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
-import Data.Typeable (tyConModule, typeRepTyCon)
+import Data.Typeable (tyConModule, tyConName, typeRepTyCon)
 import Data.VectorSpace as Vest.Prelude.Core
 import qualified Foreign.StablePtr as StablePtr
 import Network.HostName (getHostName)
@@ -175,7 +175,7 @@ writeTMVar :: TMVar a -> a -> STM ()
 writeTMVar t a = tryTakeTMVar t >> putTMVar t a
 
 -- | Infix map, like (>>=) but pure.
--- Note: It's usually the case that f <$> a = a >>- f
+-- Note: It's usually the case that f <$> a === a >>- f
 (>>-) :: (Functor f) => f a -> (a -> b) -> f b
 (>>-) = flip map
 
@@ -201,6 +201,11 @@ moduleName ::
      forall t. Typeable t
   => Text
 moduleName = pack . tyConModule . typeRepTyCon $ typeRep (Proxy :: Proxy t)
+
+constructorName ::
+     forall t. Typeable t
+  => Text
+constructorName = pack . tyConName . typeRepTyCon $ typeRep (Proxy :: Proxy t)
 
 show :: Show a => a -> Text
 -- ^ Redefine show to be text only.
