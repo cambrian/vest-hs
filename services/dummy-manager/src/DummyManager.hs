@@ -84,6 +84,6 @@ instance Service T where
   init Args {port} f =
     with (WebSocket.localConfigOn port) $ \webSocket -> f $ T {webSocket}
   rpcHandlers _ = handlers
-  valuesPublished _ = ()
-  eventProducers _ = ()
   eventConsumers _ = ()
+  makePublishedValues _ = return ()
+  makeProducedEvents _ = return ()
