@@ -33,7 +33,7 @@ materializeBlockEventDurable connection blockNumber =
     materializeRetryPolicy -- Configurable retry limit?
     recoveryCases
     (const $
-     log Debug "Materializing block" blockNumber >>
+     log Debug "materializing block" blockNumber >>
      materializeBlockEvent_ connection (fromIntegral blockNumber))
 
 -- | Recovering when a chunked stream fails is messier than just polling every minute for a new
@@ -45,7 +45,7 @@ streamNewBlockEventsDurable connection = do
           blockRetryPolicy -- Configurable retry limit?
           recoveryCases
           (const $
-           log Debug "Producing block" blockNumber >>
+           log Debug "producing block" blockNumber >>
            materializeBlockEvent_ connection (fromIntegral blockNumber) >>=
            writeStream writer)
         -- ^ Eagerly runs (and probably fails the first time) each block, which is useful if we've
