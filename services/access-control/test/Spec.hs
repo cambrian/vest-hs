@@ -13,7 +13,7 @@ configFile :: FilePath
 configFile = "access-control/test/config.yaml"
 
 seedFile :: FilePath
-seedFile = "access-control/test/access-control-seed.yaml"
+seedFile = "access-control/test/seed.yaml"
 
 pubKeyFile :: FilePath
 pubKeyFile = "access-control/test/access-control-public-key.yaml"

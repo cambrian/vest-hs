@@ -153,7 +153,8 @@ makeBlockEventStream t = do
        createdAt <- now
        Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
-       void . atomically $ swapTMVar lastProducedBlockNumber newBlockNumber)
+       void . atomically $ swapTMVar lastProducedBlockNumber newBlockNumber
+       log t Debug ("persisted block number " <> show newBlockNumber))
     blockEventStream
   return blockEventStream
 
@@ -178,7 +179,7 @@ instance Service T where
   init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
     Config {dbConfig, amqpConfig, redisConfig, tezosConfig} <-
       Yaml.decodeFileThrow configFile
-    (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
+    seed <- Yaml.decodeFileThrow seedFile -- TODO: What's up with padding?
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
     lastProducedBlockNumber <- newEmptyTMVarIO
     lastConsumedBlockNumber <- newEmptyTMVarIO

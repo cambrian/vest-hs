@@ -1,7 +1,13 @@
 #!/bin/bash
 rm -f rabbit.log
+
+# Run Redis server.
 /usr/local/bin/redis-cli shutdown > /dev/null 2>&1
 /usr/local/bin/redis-server /usr/local/etc/redis.conf > ~/.vest-hs/redis-run.log &
+
+# Run Postgres server.
+pg_ctl -D /usr/local/var/postgres stop > /dev/null 2>&1
+pg_ctl -D /usr/local/var/postgres -l ~/.vest-hs/postgres-run.log start > ~/.vest-hs/postgres-start.log
 
 # To completely clear RabbitMQ:
 # rabbitmqctl stop_app
