@@ -18,7 +18,8 @@
 -- - Implement mergeStreams
 -- - Make pure filterMaps not buffered. This would be easiest to do by providing a functor instance
 --   for Stream buf, however doing so would also require a functor instance for buf, which currently
---   cannot be well-defined.
+--   cannot be well-defined. A slight refactor could enable a functor instance, but adding the
+--   filter part of filtermap would still be challenging.
 module Vest.Prelude.Stream
   ( Bufferable
   , QueueBuffer_
