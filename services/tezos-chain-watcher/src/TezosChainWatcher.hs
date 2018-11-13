@@ -188,7 +188,6 @@ instance Service T where
        tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      -- ^ TODO: How to keep this logger in sync with the one on the service?
       f $
         T
           { dbPool
