@@ -1,6 +1,5 @@
 module Vest.Bridge.Event.Consumer
-  ( ConsumerThreads
-  , Consumers
+  ( Consumers
   , Consumer(..)
   ) where
 
@@ -11,13 +10,6 @@ import Vest.Logger
 import Vest.Prelude
 import Vest.Redis
 
-type family ConsumerThreads spec where
-  ConsumerThreads () = ()
-  ConsumerThreads (Event_ _ _ _ _ a) = Async ()
-  ConsumerThreads (a
-                   :<|> b) = (ConsumerThreads a
-                              :<|> ConsumerThreads b)
-
 -- | Consumption begins from the provided index (inclusive).
 type family Consumers spec where
   Consumers () = ()
@@ -27,7 +19,7 @@ type family Consumers spec where
                         :<|> Consumers b)
 
 class Consumer t spec where
-  consume :: t -> Proxy spec -> Consumers spec -> IO (ConsumerThreads spec)
+  consume :: t -> Proxy spec -> Consumers spec -> IO ()
 
 instance Consumer t () where
   consume _ _ _ = return ()
@@ -36,9 +28,8 @@ instance (Consumer t a, Consumer t b) =>
          Consumer t (a
                      :<|> b) where
   consume t _ (aConsumers :<|> bConsumers) = do
-    aThreads <- consume t (Proxy :: Proxy a) aConsumers
-    bThreads <- consume t (Proxy :: Proxy b) bConsumers
-    return $ aThreads :<|> bThreads
+    consume t (Proxy :: Proxy a) aConsumers
+    consume t (Proxy :: Proxy b) bConsumers
 
 instance ( Serializable fmt (IndexOf a)
          , Deserializable fmt (RpcResponse a)
@@ -56,7 +47,7 @@ instance ( Serializable fmt (IndexOf a)
   consume t _ (getStartIndex, f) = do
     let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
         lockId = retag $ eventName <> "/consumer/" <> Tagged (namespace @t)
-    async $
+    void . async $
       withDistributedLock t lockId $ do
         let materialize =
               makeClient
