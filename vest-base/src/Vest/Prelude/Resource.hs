@@ -20,14 +20,14 @@ class Resource a where
   with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config =
     bracket
-      (do log Debug $ "acquiring resource: " <> resourceName @a
+      (do log Debug "Resource acquiring" $ resourceName @a
           r <- make config
-          log Debug $ "acquired resource: " <> resourceName @a
+          log Debug "Resource acquired" $ resourceName @a
           return r)
       (\r -> do
-         log Debug $ "releasing resource: " <> resourceName @a
+         log Debug "Resource releasing" $ resourceName @a
          cleanup r
-         log Debug $ "released resource: " <> resourceName @a)
+         log Debug "Resource released" $ resourceName @a)
   -- ^ TODO: Retry on exception.
 
 data PoolConfig a = PoolConfig

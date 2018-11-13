@@ -96,16 +96,16 @@ serve_ sender t handler =
             sender (sendToClient . RpcResponse) (handler claims req))
         [ Handler $ \(x :: AuthException) -> do
             sendToClient $ RpcResponseClientException $ show x
-            log Warn x
+            log Warn "Handler exception" x
         , Handler $ \(x :: InvalidCallException) -> do
             sendToClient $ RpcResponseClientException $ show x
-            log Warn x
+            log Warn "Handler exception" x
         , Handler $ \(x :: DeserializeException fmt) -> do
             sendToClient $ RpcResponseClientException $ show x
-            log Warn x
+            log Warn "Handler exception" x
         , Handler $ \(x :: SomeException) -> do
             sendToClient RpcResponseServerException
-            log Error x
+            log Error "Handler server exception" x
             -- ^ TODO: Send a generic 503 type message instead of `show x` and add logging.
             -- throw x
         ]

@@ -72,10 +72,11 @@ instance HasConnection (Pool Connection) where
 
 runLogged :: HasConnection t => t -> Pg a -> IO a
 runLogged t f =
-  withConnection t $ \c -> runBeamPostgresDebug (log Debug . pack) c f
+  withConnection t $ \c -> runBeamPostgresDebug (log Debug "Sql query") c f
 
 runLoggedTransaction :: HasConnection t => t -> Pg a -> IO a
 -- ^ TODO: Also log transaction open/close.
 runLoggedTransaction t f =
   withConnection t $ \c ->
-    withTransactionSerializable c $ runBeamPostgresDebug (log Debug . pack) c f
+    withTransactionSerializable c $
+    runBeamPostgresDebug (log Debug "Sql transaction") c f

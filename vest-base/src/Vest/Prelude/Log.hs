@@ -15,7 +15,7 @@ data LogLevel
 
 type LogMessage a = (Time, LogLevel, a)
 
-log :: Show a => LogLevel -> a -> IO ()
-log level a = do
+log :: Show a => LogLevel -> Text -> a -> IO ()
+log level context a = do
   time <- now
-  putErrText $ show (time, level, a)
+  putErrText $ show (time, level, context, a)
