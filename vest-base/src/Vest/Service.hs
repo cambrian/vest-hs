@@ -36,6 +36,7 @@ class ( Data (ServiceArgs a)
       produce a (Proxy :: Proxy (EventsProduced a)) $ eventProducers a
       consume a (Proxy :: Proxy (EventsConsumed a)) $ eventConsumers a
       f a
+      log Debug "service setup completed, now running forever" $ namespace @a
       blockForever
   start :: IO Void
   start = do

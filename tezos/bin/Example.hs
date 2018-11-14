@@ -6,7 +6,7 @@ import Vest
 publicTezosConfig :: ResourceConfig Http.T
 publicTezosConfig =
   Http.Config
-    {schemeType = Http.HttpsType, host = "rpc.tezrpc.me", port = 443, path = ""}
+    {scheme = Http.Https, host = "rpc.tezrpc.me", port = 443, path = ""}
 
 main :: IO ()
 main =
