@@ -65,92 +65,89 @@ bakingCycle cycleNumber = cycleNumber - 1 - frozenCycles
 snapshotCycle :: Int -> Int
 snapshotCycle cycleNumber = bakingCycle cycleNumber - snapshotLag
 
-getBlock :: Http.T -> Text -> IO Block
-getBlock connection hash =
-  Http.direct (Http.request (Proxy :: Proxy GetBlock) mainChain hash) connection
+getBlock :: Http.Client -> Text -> IO Block
+getBlock httpClient hash =
+  Http.request httpClient $
+  Http.buildRequest (Proxy :: Proxy GetBlock) mainChain hash
 
 -- | Will throw if targetBlockNumber is in the future.
-getBlockHash :: Http.T -> Int -> IO Text
-getBlockHash connection targetBlockNumber = do
-  latestBlock <- getBlock connection headBlockHash
+getBlockHash :: Http.Client -> Int -> IO Text
+getBlockHash httpClient targetBlockNumber = do
+  latestBlock <- getBlock httpClient headBlockHash
   -- Ugly let because of duplicate record fields.
   let Block {hash = latestBlockHash} = latestBlock
       BlockHeader {level = latestBlockNumber} = header latestBlock
       offset = latestBlockNumber - targetBlockNumber
   when (offset < 0) $ throw UnexpectedResultException
-  Http.direct
-    (Http.request
-       (Proxy :: Proxy GetBlockHash)
-       mainChain
-       (latestBlockHash <> "~" <> show offset))
-    connection
+  Http.request httpClient $
+    Http.buildRequest
+      (Proxy :: Proxy GetBlockHash)
+      mainChain
+      (latestBlockHash <> "~" <> show offset)
   -- ^ We query a given block number using hash HASH~X, which represents the block X levels before
   -- the block represented by HASH.
 
-getLastBlockHash :: Http.T -> Int -> IO Text
-getLastBlockHash connection cycleNumber =
-  getBlockHash connection (lastBlockNumberInCycle cycleNumber)
+getLastBlockHash :: Http.Client -> Int -> IO Text
+getLastBlockHash httpClient cycleNumber =
+  getBlockHash httpClient (lastBlockNumberInCycle cycleNumber)
 
 -- | Takes a while to run, but we only have to run this once per cycle.
-getSnapshotBlockHash :: Http.T -> Int -> Int -> IO Text
-getSnapshotBlockHash connection bakingCycleNumber snapshotCycleNumber = do
-  blockHashInBakingCycle <- getLastBlockHash connection bakingCycleNumber
+getSnapshotBlockHash :: Http.Client -> Int -> Int -> IO Text
+getSnapshotBlockHash httpClient bakingCycleNumber snapshotCycleNumber = do
+  blockHashInBakingCycle <- getLastBlockHash httpClient bakingCycleNumber
   indices <-
-    Http.direct
-      (Http.request
-         (Proxy :: Proxy GetBlockSnapshotIndices)
-         mainChain
-         blockHashInBakingCycle
-         bakingCycleNumber)
-      connection
+    Http.request httpClient $
+    Http.buildRequest
+      (Proxy :: Proxy GetBlockSnapshotIndices)
+      mainChain
+      blockHashInBakingCycle
+      bakingCycleNumber
   when (length indices /= 1) $ throw UnexpectedResultException
   snapshotIndex <- fromJustUnsafe UnexpectedResultException (head indices)
   -- ^ Baking cycle should only have one valid snapshot if it is complete.
   let snapshotBlockNumber =
         firstBlockNumberInCycle snapshotCycleNumber +
         snapshotOffset snapshotIndex
-  getBlockHash connection snapshotBlockNumber
+  getBlockHash httpClient snapshotBlockNumber
 
 -- | Calculates reward info based on a delegate, the last block in a baking cycle, and the snapshot
 -- block where baking rights were calculated for the baking cycle. This interface allows efficient
 -- requests, even though the snapshot block is redundant information.
-getRewardInfoSingle :: Http.T -> Text -> Text -> Text -> IO RewardInfo
-getRewardInfoSingle connection rewardBlockHash snapshotBlockHash delegateId = do
+getRewardInfoSingle :: Http.Client -> Text -> Text -> Text -> IO RewardInfo
+getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
   frozenBalanceCycles <-
-    Http.direct
-      (Http.request
-         (Proxy :: Proxy ListFrozenBalanceCycles)
-         mainChain
-         rewardBlockHash
-         delegateId)
-      connection
+    Http.request httpClient $
+    Http.buildRequest
+      (Proxy :: Proxy ListFrozenBalanceCycles)
+      mainChain
+      rewardBlockHash
+      delegateId
   frozenBalance <-
     fromJustUnsafe UnexpectedResultException (last frozenBalanceCycles)
   reward <-
     (+) <$> toFixedQtyUnsafe (rewards frozenBalance) <*>
     toFixedQtyUnsafe (fees frozenBalance)
   delegateSnapshot <-
-    Http.direct
-      (Http.request
-         (Proxy :: Proxy GetDelegate)
-         mainChain
-         snapshotBlockHash
-         delegateId)
-      connection
-  stakingBalance <- toFixedQtyUnsafe (staking_balance delegateSnapshot)
-  delegatedBalance <- toFixedQtyUnsafe (delegated_balance delegateSnapshot)
+    Http.request httpClient $
+    Http.buildRequest
+      (Proxy :: Proxy GetDelegate)
+      mainChain
+      snapshotBlockHash
+      delegateId
+  stakingBalance <- toFixedQtyUnsafe $ staking_balance delegateSnapshot
+  delegatedBalance <- toFixedQtyUnsafe $ delegated_balance delegateSnapshot
   let delegators = delegated_contracts delegateSnapshot
   delegations <-
     mapConcurrently
       (\delegator -> do
          size <-
-           Http.direct
-             (Http.request
+           Http.request
+             httpClient
+             (Http.buildRequest
                 (Proxy :: Proxy GetContractBalance)
                 mainChain
                 snapshotBlockHash
-                delegator)
-             connection >>=
+                delegator) >>=
            toFixedQtyUnsafe
          return DelegationInfo {delegator = Tagged delegator, size})
       delegators
@@ -225,10 +222,10 @@ recoveryCases =
       (\b e r -> log Debug "unexpected result" $ defaultLogMsg b e r)
   ]
 
-materializeBlockEvent_ :: Http.T -> Int -> IO BlockEvent
-materializeBlockEvent_ connection blockNumber = do
-  blockHash <- getBlockHash connection blockNumber
-  getBlock connection blockHash >>= toBlockEvent
+materializeBlockEvent_ :: Http.Client -> Int -> IO BlockEvent
+materializeBlockEvent_ httpClient blockNumber = do
+  blockHash <- getBlockHash httpClient blockNumber
+  getBlock httpClient blockHash >>= toBlockEvent
 
 materializeRetryPolicy :: RetryPolicy
 materializeRetryPolicy = exponentialBackoff $ 2 * 1000000

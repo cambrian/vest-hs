@@ -3,7 +3,7 @@ import Test (ignoreIO)
 import Tezos
 import Vest
 
-publicTezosConfig :: ResourceConfig Http.T
+publicTezosConfig :: ResourceConfig Http.Client
 publicTezosConfig =
   Http.Config
     {scheme = Http.Https, host = "rpc.tezrpc.me", port = 443, path = ""}

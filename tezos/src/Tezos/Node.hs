@@ -15,46 +15,46 @@ import Tezos.Prelude
 import Vest hiding (hash)
 
 getRewardInfo ::
-     Http.T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
-getRewardInfo connection cycleNumber delegateIds = do
+     Http.Client -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
+getRewardInfo httpClient cycleNumber delegateIds = do
   let rewardBlockCycle = bakingCycle (fromIntegral cycleNumber)
       snapshotBlockCycle = snapshotCycle (fromIntegral cycleNumber)
   when (snapshotBlockCycle < 0) $ throw UnexpectedResultException
-  rewardBlockHash <- getLastBlockHash connection rewardBlockCycle
+  rewardBlockHash <- getLastBlockHash httpClient rewardBlockCycle
   snapshotBlockHash <-
-    getSnapshotBlockHash connection rewardBlockCycle snapshotBlockCycle
+    getSnapshotBlockHash httpClient rewardBlockCycle snapshotBlockCycle
   mapM
-    (getRewardInfoSingle connection rewardBlockHash snapshotBlockHash . untag)
+    (getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash . untag)
     delegateIds
 
-materializeBlockEventDurable :: Http.T -> IndexOf BlockEvent -> IO BlockEvent
-materializeBlockEventDurable connection blockNumber =
+materializeBlockEventDurable ::
+     Http.Client -> IndexOf BlockEvent -> IO BlockEvent
+materializeBlockEventDurable httpClient blockNumber =
   recovering
     materializeRetryPolicy -- Configurable retry limit?
     recoveryCases
     (const $
      log Debug "materializing block" blockNumber >>
-     materializeBlockEvent_ connection (fromIntegral blockNumber))
+     materializeBlockEvent_ httpClient (fromIntegral blockNumber))
 
 -- | Recovering when a chunked stream fails is messier than just polling every minute for a new
 -- block, so we opt for the latter solution when streaming block events.
-streamNewBlockEventsDurable :: Http.T -> IO (Stream QueueBuffer BlockEvent)
-streamNewBlockEventsDurable connection = do
+streamNewBlockEventsDurable :: Http.Client -> IO (Stream QueueBuffer BlockEvent)
+streamNewBlockEventsDurable httpClient = do
   let streamFrom blockNumber writer = do
         recovering
           blockRetryPolicy -- Configurable retry limit?
           recoveryCases
           (const $
            log Debug "producing block" blockNumber >>
-           materializeBlockEvent_ connection (fromIntegral blockNumber) >>=
+           materializeBlockEvent_ httpClient (fromIntegral blockNumber) >>=
            writeStream writer)
         -- ^ Eagerly runs (and probably fails the first time) each block, which is useful if we've
         -- gotten behind due to a network outage. This works, but could be improved.
         streamFrom (blockNumber + 1) writer
   LevelInfo {level = startBlockNumber} <-
-    Http.direct
-      (Http.request (Proxy :: Proxy GetBlockLevel) mainChain headBlockHash)
-      connection
+    Http.request httpClient $
+    Http.buildRequest (Proxy :: Proxy GetBlockLevel) mainChain headBlockHash
   (writer, stream) <- newStream
   async $ streamFrom startBlockNumber writer
   return stream
