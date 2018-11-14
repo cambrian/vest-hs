@@ -146,17 +146,17 @@ makeBlockEventStream t = do
       (Tezos.materializeBlockEventDurable $ tezos t)
       nextBlockNumber
       rawBlockEventStream
-  -- Async persist block events and update block counter.
+  -- Synchronously persist block events.
   let T {lastProducedBlockNumber} = t
-  tapStream_
+  mapMStream
     (\blockEvent -> do
        createdAt <- now
        Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
        void . atomically $ swapTMVar lastProducedBlockNumber newBlockNumber
-       log Debug "persisted block number " newBlockNumber)
+       log Debug "persisted block number " newBlockNumber
+       return blockEvent)
     blockEventStream
-  return blockEventStream
 
 blockEventConsumer :: T -> Consumers BlockEvents
 blockEventConsumer t =
@@ -189,18 +189,21 @@ instance Service T where
        tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      f $
-        T
-          { dbPool
-          , amqp
-          , redis
-          , tezos
-          , accessControlClient
-          , lastProducedBlockNumber
-          , lastConsumedBlockNumber
-          , blockEventConsumerWriter
-          , blockEventConsumerStream
-          }
+      let t =
+            T
+              { dbPool
+              , amqp
+              , redis
+              , tezos
+              , accessControlClient
+              , lastProducedBlockNumber
+              , lastConsumedBlockNumber
+              , blockEventConsumerWriter
+              , blockEventConsumerStream
+              }
+      Db.runLogged t $ Db.ensurePostgresSchema checkedSchema
+      -- ^ This action should fail if data loss might occur.
+      f t
   rpcHandlers t = monitorOp t :<|> rewardInfo t :<|> originatedMapping t
   valuesPublished _ = ()
   eventProducers t = (makeBlockEventStream t, materializeBlockEvent t)

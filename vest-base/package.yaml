@@ -19,6 +19,7 @@ dependencies:
 - base64-bytestring       >= 1
 - beam-core               >= 0.7
 - beam-postgres           >= 0.3
+- beam-migrate            >= 0.3
 - blake2                  >= 0.2
 - bytestring              >= 0.10
 - concurrent-extra        >= 0.7
