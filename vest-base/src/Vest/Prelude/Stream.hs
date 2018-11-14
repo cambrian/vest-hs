@@ -195,7 +195,7 @@ data Stream buf a = Stream
 
 makeStreamReader :: Bufferable buf a => buf a -> IO (Stream buf a)
 makeStreamReader buf = do
-  readerThread <- myThreadId
+  thisThread <- myThreadId
   downstreams <- TMap.newIO
   downstreamCtr <- newTVarIO (0 :: Word)
   propagateLock <- Lock.new
@@ -226,9 +226,8 @@ makeStreamReader buf = do
         a <- MaybeT $ atomically read
         lift $ Lock.with propagateLock $
           -- Uncaught exceptions in impure streaming actions should cause the process to crash.
-          catchAny
-            (TMap.parallelFilterValuesM (`writeStream'` a) downstreams)
-            (throwTo readerThread)
+          TMap.parallelFilterValuesM (`writeStream'` a) downstreams `catchAny`
+          throwTo thisThread
         propagate
   propagator <-
     async $ do
