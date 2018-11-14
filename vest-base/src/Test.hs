@@ -26,25 +26,25 @@ testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =
   goldenVsStringDiff name diffCmd path . fmap convertString
 
-type TestService a = (Async' "ServiceThread" Void, a)
+newtype TestService a = TestService
+  { serviceThread :: Async Void
+  }
 
 instance Service a => Resource (TestService a) where
   type ResourceConfig (TestService a) = ServiceArgs a
   resourceName = "TestService " <> namespace @a
   make args = do
-    serviceVar <- newEmptyTMVarIO
     mainThread <- myThreadId
-    serviceThread <- async' $ run args (atomically . putTMVar serviceVar)
+    serviceThread <- async $ run @a args return
     exceptionWatcher <-
       async $ do
-        threadResult <- waitCatch (untag serviceThread)
+        threadResult <- waitCatch serviceThread
         case threadResult of
           Left exc -> evilThrowTo mainThread exc
           Right _ -> return ()
-    a <- atomically $ takeTMVar serviceVar
     cancel exceptionWatcher
-    return (serviceThread, a)
-  cleanup = cancel . untag . fst
+    return $ TestService {serviceThread}
+  cleanup = cancel . serviceThread
 
 testWithResource ::
      forall a. Resource a
@@ -52,19 +52,16 @@ testWithResource ::
   -> (IO a -> TestTree)
   -> TestTree
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
-testWithResource config = Tasty.withResource (make @a config) (cleanup @a)
+testWithResource config =
+  Tasty.withResource (makeLogged @a config) (cleanupLogged @a)
 
 testWithService ::
      forall a. Service a
   => ServiceArgs a
-  -> (IO a -> TestTree)
+  -> TestTree
   -> TestTree
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
-testWithService args f =
-  Tasty.withResource
-    (make @(TestService a) args)
-    (cleanup @(TestService a))
-    (f . fmap snd)
+testWithService args test = testWithResource @(TestService a) args (const test)
 
 ignoreIO :: a -> IO ()
 ignoreIO _ = return ()

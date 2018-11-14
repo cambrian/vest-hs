@@ -2,6 +2,7 @@ import qualified AccessControl
 import qualified AccessControl.Auth
 import qualified AccessControl.Client
 import qualified AccessControl.Permission as Permission
+import qualified AccessControl.TestClient as TestClient
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
@@ -21,14 +22,8 @@ pubKeyFile = "access-control/test/access-control-public-key.yaml"
 subjectsFile :: FilePath
 subjectsFile = "access-control/test/subjects.yaml"
 
-testClientSeed :: ByteString
--- ^ In practice you should read these from files. Doesn't really matter for tests.
-testClientSeed = "01234567890123456789012345678901"
-
-testServerSeed :: ByteString
--- ^ Not actually used, but required for accessControlClient setup
-testServerSeed = "0123456789012345678901234567890 "
-
+-- | This is a test server that has access controlled endpoints.
+-- Not to be confused with AccessControl.TestServer
 data TestServer = TestServer
   { amqp :: Amqp.T
   , accessControlClient :: AccessControl.Client.T
@@ -62,42 +57,9 @@ instance Service TestServer where
     accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
     with Amqp.localConfig $ \amqp -> do
       accessControlClient <-
-        AccessControl.Client.make amqp accessControlPublicKey testServerSeed
+        AccessControl.Client.make amqp accessControlPublicKey "testServerSeed"
       f $ TestServer {amqp, accessControlClient}
   rpcHandlers _ = const return :<|> const return
-  valuesPublished _ = ()
-  eventProducers _ = ()
-  eventConsumers _ = ()
-
-data TestClient = TestClient
-  { amqp :: Amqp.T
-  , accessControlClient :: AccessControl.Client.T
-  }
-
-instance HasNamespace TestClient where
-  namespace = "TestClient"
-
-instance HasRpcTransport Amqp.T TestClient where
-  rpcTransport = amqp
-
--- There has to be a way to automatically derive this... right?
-instance AccessControl.Client.Has TestClient where
-  accessControlClient = accessControlClient
-
-instance Service TestClient where
-  type ServiceArgs TestClient = ()
-  type RpcSpec TestClient = ()
-  type ValueSpec TestClient = ()
-  type EventsProduced TestClient = ()
-  type EventsConsumed TestClient = ()
-  defaultArgs = ()
-  init () f = do
-    accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
-    with Amqp.localConfig $ \amqp -> do
-      accessControlClient <-
-        AccessControl.Client.make amqp accessControlPublicKey testClientSeed
-      f $ TestClient {amqp, accessControlClient}
-  rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()
   eventConsumers _ = ()
@@ -115,22 +77,22 @@ generateSubjects =
   testCaseRaw "Generate Access Control Subjects" subjectsFile $ do
     let subjects =
           HashMap.fromList
-            [ ( fst $ seedKeyPair testClientSeed
+            [ ( TestClient.pubKey
               , AccessControl.Subject
-                  { AccessControl.name = namespace @TestClient
+                  { AccessControl.name = namespace @TestClient.T
                   , AccessControl.permissions = HashSet.fromList [Permission.B]
                   })
             ]
     return $ Yaml.encode subjects
 
-testPermitted :: IO TestClient -> TestTree
+testPermitted :: IO TestClient.T -> TestTree
 testPermitted t =
   testCase "Permitted" "access-control/test/permitted.gold" $ do
     t <- t
     let call = makeClient t (Proxy :: Proxy PermittedEndpoint)
     show <$> call ()
 
-testForbidden :: IO TestClient -> TestTree
+testForbidden :: IO TestClient.T -> TestTree
 testForbidden t =
   expectFail $
   testCase "Forbidden" "access-control/test/forbidden.gold" $ do
@@ -151,11 +113,14 @@ tests =
        , AccessControl.subjectsFile = subjectsFile
        , AccessControl.seedFile = seedFile
        }) $
-  const $
   testWithService @TestServer () $
-  const $
-  testWithService () $ \testClient ->
-    testGroup "Tests" [testPermitted testClient, testForbidden testClient]
+  testWithResource @TestClient.T Amqp.localConfig $ \testClient ->
+    testGroup
+      "Tests"
+      [ testCase "dummy" "access-control/test/dummy.gold" $ return "dummy"
+      , ignoreTest $
+        testGroup "Tests" [testPermitted testClient, testForbidden testClient]
+      ]
 
 main :: IO ()
 main = defaultMain $ testGroup "All" [generateDataFiles, tests]

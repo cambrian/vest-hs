@@ -10,7 +10,7 @@ data T
   = InvalidateAuthTokens
   | IssuePayout
   | B
-  deriving (Eq, Ord, Read, Show, Generic, Hashable, ToJSON, FromJSON)
+  deriving (Eq, Ord, Enum, Read, Show, Generic, Hashable, ToJSON, FromJSON)
 
 -- TODO: Can this boilerplate be inferred using GHC.Generics?
 instance Is 'InvalidateAuthTokens where
