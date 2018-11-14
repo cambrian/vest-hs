@@ -144,7 +144,7 @@ instance FromJSONKey ByteString where
     FromJSONKeyTextParser $ either fail pure . Base64.decode . encodeUtf8
 
 -- Symbols will show up in TS as string literals.
-instance (KnownSymbol s) => TypeScript (s :: Symbol) where
+instance (KnownSymbol s) => TypeScript s where
   getTypeScriptType s = "\"" ++ symbolVal s ++ "\""
 
 $(deriveTypeScript defaultOptions ''Tagged)

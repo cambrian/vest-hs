@@ -8,7 +8,7 @@ import Network.HTTP.Client hiding (Proxy)
 import Network.HTTP.Client.TLS
 import Servant.API as Reexports hiding (Stream)
 import Servant.Client hiding (ServantError(..))
-import Servant.Client as Reexports (ServantError(..))
+import Servant.Client as Reexports (Scheme(Http, Https), ServantError(..))
 import Vest.Prelude.Core
 import Vest.Prelude.Resource
 import Vest.Prelude.Stream
@@ -21,21 +21,21 @@ data HttpClientException =
 defaultRequestTimeout :: Duration
 defaultRequestTimeout = sec 5
 
--- Added because Scheme does not derive certain useful instances.
-data SchemeType
-  = HttpType
-  | HttpsType
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
+deriving instance Read Scheme
+
+instance ToJSON Scheme
+
+instance FromJSON Scheme
 
 data Config = Config
-  { schemeType :: SchemeType
+  { scheme :: Scheme
   , host :: Text' "Host"
   , port :: Word16' "Port"
   , path :: Text' "Path"
-  } deriving (Eq, Ord, Show, Read, Generic, Hashable, FromJSON, ToJSON)
+  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 data T = T
-  { schemeType :: SchemeType
+  { scheme :: Scheme
   , host :: Text' "Host"
   , port :: Word16' "Port"
   , path :: Text' "Path"
@@ -45,29 +45,25 @@ data T = T
 instance Resource T where
   type ResourceConfig T = Config
   make :: Config -> IO T
-  make Config {schemeType, host, port, path} = do
+  make Config {scheme, host, port, path} = do
     manager <-
       newManager
-        (case schemeType of
-           HttpType ->
+        (case scheme of
+           Http ->
              defaultManagerSettings
                {managerResponseTimeout = responseTimeoutNone}
-           HttpsType ->
+           Https ->
              tlsManagerSettings {managerResponseTimeout = responseTimeoutNone})
     -- ^ Override default timeout to none. Timeouts for HTTP requests should be explicitly
     -- specified in the code (and ideally at the handler level).
-    return T {schemeType, host, port, path, manager}
+    return T {scheme, host, port, path, manager}
   -- closeManager is apparently deprecated, since managers close on their own when they are no
   -- longer needed. Unclear how that works but okay.
   cleanup :: T -> IO ()
   cleanup _ = return ()
 
-schemeFromType :: SchemeType -> Scheme
-schemeFromType HttpType = Http
-schemeFromType HttpsType = Https
-
 call :: ClientM res -> T -> IO (Either ServantError res)
-call requester T { schemeType
+call requester T { scheme
                  , host = Tagged host
                  , port = Tagged port
                  , path = Tagged path
@@ -77,11 +73,7 @@ call requester T { schemeType
     requester
     (mkClientEnv
        manager
-       (BaseUrl
-          (schemeFromType schemeType)
-          (unpack host)
-          (fromIntegral port)
-          (unpack path)))
+       (BaseUrl scheme (unpack host) (fromIntegral port) (unpack path)))
 
 direct :: ClientM result -> T -> IO result
 direct requester t = do

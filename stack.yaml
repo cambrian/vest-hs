@@ -3,7 +3,7 @@ resolver: lts-12.14
 packages:
 - services
 - tezos
-- typescript
+# - typescript
 - vest-base
 
 extra-deps:
