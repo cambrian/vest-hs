@@ -124,8 +124,8 @@ uncaughtExceptionTest =
             s <- streamFromList @QueueBuffer @Int [1, 2, 3]
             consumeStream (\_ -> throw BugException) s
         wait badThread
-        return $ show False)
-    (\(_ :: SomeAsyncException) -> return $ show True)
+        return "Did not throw.")
+    (\(ex :: SomeAsyncException) -> return $ show ex)
 
 test_stream :: TestTree
 test_stream =

@@ -1,1 +1,0 @@
-module TezosDelegationCore.Api where

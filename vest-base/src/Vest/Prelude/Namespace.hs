@@ -3,8 +3,9 @@ module Vest.Prelude.Namespace
   ) where
 
 import Data.List (span)
-import Data.Text (takeWhile)
+import Data.Text (breakOn, stripPrefix, takeWhile)
 import Vest.Prelude.Core hiding (takeWhile)
+import Vest.Prelude.Serialize
 
 -- TODO: Make doctests for pretty serialization roundtrip, isstring.
 newtype Namespaced (ns :: k) a =
@@ -17,6 +18,18 @@ instance (IsString a) => IsString (Namespaced ns a) where
     let (ns, slasha) = span (/= '/') s
      in Namespaced (Tagged $ pack ns, fromString $ tailSafe slasha)
 
+instance (Serializable 'Pretty a) =>
+         Serializable 'Pretty (Namespaced ns a) where
+  serialize (Namespaced (ns, a)) =
+    serialize @'Pretty ns <> "/" <> serialize @'Pretty a
+
+instance (Deserializable 'Pretty a) =>
+         Deserializable 'Pretty (Namespaced ns a) where
+  deserialize text = do
+    let (ns, slasha) = breakOn "/" text
+    a <- stripPrefix "/" slasha >>= deserialize @'Pretty
+    return $ Namespaced (Tagged ns, a)
+
 getNamespace' :: Namespaced ns a -> Text' ns
 getNamespace' (Namespaced (ns, _)) = ns
 
@@ -28,8 +41,8 @@ class HasNamespace t where
   default namespace :: Typeable t =>
     Text
   namespace = takeWhile (/= '.') $ moduleName @t
-  -- ^ Turns DummyManager.Internal (for example) into DummyManager. We can reconsider this in the
-  -- future if we ever need multiple namespaces within the same root module name.
+  -- ^ Turns "DummyManager.Internal" (for example) into "DummyManager". We can reconsider this in
+  -- the future if we ever need multiple namespaces within the same root module name.
   namespace' :: forall ns. Text' ns
   namespace' = Tagged $ namespace @t
   namespaced :: forall ns a. a -> Namespaced ns a

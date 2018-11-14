@@ -1,5 +1,6 @@
 module Tezos.Node
   ( module Reexports
+  , makePayout
   , getRewardInfo
   , materializeBlockEventDurable
   , streamNewBlockEventsDurable
@@ -16,6 +17,9 @@ import Tezos.Node.Internal as Reexports
 import Tezos.Node.Prelude
 import Tezos.Prelude
 import Vest hiding (hash)
+
+makePayout :: Http.Client -> Address -> FixedQty XTZ -> IO OperationHash
+makePayout _httpClient _recipient _size = panic "unimplemented"
 
 getRewardInfo ::
      Http.Client -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]

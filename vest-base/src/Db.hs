@@ -82,7 +82,7 @@ data Config = Config
   , user :: String
   , password :: String
   , database :: String
-  } deriving (Generic, FromJSON, Show)
+  } deriving (Eq, Read, Show, Generic, FromJSON, ToJSON)
 
 pgConnectInfo :: Config -> Postgres.ConnectInfo
 pgConnectInfo Config {host, port, user, password, database} =

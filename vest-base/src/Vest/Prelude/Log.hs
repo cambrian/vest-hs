@@ -17,6 +17,7 @@ logLockRef :: IORef (TMVar ())
 {-# NOINLINE logLockRef #-}
 logLockRef = unsafePerformIO (newEmptyTMVarIO >>= newIORef)
 
+-- | TODO: replace with reading environment variable
 testModeRef :: IORef (TVar Bool)
 {-# NOINLINE testModeRef #-}
 testModeRef = unsafePerformIO (newTVarIO False >>= newIORef)
