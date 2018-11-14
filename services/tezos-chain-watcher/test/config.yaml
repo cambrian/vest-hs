@@ -14,7 +14,7 @@ redisConfig:
   host: "localhost"
   port: 6379
 tezosConfig:
-  schemeType: "HttpsType"
+  scheme: "Https"
   host: "rpc.tezrpc.me"
   port: 443
   path: ""

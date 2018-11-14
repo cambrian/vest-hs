@@ -1,4 +1,3 @@
--- TODO: Consider adding more data consistency checks in this service.
 module TezosChainWatcher
   ( module TezosChainWatcher
   ) where

@@ -113,6 +113,20 @@ takeStreamTest =
     tail <- listFromStream s
     return $ show (head, tail)
 
+uncaughtExceptionTest :: TestTree
+uncaughtExceptionTest =
+  testCase
+    "uncaught-exception"
+    "test/Vest/Prelude/Stream/uncaught-exception.gold" $
+  catchAsync
+    (do badThread <-
+          async $ do
+            s <- streamFromList @QueueBuffer @Int [1, 2, 3]
+            consumeStream (\_ -> throw BugException) s
+        wait badThread
+        return $ show False)
+    (\(_ :: SomeAsyncException) -> return $ show True)
+
 test_stream :: TestTree
 test_stream =
   testGroup
@@ -123,4 +137,5 @@ test_stream =
     , multiQueue
     , toFromList
     , takeStreamTest
+    , uncaughtExceptionTest
     ]
