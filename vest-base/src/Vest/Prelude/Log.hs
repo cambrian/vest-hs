@@ -4,7 +4,6 @@ module Vest.Prelude.Log
   ( LogLevel(..)
   , LogMessage
   , log
-  , setTestModeUnsafe
   ) where
 
 import Data.IORef
@@ -17,10 +16,6 @@ logLockRef :: IORef (TMVar ())
 {-# NOINLINE logLockRef #-}
 logLockRef = unsafePerformIO (newEmptyTMVarIO >>= newIORef)
 
-testModeRef :: IORef (TVar Bool)
-{-# NOINLINE testModeRef #-}
-testModeRef = unsafePerformIO (newTVarIO False >>= newIORef)
-
 withLogLock :: IO a -> IO a
 withLogLock action = do
   logLock <- readIORef logLockRef
@@ -29,13 +24,8 @@ withLogLock action = do
   void . atomically $ takeTMVar logLock
   return result
 
-setTestModeUnsafe :: Bool -> IO ()
-setTestModeUnsafe value = do
-  testMode <- readIORef testModeRef
-  atomically $ writeTVar testMode value
-
 getTestMode :: IO Bool
-getTestMode = readIORef testModeRef >>= readTVarIO
+getTestMode = isJust <$> lookupEnv "___TEST_MODE_DO_NOT_SET"
 
 data LogLevel
   = Debug

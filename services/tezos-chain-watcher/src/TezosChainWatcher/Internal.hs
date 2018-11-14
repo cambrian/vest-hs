@@ -4,8 +4,8 @@ module TezosChainWatcher.Internal
 
 import qualified AccessControl.Client
 import qualified Db
-import qualified Http
 import qualified Tezos
+import qualified Tezos.Node
 import qualified Transport.Amqp as Amqp
 import Vest
 
@@ -13,7 +13,7 @@ data T = T
   { dbPool :: Pool Db.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
-  , tezos :: Http.Client
+  , tezos :: Tezos.Node.T
   , accessControlClient :: AccessControl.Client.T
   , lastConsumedBlockNumber :: TMVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent

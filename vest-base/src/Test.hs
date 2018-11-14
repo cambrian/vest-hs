@@ -20,8 +20,7 @@ diffCmd :: FilePath -> FilePath -> [String]
 diffCmd ref new = ["diff", "-u", "--color", ref, new]
 
 testCase :: String -> FilePath -> IO Text -> TestTree
-testCase name path test =
-  testCaseRaw name path . fmap convertString $ (setTestModeUnsafe True >> test)
+testCase name path = testCaseRaw name path . fmap convertString
 
 testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =

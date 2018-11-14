@@ -50,6 +50,7 @@ import Protolude as Vest.Prelude.Core hiding
   , uninterruptibleMask
   , uninterruptibleMask_
   )
+import System.Environment as Vest.Prelude.Core
 import qualified TMap
 
 -- import qualified Control.Monad.Fail

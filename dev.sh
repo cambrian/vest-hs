@@ -21,7 +21,7 @@ pg_ctl -D /usr/local/var/postgres -l ~/.vest-hs/postgres-run.log start > ~/.vest
 /usr/local/sbin/rabbitmq-plugins enable rabbitmq_recent_history_exchange
 
 # TODO: Figure out how compile/re-run tests more selectively.
-stack test --fast --file-watch --no-rerun-tests
+(export ___TEST_MODE_DO_NOT_SET=true && stack test --fast --file-watch --no-rerun-tests)
 
 # Append this for hspec only:
 # --test-arguments '--rerun --failure-report=TESTREPORT --rerun-all-on-success'

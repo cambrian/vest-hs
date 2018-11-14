@@ -1,5 +1,6 @@
 module Tezos.Node
   ( module Reexports
+  , T(..)
   , getRewardInfo
   , materializeBlockEventDurable
   , streamNewBlockEventsDurable
@@ -17,9 +18,21 @@ import Tezos.Node.Prelude
 import Tezos.Prelude
 import Vest hiding (hash)
 
-getRewardInfo ::
-     Http.Client -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
-getRewardInfo httpClient cycleNumber delegateIds = do
+data T = T
+  { httpClient :: Http.Client
+  }
+
+instance Resource T where
+  type ResourceConfig T = Http.Config
+  make :: Http.Config -> IO T
+  make config = do
+    httpClient <- makeLogged @Http.Client config
+    return $ T {httpClient}
+  cleanup :: T -> IO ()
+  cleanup = cleanupLogged . httpClient
+
+getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
+getRewardInfo T {httpClient} cycleNumber delegateIds = do
   let rewardBlockCycle = bakingCycle (fromIntegral cycleNumber)
       snapshotBlockCycle = snapshotCycle (fromIntegral cycleNumber)
   when (snapshotBlockCycle < 0) $ throw UnexpectedResultException
@@ -30,9 +43,8 @@ getRewardInfo httpClient cycleNumber delegateIds = do
     (getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash . untag)
     delegateIds
 
-materializeBlockEventDurable ::
-     Http.Client -> IndexOf BlockEvent -> IO BlockEvent
-materializeBlockEventDurable httpClient blockNumber =
+materializeBlockEventDurable :: T -> IndexOf BlockEvent -> IO BlockEvent
+materializeBlockEventDurable T {httpClient} blockNumber =
   recovering
     materializeRetryPolicy -- Configurable retry limit?
     recoveryCases
@@ -43,8 +55,8 @@ materializeBlockEventDurable httpClient blockNumber =
 
 -- | Recovering when a chunked stream fails is messier than just polling every minute for a new
 -- block, so we opt for the latter solution when streaming block events.
-streamNewBlockEventsDurable :: Http.Client -> IO (Stream QueueBuffer BlockEvent)
-streamNewBlockEventsDurable httpClient = do
+streamNewBlockEventsDurable :: T -> IO (Stream QueueBuffer BlockEvent)
+streamNewBlockEventsDurable T {httpClient} = do
   let streamFrom blockNumber writer = do
         recovering
           blockRetryPolicy -- Configurable retry limit?
