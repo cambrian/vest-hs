@@ -47,11 +47,11 @@ class Resource a where
 
 -- | Require use of the logged versions of make/cleanup
 {-# WARNING
-make "use makeLogged"
+make "use `with resourceConfig $ resource -> ...` if you can, otherwise use `makeLogged`"
  #-}
 
 {-# WARNING
-cleanup "use cleanupLogged"
+cleanup "use `with resourceConfig $ resource -> ...` if you can, otherwise use `cleanupLogged`"
  #-}
 
 data PoolConfig a = PoolConfig
