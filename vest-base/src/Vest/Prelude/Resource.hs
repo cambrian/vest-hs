@@ -27,7 +27,7 @@ class Resource a where
     cleanup a
     log Debug "resource released" $ resourceName @a
   {-# MINIMAL make, cleanup | makeLogged, cleanupLogged #-}
-  -- ^ defining makeLogged and cleanupLogged allows you to skip the default logging
+  -- ^ Defining makeLogged and cleanupLogged allows you to skip the default logging.
   resourceName :: Text
   default resourceName :: Typeable a =>
     Text
@@ -43,7 +43,7 @@ data PoolConfig a = PoolConfig
   , resourceConfig :: ResourceConfig a
   }
 
--- | Get a resource from a pool with @withResource
+-- | Get a resource from a pool with @withResource.
 instance Resource a => Resource (Pool a) where
   type ResourceConfig (Pool a) = PoolConfig a
   resourceName = "Pool " <> resourceName @a

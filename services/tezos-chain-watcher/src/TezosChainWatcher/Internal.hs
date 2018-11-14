@@ -15,7 +15,6 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Http.T
   , accessControlClient :: AccessControl.Client.T
-  , lastProducedBlockNumber :: TMVar Word64
   , lastConsumedBlockNumber :: TMVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
   , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
