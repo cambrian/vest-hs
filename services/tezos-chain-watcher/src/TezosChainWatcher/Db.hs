@@ -3,17 +3,16 @@ module TezosChainWatcher.Db
   ) where
 
 import Db
-import qualified GHC.Base
 import qualified Tezos
 import Vest hiding (from, hash, to)
 
 data BlockT f = Block
-  { number :: C f Word64
-  , hash :: C f Tezos.BlockHash
-  , cycle :: C f Word64 -- Should be cycleNumber but Beam is not a fan.
-  , fee :: C f (FixedQty XTZ)
-  , time :: C f Time
-  , createdAt :: C f Time
+  { blockNumber :: C f Word64
+  , blockHash :: C f Tezos.BlockHash
+  , blockCycleNumber :: C f Word64
+  , blockFee :: C f (FixedQty XTZ)
+  , blockTime :: C f Time
+  , blockCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Block = BlockT Identity
@@ -27,7 +26,7 @@ deriving instance Show Block
 instance Table BlockT where
   data PrimaryKey BlockT f = BlockNumber (C f Word64)
                              deriving (Generic, Beamable)
-  primaryKey Block {number} = BlockNumber number
+  primaryKey Block {blockNumber} = BlockNumber blockNumber
 
 deriving instance Eq (PrimaryKey BlockT Identity)
 
@@ -35,41 +34,10 @@ deriving instance Read (PrimaryKey BlockT Identity)
 
 deriving instance Show (PrimaryKey BlockT Identity)
 
-data OperationKind
-  = OriginationKind
-  | TransactionKind
-  | OtherKind
-  deriving (Eq, Read, Show)
-
-instance HasSqlValueSyntax be GHC.Base.String =>
-         HasSqlValueSyntax be OperationKind where
-  sqlValueSyntax = autoSqlValueSyntax
-
-instance FromField OperationKind where
-  fromField f bs = do
-    valMaybe <- deserialize @'Haskell <$> fromField f bs
-    case valMaybe of
-      Nothing -> returnError ConversionFailed f "could not parse OperationKind"
-      Just val -> pure val
-
-instance FromBackendRow Postgres OperationKind
-
-instance (IsSql92DataTypeSyntax syntax, HasDefaultSqlDataType syntax Text) =>
-         HasDefaultSqlDataType syntax OperationKind where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy Text)
-
-instance ( IsSql92ColumnSchemaSyntax syntax
-         , HasDefaultSqlDataTypeConstraints syntax Text
-         ) =>
-         HasDefaultSqlDataTypeConstraints syntax OperationKind where
-  defaultSqlDataTypeConstraints _ _ =
-    defaultSqlDataTypeConstraints (Proxy :: Proxy Text) (Proxy :: Proxy syntax)
-
 data OperationT f = Operation
-  { hash :: C f Tezos.OperationHash
-  , blockNumber :: PrimaryKey BlockT f
-  , kind :: C f OperationKind
-  , createdAt :: C f Time
+  { operationHash :: C f Tezos.OperationHash
+  , operationBlockNumber :: PrimaryKey BlockT f
+  , operationCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Operation = OperationT Identity
@@ -84,7 +52,7 @@ instance Table OperationT where
   data PrimaryKey OperationT f = OperationHash (C f
                                                 Tezos.OperationHash)
                                  deriving (Generic, Beamable)
-  primaryKey Operation {hash} = OperationHash hash
+  primaryKey Operation {operationHash} = OperationHash operationHash
 
 deriving instance Eq (PrimaryKey OperationT Identity)
 
@@ -93,10 +61,10 @@ deriving instance Read (PrimaryKey OperationT Identity)
 deriving instance Show (PrimaryKey OperationT Identity)
 
 data OriginationT f = Origination
-  { hash :: PrimaryKey OperationT f
-  , originator :: C f Tezos.ImplicitAddress
-  , originated :: C f Tezos.OriginatedAddress
-  , createdAt :: C f Time
+  { originationHash :: PrimaryKey OperationT f
+  , originationOriginator :: C f Tezos.ImplicitAddress
+  , originationOriginated :: C f Tezos.OriginatedAddress
+  , originationCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Origination = OriginationT Identity
@@ -111,8 +79,14 @@ instance Table OriginationT where
   data PrimaryKey OriginationT f = OriginationHash (PrimaryKey
                                                     OperationT
                                                     f)
+                                                 (C f Tezos.ImplicitAddress)
+                                                 (C f Tezos.OriginatedAddress)
                                    deriving (Generic, Beamable)
-  primaryKey Origination {hash} = OriginationHash hash
+  primaryKey Origination { originationHash
+                         , originationOriginator
+                         , originationOriginated
+                         } =
+    OriginationHash originationHash originationOriginator originationOriginated
 
 deriving instance Eq (PrimaryKey OriginationT Identity)
 
@@ -121,12 +95,12 @@ deriving instance Read (PrimaryKey OriginationT Identity)
 deriving instance Show (PrimaryKey OriginationT Identity)
 
 data TransactionT f = Transaction
-  { hash :: PrimaryKey OperationT f
-  , from :: C f Tezos.Address
-  , to :: C f Tezos.Address
-  , fee :: C f (FixedQty XTZ)
-  , size :: C f (FixedQty XTZ)
-  , createdAt :: C f Time
+  { transactionHash :: PrimaryKey OperationT f
+  , transactionFrom :: C f Tezos.Address
+  , transactionTo :: C f Tezos.Address
+  , transactionFee :: C f (FixedQty XTZ)
+  , transactionSize :: C f (FixedQty XTZ)
+  , transactionCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Transaction = TransactionT Identity
@@ -142,7 +116,7 @@ instance Table TransactionT where
                                                     OperationT
                                                     f)
                                    deriving (Generic, Beamable)
-  primaryKey Transaction {hash} = TransactionHash hash
+  primaryKey Transaction {transactionHash} = TransactionHash transactionHash
 
 deriving instance Eq (PrimaryKey TransactionT Identity)
 
@@ -169,145 +143,154 @@ selectNextBlockNumber :: Pg Word64
 selectNextBlockNumber = do
   m <-
     runSelectReturningOne $
-    select $ aggregate_ max_ $ number <$> all_ (blocks schema)
+    select $ aggregate_ max_ $ blockNumber <$> all_ (blocks schema)
   return $
     case m of
       Just (Just num) -> num + 1
-      _ -> fromIntegral Tezos.firstBlockNumber + 1
+      _ -> fromIntegral Tezos.firstReadableBlockNumber + 1
 
 selectBlockInfoForOpHash ::
      Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
-selectBlockInfoForOpHash opHash =
+selectBlockInfoForOpHash hash =
   runSelectReturningOne $
   select $ do
     op <-
-      filter_ (\Operation {hash} -> hash ==. val_ opHash) $
+      filter_ (\Operation {operationHash} -> operationHash ==. val_ hash) $
       all_ (operations schema)
     block <- all_ (blocks schema)
-    let BlockNumber opBlockNumber = blockNumber op
-    guard_ (opBlockNumber ==. number block)
-    let Block {number, hash} = block
-    pure (number, hash)
+    guard_ (operationBlockNumber op ==. BlockNumber (blockNumber block))
+    let Block {blockNumber, blockHash} = block
+    pure (blockNumber, blockHash)
 
 selectOriginatedForImplicit ::
      Tezos.ImplicitAddress -> Pg [Tezos.OriginatedAddress]
-selectOriginatedForImplicit implicitAddress = do
-  originations <-
-    runSelectReturningList $
-    select $
-    filter_ (\Origination {originator} -> originator ==. val_ implicitAddress) $
-    all_ (originations schema)
-  return $ originated <$> originations
+selectOriginatedForImplicit implicitAddress =
+  runSelectReturningList $
+  select $ do
+    origination <-
+      filter_
+        (\Origination {originationOriginator} ->
+           originationOriginator ==. val_ implicitAddress) $
+      all_ (originations schema)
+    pure $ originationOriginated origination
 
-originationToOp :: Origination -> Tezos.Operation
-originationToOp Origination { hash = OperationHash opHash
-                            , originator
-                            , originated
-                            } =
-  Tezos.OriginationOp $ Tezos.Origination opHash originator originated
+toTezosOrigination :: Origination -> Tezos.Origination
+toTezosOrigination Origination { originationHash = OperationHash opHash
+                               , originationOriginator = originator
+                               , originationOriginated = originated
+                               } =
+  Tezos.Origination {hash = opHash, originator, originated}
 
-transactionToOp :: Transaction -> Tezos.Operation
-transactionToOp Transaction {hash = OperationHash opHash, from, to, fee, size} =
-  Tezos.TransactionOp $ Tezos.Transaction opHash from to fee size
+toTezosTransaction :: Transaction -> Tezos.Transaction
+toTezosTransaction Transaction { transactionHash = OperationHash opHash
+                               , transactionFrom = from
+                               , transactionTo = to
+                               , transactionFee = fee
+                               , transactionSize = size
+                               } =
+  Tezos.Transaction {hash = opHash, from, to, fee, size}
 
-toBlockEventOperation :: Operation -> Pg (Maybe Tezos.Operation)
-toBlockEventOperation Operation {hash, kind} =
-  case kind of
-    OriginationKind -> do
-      originationMaybe <-
-        runSelectReturningOne $
-        select $
-        filter_
-          (\Origination {hash = OperationHash opHash} -> opHash ==. val_ hash) $
-        all_ (originations schema)
-      return $ originationToOp <$> originationMaybe
-    TransactionKind -> do
-      transactionMaybe <-
-        runSelectReturningOne $
-        select $
-        filter_
-          (\Transaction {hash = OperationHash opHash} -> opHash ==. val_ hash) $
-        all_ (transactions schema)
-      return $ transactionToOp <$> transactionMaybe
-    OtherKind -> return $ Just $ Tezos.Other hash
+selectTezosOperationsByBlockNumber :: Word64 -> Pg [Tezos.OperationHash]
+selectTezosOperationsByBlockNumber number =
+  fmap operationHash <$>
+  runSelectReturningList
+    (select $
+     filter_ (\op -> operationBlockNumber op ==. val_ (BlockNumber number)) $
+     all_ (operations schema))
 
-selectBlockEventByNumber ::
-     Word64 -> Pg (Either InvalidStateException (Maybe Tezos.BlockEvent))
+selectTezosOriginationsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Origination]
+selectTezosOriginationsByOpHash hash =
+  fmap toTezosOrigination <$>
+  runSelectReturningList
+    (select $
+     filter_ (\og -> originationHash og ==. val_ (OperationHash hash)) $
+     all_ (originations schema))
+
+selectTezosTransactionsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Transaction]
+selectTezosTransactionsByOpHash hash =
+  fmap toTezosTransaction <$>
+  runSelectReturningList
+    (select $
+     filter_ (\og -> transactionHash og ==. val_ (OperationHash hash)) $
+     all_ (transactions schema))
+
+selectBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
 selectBlockEventByNumber queryNumber = do
   blockMaybe <-
     runSelectReturningOne $
     select $
-    filter_ (\block -> number block ==. val_ queryNumber) $ all_ (blocks schema)
+    filter_ (\block -> blockNumber block ==. val_ queryNumber) $
+    all_ (blocks schema)
   case blockMaybe of
-    Nothing -> return $ Right Nothing
-    Just Block {number, hash, cycle = cycleNumber, fee, time} -> do
-      blockOps <-
-        runSelectReturningList $
-        select $
-        filter_ (\op -> blockNumber op ==. BlockNumber (val_ queryNumber)) $
-        all_ (operations schema)
-      operations <- catMaybes <$> mapM toBlockEventOperation blockOps
-      if length blockOps /= length operations
-        then return $ Left InvalidStateException
-        else return $
-             Right . Just $
-             Tezos.BlockEvent {number, hash, cycleNumber, fee, time, operations}
+    Nothing -> return Nothing
+    Just (Block number hash cycleNumber fee time _) -> do
+      operations <- selectTezosOperationsByBlockNumber number
+      originations <- concatMapM selectTezosOriginationsByOpHash operations
+      transactions <- concatMapM selectTezosTransactionsByOpHash operations
+      return $
+        Just $
+        Tezos.BlockEvent
+          { number
+          , hash
+          , cycleNumber
+          , fee
+          , time
+          , operations
+          , originations
+          , transactions
+          }
 
--- TODO: Reduce verbose duplication. Also, batching?
-insertOp :: Word64 -> Time -> Tezos.Operation -> Pg ()
-insertOp blockNumber createdAt op =
-  case op of
-    Tezos.OriginationOp Tezos.Origination {hash, originator, originated} -> do
-      runInsert $
-        insert
-          (operations schema)
-          (insertValues
-             [ Operation
-                 hash
-                 (BlockNumber blockNumber)
-                 OriginationKind
-                 createdAt
-             ])
-          onConflictDefault
-      runInsert $
-        insert
-          (originations schema)
-          (insertValues
-             [Origination (OperationHash hash) originator originated createdAt])
-          onConflictDefault
-    Tezos.TransactionOp Tezos.Transaction {hash, from, to, fee, size} -> do
-      runInsert $
-        insert
-          (operations schema)
-          (insertValues
-             [ Operation
-                 hash
-                 (BlockNumber blockNumber)
-                 TransactionKind
-                 createdAt
-             ])
-          onConflictDefault
-      runInsert $
-        insert
-          (transactions schema)
-          (insertValues
-             [Transaction (OperationHash hash) from to fee size createdAt])
-          onConflictDefault
-    Tezos.Other hash ->
-      runInsert $
-      insert
-        (operations schema)
-        (insertValues
-           [Operation hash (BlockNumber blockNumber) OtherKind createdAt])
-        onConflictDefault
+insertTezosOpHashes :: Word64 -> Time -> [Tezos.OperationHash] -> Pg ()
+insertTezosOpHashes blockNumber createdAt tezosOpHashes =
+  runInsert $
+  insert
+    (operations schema)
+    (insertValues $
+     fmap
+       (\hash -> Operation hash (BlockNumber blockNumber) createdAt)
+       tezosOpHashes)
+    onConflictDefault
+
+insertTezosOriginations :: Time -> [Tezos.Origination] -> Pg ()
+insertTezosOriginations createdAt tezosOriginations =
+  runInsert $
+  insert
+    (originations schema)
+    (insertValues $
+     fmap
+       (\Tezos.Origination {hash, originator, originated} ->
+          Origination (OperationHash hash) originator originated createdAt)
+       tezosOriginations)
+    onConflictDefault
+
+insertTezosTransactions :: Time -> [Tezos.Transaction] -> Pg ()
+insertTezosTransactions createdAt tezosTransactions =
+  runInsert $
+  insert
+    (transactions schema)
+    (insertValues $
+     fmap
+       (\Tezos.Transaction {hash, from, to, fee, size} ->
+          Transaction (OperationHash hash) from to fee size createdAt)
+       tezosTransactions)
+    onConflictDefault
 
 insertBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
 insertBlockEvent createdAt blockEvent = do
-  let Tezos.BlockEvent {number, hash, cycleNumber, fee, time, operations} =
-        blockEvent
+  let Tezos.BlockEvent { number
+                       , hash
+                       , cycleNumber
+                       , fee
+                       , time
+                       , operations
+                       , originations
+                       , transactions
+                       } = blockEvent
   runInsert $
     insert
       (blocks schema)
       (insertValues [Block number hash cycleNumber fee time createdAt])
       onConflictDefault
-  mapM_ (insertOp number createdAt) operations
+  insertTezosOpHashes number createdAt operations
+  insertTezosOriginations createdAt originations
+  insertTezosTransactions createdAt transactions

@@ -52,19 +52,15 @@ data Transaction = Transaction
   , size :: FixedQty XTZ
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
-data Operation
-  = OriginationOp Origination
-  | TransactionOp Transaction
-  | Other OperationHash
-  deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
-
 data BlockEvent = BlockEvent
   { number :: Word64
   , hash :: BlockHash
   , cycleNumber :: Word64
   , fee :: FixedQty XTZ
   , time :: Time
-  , operations :: [Operation]
+  , operations :: [OperationHash]
+  , originations :: [Origination]
+  , transactions :: [Transaction]
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 instance Indexable BlockEvent where

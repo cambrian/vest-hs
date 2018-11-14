@@ -12,7 +12,7 @@ data T = T
   { db :: Db.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
-  , tezos :: Http.T
+  , tezos :: Http.Client
   , accessControlClient :: AccessControl.Client.T
   } deriving (HasNamespace)
 

@@ -61,7 +61,7 @@ data PoolConfig a = PoolConfig
   , resourceConfig :: ResourceConfig a
   }
 
--- | Get a resource from a pool with @withResource
+-- | Get a resource from a pool with @withResource.
 instance Resource a => Resource (Pool a) where
   type ResourceConfig (Pool a) = PoolConfig a
   resourceName = "Pool " <> resourceName @a

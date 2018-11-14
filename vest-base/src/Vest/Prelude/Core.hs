@@ -9,6 +9,7 @@ import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
 import Control.Concurrent.STM.TVar as Vest.Prelude.Core
 import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Vest.Prelude.Core
+import Control.Monad.Extra as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
 import Control.Monad.Trans.Maybe as Vest.Prelude.Core
 import Data.Aeson.TypeScript.TH

@@ -52,11 +52,6 @@ defaultArgs_ =
   summary "tezos-chain-watcher v0.1.0" &=
   program "tezos-chain-watcher"
 
-toOpHash :: Tezos.Operation -> Tezos.OperationHash
-toOpHash (Tezos.OriginationOp Tezos.Origination {hash}) = hash
-toOpHash (Tezos.TransactionOp Tezos.Transaction {hash}) = hash
-toOpHash (Tezos.Other hash) = hash
-
 -- TODO: Determine a good value for this.
 confirmationThreshold :: Word64
 confirmationThreshold = 5
@@ -100,9 +95,8 @@ monitorOp t opHash = do
       (\Tezos.BlockEvent {hash, number, operations} -> do
          startBlockNumber <- atomically $ readTMVar startBlockNumberVar
         -- ^ Wait for first item to be streamed.
-         let opHashes = fmap toOpHash operations
          when
-           (opHash `elem` opHashes)
+           (opHash `elem` operations)
            (void . atomically $ tryPutTMVar opBlockInfoVar (number, hash))
          opBlockInfoMaybe <- atomically $ tryReadTMVar opBlockInfoVar
          let response =
@@ -133,8 +127,8 @@ originatedMapping t = Db.runLogged t . selectOriginatedForImplicit
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
   atomically $
-    readTMVar (lastProducedBlockNumber t) >>= check . (blockNumber <=)
-  Db.runLogged t (selectBlockEventByNumber blockNumber) >>= fromRightOrThrowLeft >>=
+    readTMVar (lastConsumedBlockNumber t) >>= check . (blockNumber <=)
+  Db.runLogged t (selectBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
 
 makeBlockEventStream :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
@@ -147,14 +141,13 @@ makeBlockEventStream t = do
       nextBlockNumber
       rawBlockEventStream
   -- Synchronously persist block events.
-  let T {lastProducedBlockNumber} = t
   mapMStream
     (\blockEvent -> do
        createdAt <- now
-       Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
-       void . atomically $ swapTMVar lastProducedBlockNumber newBlockNumber
-       log Debug "persisted block number " newBlockNumber
+       log Debug "persisting block event" newBlockNumber
+       Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
+       log Debug "persisted block event" newBlockNumber
        return blockEvent)
     blockEventStream
 
@@ -163,7 +156,7 @@ blockEventConsumer t =
   let getInitialBlockNumber = Db.runLogged t selectNextBlockNumber
       T {blockEventConsumerWriter = writer, lastConsumedBlockNumber} = t
       updateBlockNumber Tezos.BlockEvent {number} =
-        atomically . swapTMVar lastConsumedBlockNumber $ number
+        atomically . writeTMVar lastConsumedBlockNumber $ number
       consumeBlockEvent x = updateBlockNumber x >> writeStream writer x
    in (getInitialBlockNumber, consumeBlockEvent)
 
@@ -181,7 +174,6 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     seed <- Yaml.decodeFileThrow seedFile -- TODO: What's up with padding?
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    lastProducedBlockNumber <- newEmptyTMVarIO
     lastConsumedBlockNumber <- newEmptyTMVarIO
     (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
     with
@@ -196,7 +188,6 @@ instance Service T where
               , redis
               , tezos
               , accessControlClient
-              , lastProducedBlockNumber
               , lastConsumedBlockNumber
               , blockEventConsumerWriter
               , blockEventConsumerStream

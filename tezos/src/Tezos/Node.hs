@@ -9,7 +9,10 @@ module Tezos.Node
 import Control.Retry
 import qualified Http
 import Tezos.Node.Internal
-import Tezos.Node.Internal as Reexports (blocksPerCycle, firstBlockNumber)
+import Tezos.Node.Internal as Reexports
+  ( blocksPerCycle
+  , firstReadableBlockNumber
+  )
 import Tezos.Node.Prelude
 import Tezos.Prelude
 import Vest hiding (hash)
@@ -33,9 +36,10 @@ materializeBlockEventDurable httpClient blockNumber =
   recovering
     materializeRetryPolicy -- Configurable retry limit?
     recoveryCases
-    (const $
-     log Debug "materializing block" blockNumber >>
-     materializeBlockEvent_ httpClient (fromIntegral blockNumber))
+    (const $ do
+       log Debug "materializing block event" blockNumber
+       event <- materializeBlockEvent_ httpClient (fromIntegral blockNumber)
+       log Debug "materialized block event" blockNumber >> return event)
 
 -- | Recovering when a chunked stream fails is messier than just polling every minute for a new
 -- block, so we opt for the latter solution when streaming block events.
@@ -45,10 +49,12 @@ streamNewBlockEventsDurable httpClient = do
         recovering
           blockRetryPolicy -- Configurable retry limit?
           recoveryCases
-          (const $
-           log Debug "producing block" blockNumber >>
-           materializeBlockEvent_ httpClient (fromIntegral blockNumber) >>=
-           writeStream writer)
+          (const $ do
+             log Debug "producing block event" blockNumber
+             event <-
+               materializeBlockEvent_ httpClient (fromIntegral blockNumber)
+             writeStream writer event
+             log Debug "produced block event" blockNumber)
         -- ^ Eagerly runs (and probably fails the first time) each block, which is useful if we've
         -- gotten behind due to a network outage. This works, but could be improved.
         streamFrom (blockNumber + 1) writer

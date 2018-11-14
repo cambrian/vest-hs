@@ -37,6 +37,9 @@ blocksPerSnapshot = 256
 firstBlockNumber :: Int
 firstBlockNumber = 1
 
+firstReadableBlockNumber :: Int
+firstReadableBlockNumber = 2
+
 frozenCycles :: Int
 frozenCycles = 5
 
@@ -160,25 +163,25 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
       , delegations
       }
 
--- Note that several operations might share a batch hash. Moreover, a single Node operation can
--- sometimes represent multiple logical operations (e.g. when an origination creates multiple
--- contracts). I'm still not 100% sure when this can happen, but the API suggests the possibility.
-toOperation :: Text -> Node.Operation -> IO [Operation]
-toOperation hash nodeOp =
+extractOriginations :: Text -> Node.Operation -> [Origination]
+extractOriginations hash nodeOp =
   case nodeOp of
     Node.OriginationOp Node.Origination { source = originator
                                         , metadata = OriginationMetadata {operation_result = OriginationResult {originated_contracts = contracts}}
                                         } ->
-      return $
       fmap
         (\originated ->
-           OriginationOp $
            Origination
              { hash = Tagged hash
              , originator = Tagged originator
              , originated = Tagged originated
              })
         (fromMaybe [] contracts)
+    _ -> []
+
+extractTransaction :: Text -> Node.Operation -> IO (Maybe Transaction)
+extractTransaction hash nodeOp =
+  case nodeOp of
     Node.TransactionOp Node.Transaction { source = from
                                         , destination = to
                                         , fee = feeRaw
@@ -186,22 +189,28 @@ toOperation hash nodeOp =
                                         } -> do
       fee <- toFixedQtyUnsafe feeRaw
       size <- toFixedQtyUnsafe sizeRaw
-      return
-        [ TransactionOp $
-          Transaction
-            {hash = Tagged hash, from = Tagged from, to = Tagged to, fee, size}
-        ]
-    _ -> return [Other $ Tagged hash]
+      return $
+        Just $
+        Transaction
+          {hash = Tagged hash, from = Tagged from, to = Tagged to, fee, size}
+    _ -> return Nothing
 
 toBlockEvent :: Block -> IO BlockEvent
 toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
   let BlockHeader {level = number, timestamp} = header
       BlockMetadata {level = LevelInfo {cycle = cycleNumber}} = metadata
-  operations <-
+      operationGroups = concat operationsRaw
+      operations = fmap (\OperationGroup {hash} -> Tagged hash) operationGroups
+      originations =
+        concatMap
+          (\OperationGroup {hash, contents = operations} ->
+             concatMap (extractOriginations hash) operations)
+          operationGroups
+  transactions <-
     concatMapM
-      (\OperationGroup {hash, contents} ->
-         concatMapM (toOperation hash) contents)
-      (concat operationsRaw)
+      (\OperationGroup {hash, contents = operations} ->
+         mapMaybeM (extractTransaction hash) operations)
+      operationGroups
   return
     BlockEvent
       { number = fromIntegral number -- Int to Word64.
@@ -210,6 +219,8 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
       , fee = opFee
       , time = timestamp
       , operations
+      , originations
+      , transactions
       }
 
 recoveryCases :: [RetryStatus -> Handler IO Bool]
@@ -225,7 +236,11 @@ recoveryCases =
 materializeBlockEvent_ :: Http.Client -> Int -> IO BlockEvent
 materializeBlockEvent_ httpClient blockNumber = do
   blockHash <- getBlockHash httpClient blockNumber
-  getBlock httpClient blockHash >>= toBlockEvent
+  block <- getBlock httpClient blockHash
+  let Block {header = BlockHeader {level}} = block
+  when (level /= blockNumber) $ throw UnexpectedResultException
+  -- ^ Sometimes the genesis block 0 randomly pops out of a query...
+  toBlockEvent block
 
 materializeRetryPolicy :: RetryPolicy
 materializeRetryPolicy = exponentialBackoff $ 2 * 1000000

@@ -13,9 +13,8 @@ data T = T
   { dbPool :: Pool Db.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
-  , tezos :: Http.T
+  , tezos :: Http.Client
   , accessControlClient :: AccessControl.Client.T
-  , lastProducedBlockNumber :: TMVar Word64
   , lastConsumedBlockNumber :: TMVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
   , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
