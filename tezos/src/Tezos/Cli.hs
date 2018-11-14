@@ -9,6 +9,3 @@ import Vest
 -- config information to extract keys from hardware/filesystem.
 makePayout :: Address -> FixedQty XTZ -> IO OperationHash
 makePayout _recipient _size = panic "unimplemented"
-
-injectOperation :: SignedOperationContents -> IO ()
-injectOperation _operation = panic "unimplemented"
