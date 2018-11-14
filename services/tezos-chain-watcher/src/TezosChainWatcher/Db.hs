@@ -10,7 +10,7 @@ import Vest hiding (from, hash, to)
 data BlockT f = Block
   { number :: C f Word64
   , hash :: C f Tezos.BlockHash
-  , cycleNumber :: C f Word64
+  , cycle :: C f Word64 -- Should be cycleNumber but Beam is not a fan.
   , fee :: C f (FixedQty XTZ)
   , time :: C f Time
   , createdAt :: C f Time
@@ -53,6 +53,17 @@ instance FromField OperationKind where
       Just val -> pure val
 
 instance FromBackendRow Postgres OperationKind
+
+instance (IsSql92DataTypeSyntax syntax, HasDefaultSqlDataType syntax Text) =>
+         HasDefaultSqlDataType syntax OperationKind where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy Text)
+
+instance ( IsSql92ColumnSchemaSyntax syntax
+         , HasDefaultSqlDataTypeConstraints syntax Text
+         ) =>
+         HasDefaultSqlDataTypeConstraints syntax OperationKind where
+  defaultSqlDataTypeConstraints _ _ =
+    defaultSqlDataTypeConstraints (Proxy :: Proxy Text) (Proxy :: Proxy syntax)
 
 data OperationT f = Operation
   { hash :: C f Tezos.OperationHash
@@ -148,8 +159,11 @@ data Schema f = Schema
 
 instance Database Postgres Schema
 
+checkedSchema :: CheckedDatabaseSettings Postgres Schema
+checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
+
 schema :: DatabaseSettings Postgres Schema
-schema = defaultDbSettings
+schema = unCheckDatabase checkedSchema
 
 selectNextBlockNumber :: Pg Word64
 selectNextBlockNumber = do
@@ -159,7 +173,7 @@ selectNextBlockNumber = do
   return $
     case m of
       Just (Just num) -> num + 1
-      _ -> fromIntegral Tezos.firstBlockNumber
+      _ -> fromIntegral Tezos.firstBlockNumber + 1
 
 selectBlockInfoForOpHash ::
      Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
@@ -226,7 +240,7 @@ selectBlockEventByNumber queryNumber = do
     filter_ (\block -> number block ==. val_ queryNumber) $ all_ (blocks schema)
   case blockMaybe of
     Nothing -> return $ Right Nothing
-    Just Block {number, hash, cycleNumber, fee, time} -> do
+    Just Block {number, hash, cycle = cycleNumber, fee, time} -> do
       blockOps <-
         runSelectReturningList $
         select $
