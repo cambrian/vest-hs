@@ -55,9 +55,9 @@ cleanup "use `with resourceConfig $ resource -> ...` if you can, otherwise use `
  #-}
 
 data PoolConfig a = PoolConfig
-  { idleTime :: Duration
-  , numResources :: Word
+  { numResources :: Word
   -- ^ numResources is technically per-stripe, but we just use 1 stripe.
+  , idleTime :: Duration
   , resourceConfig :: ResourceConfig a
   }
 

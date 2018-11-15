@@ -3,12 +3,12 @@ module TezosDelegationCore.Internal
   ) where
 
 import qualified AccessControl.Client
-import qualified Db
+import qualified Postgres
 import qualified Transport.Amqp as Amqp
 import Vest
 
 data T = T
-  { dbPool :: Pool Db.Connection
+  { dbPool :: Pool Postgres.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , accessControlClient :: AccessControl.Client.T
@@ -26,5 +26,5 @@ instance HasEventTransport Amqp.T T where
 instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient
 
-instance Db.HasConnection T where
+instance Postgres.HasConnection T where
   withConnection t = withResource $ dbPool t

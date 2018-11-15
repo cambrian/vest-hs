@@ -1,4 +1,4 @@
-module Db
+module Postgres
   ( module Reexports
   , Config(..)
   , HasConnection(..)

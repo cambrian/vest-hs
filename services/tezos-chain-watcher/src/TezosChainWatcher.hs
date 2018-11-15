@@ -4,8 +4,8 @@ module TezosChainWatcher
 
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import qualified Db
 import qualified Http
+import qualified Postgres as Pg
 import qualified Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
@@ -15,7 +15,7 @@ import Vest hiding (hash)
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: Db.Config
+  { dbConfig :: Pg.Config
   , amqpConfig :: Amqp.Config
   , redisConfig :: RedisConfig
   , tezosConfig :: Http.Config
@@ -107,7 +107,7 @@ monitorOp t opHash = do
   -- async so we do not miss stream events during the DB query). Then wait for the takeWhile to
   -- finish and close the monitorStream.
   async $ do
-    opBlockInfoMaybe <- Db.runLogged t (selectBlockInfoForOpHash opHash)
+    opBlockInfoMaybe <- Pg.runLogged t (selectBlockInfoForOpHash opHash)
     currentBlockNumber <- atomically (readTMVar lastConsumedBlockNumber)
     sequence_ $ void . atomically . putTMVar opBlockInfoVar <$> opBlockInfoMaybe
     writeStream writer $
@@ -121,18 +121,18 @@ rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 
 originatedMapping :: T -> Tezos.ImplicitAddress -> IO [Tezos.OriginatedAddress]
-originatedMapping t = Db.runLogged t . selectOriginatedForImplicit
+originatedMapping t = Pg.runLogged t . selectOriginatedForImplicit
 
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
   atomically $
     readTMVar (lastConsumedBlockNumber t) >>= check . (blockNumber <=)
-  Db.runLogged t (selectBlockEventByNumber blockNumber) >>=
+  Pg.runLogged t (selectBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
 
 makeBlockEventStream :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
 makeBlockEventStream t = do
-  nextBlockNumber <- Db.runLogged t selectNextBlockNumber
+  nextBlockNumber <- Pg.runLogged t selectNextBlockNumber
   rawBlockEventStream <- Tezos.streamNewBlockEventsDurable $ tezos t
   blockEventStream <-
     gapFilledStream
@@ -145,14 +145,14 @@ makeBlockEventStream t = do
        createdAt <- now
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
        log Debug "persisting block event" newBlockNumber
-       Db.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
+       Pg.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
        log Debug "persisted block event" newBlockNumber
        return blockEvent)
     blockEventStream
 
 blockEventConsumer :: T -> Consumers BlockEvents
 blockEventConsumer t =
-  let getInitialBlockNumber = Db.runLogged t selectNextBlockNumber
+  let getInitialBlockNumber = Pg.runLogged t selectNextBlockNumber
       T {blockEventConsumerWriter = writer, lastConsumedBlockNumber} = t
       updateBlockNumber Tezos.BlockEvent {number} =
         atomically . writeTMVar lastConsumedBlockNumber $ number
@@ -176,7 +176,7 @@ instance Service T where
     lastConsumedBlockNumber <- newEmptyTMVarIO
     (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
     with
-      (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig :<|>
+      (PoolConfig 5 (sec 30) dbConfig :<|> amqpConfig :<|> redisConfig :<|>
        tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
@@ -191,7 +191,7 @@ instance Service T where
               , blockEventConsumerWriter
               , blockEventConsumerStream
               }
-      Db.runLogged t $ Db.ensurePostgresSchema checkedSchema
+      Pg.runLogged t $ Pg.ensurePostgresSchema checkedSchema
       -- ^ This action should fail if data loss might occur.
       f t
   rpcHandlers t = monitorOp t :<|> rewardInfo t :<|> originatedMapping t

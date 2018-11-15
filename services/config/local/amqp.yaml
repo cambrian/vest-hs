@@ -1,0 +1,4 @@
+hostname: "localhost"
+virtualHost: "/"
+username: "guest"
+password: "guest"

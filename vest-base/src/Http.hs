@@ -59,12 +59,12 @@ instance Resource Client where
         call :: ClientM a -> IO a
         call req = runClientM req clientEnv >>= fromRightOrThrowLeft
     return $ Client call
-  -- closeManager is apparently deprecated, since managers close on their own when they are no
-  -- longer needed. Unclear how that works but okay.
   cleanup :: Client -> IO ()
+  -- ^ closeManager is apparently deprecated, since managers close on their own when they are no
+  -- longer needed. Unclear how that works but okay.
   cleanup _ = return ()
 
--- Renaming to make things less opaque for the user.
 buildRequest ::
      HasClient ClientM api => Proxy api -> Servant.Client.Client ClientM api
+-- ^ Renaming to make things less opaque for the user.
 buildRequest = client

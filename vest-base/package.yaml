@@ -60,6 +60,7 @@ dependencies:
 - tasty-expected-failure  >= 0.11
 - tasty-golden            >= 2.3
 - text                    >= 1.2
+- text-manipulate         >= 0.2
 - time                    >= 1.8
 - transformers            >= 0.5
 - unix                    >= 2.7
@@ -72,6 +73,7 @@ dependencies:
 - wai-websockets          >= 3.0
 - warp                    >= 3.2
 - websockets              >= 0.12
+- yaml                    >= 0.10
 
 # The default-extensions and ghc-options were inspired by this post (and modified for convenience):
 # https://lexi-lambda.github.io/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/

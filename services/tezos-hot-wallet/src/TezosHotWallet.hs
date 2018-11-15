@@ -4,8 +4,8 @@ module TezosHotWallet
 
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import qualified Db
 import qualified Http
+import qualified Postgres as Pg
 import TezosHotWallet.Api as TezosHotWallet
 import TezosHotWallet.Internal as TezosHotWallet
 import qualified Transport.Amqp as Amqp
@@ -13,7 +13,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: Db.Config
+  { dbConfig :: Pg.Config
   , amqpConfig :: Amqp.Config
   , redisConfig :: RedisConfig
   , tezosConfig :: Http.Config
@@ -66,10 +66,12 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    with (dbConfig :<|> amqpConfig :<|> redisConfig :<|> tezosConfig) $ \(db :<|> amqp :<|> redis :<|> tezos) -> do
+    with
+      (PoolConfig 5 (sec 30) dbConfig :<|> amqpConfig :<|> redisConfig :<|>
+       tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      f $ T {db, amqp, redis, tezos, accessControlClient}
+      f $ T {dbPool, amqp, redis, tezos, accessControlClient}
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = panic "unimplemented"

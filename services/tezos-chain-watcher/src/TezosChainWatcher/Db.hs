@@ -2,7 +2,7 @@ module TezosChainWatcher.Db
   ( module TezosChainWatcher.Db
   ) where
 
-import Db
+import Postgres
 import qualified Tezos
 import Vest hiding (from, hash, to)
 

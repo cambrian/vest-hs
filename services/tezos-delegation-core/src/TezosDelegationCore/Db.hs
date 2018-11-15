@@ -2,7 +2,7 @@ module TezosDelegationCore.Db
   ( module TezosDelegationCore.Db
   ) where
 
-import Db
+import Postgres
 import qualified Tezos
 import Vest
 

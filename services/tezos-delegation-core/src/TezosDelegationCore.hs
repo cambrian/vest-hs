@@ -5,7 +5,7 @@ module TezosDelegationCore
 -- import TezosDelegationCore.Api as TezosDelegationCore
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import qualified Db
+import qualified Postgres as Pg
 import qualified Tezos
 import TezosChainWatcher.Api
 import TezosDelegationCore.Db
@@ -16,7 +16,7 @@ import Vest
 import qualified Vest as CmdArgs (name)
 
 data Config = Config
-  { dbConfig :: Db.Config
+  { dbConfig :: Pg.Config
   , amqpConfig :: Amqp.Config
   , redisConfig :: RedisConfig
   } deriving (Generic, FromJSON)
@@ -61,8 +61,8 @@ blockConsumer :: T -> Consumers BlockEvents
 blockConsumer t =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
       handleCycle blockNum cycleNum cycleTime = do
-        Db.runLogged t (wasCycleAlreadyHandled cycleNum) >>= (`when` return ())
-        delegates <- Db.runLogged t $ delegatesTrackedAtCycle cycleNum
+        Pg.runLogged t (wasCycleAlreadyHandled cycleNum) >>= (`when` return ())
+        delegates <- Pg.runLogged t $ delegatesTrackedAtCycle cycleNum
         rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNum delegates
         time <- now
         forM_ rewardInfos $ \Tezos.RewardInfo { delegate
@@ -71,7 +71,7 @@ blockConsumer t =
                                               , delegatedBalance
                                               , delegations
                                               } -> do
-          Db.runLogged t (wasRewardAlreadyProcessed cycleNum delegate) >>=
+          Pg.runLogged t (wasRewardAlreadyProcessed cycleNum delegate) >>=
             (`when` return ())
           let delegateReward size =
                 fixedOf Round $
@@ -91,12 +91,12 @@ blockConsumer t =
                 fixedOf Ceiling $ rationalOf grossDelegateReward ^* platformFee
               paymentOwed = totalDividends + vestCut
           billId <- nextUUID
-          -- Insert entries into Db
-          Db.runLoggedTransaction t $ do
-            Db.runInsert $
-              Db.insert
+          -- Insert entries into Pg
+          Pg.runLoggedTransaction t $ do
+            Pg.runInsert $
+              Pg.insert
                 (bills schema)
-                (Db.insertValues
+                (Pg.insertValues
                    [ Bill
                        billId
                        (DelegateAddress delegate)
@@ -104,11 +104,11 @@ blockConsumer t =
                        time
                        Nothing
                    ])
-                Db.onConflictDefault
-            Db.runInsert $
-              Db.insert
+                Pg.onConflictDefault
+            Pg.runInsert $
+              Pg.insert
                 (rewards schema)
-                (Db.insertValues
+                (Pg.insertValues
                    [ Reward
                        (CycleNumber cycleNum)
                        (DelegateAddress delegate)
@@ -118,12 +118,12 @@ blockConsumer t =
                        (BillId billId)
                        time
                    ])
-                Db.onConflictDefault
+                Pg.onConflictDefault
             forM_ dividends_ $ \(delegator, size) ->
-              Db.runInsert $
-              Db.insert
+              Pg.runInsert $
+              Pg.insert
                 (dividends schema)
-                (Db.insertValues
+                (Pg.insertValues
                    [ Dividend
                        (CycleNumber cycleNum)
                        (DelegateAddress delegate)
@@ -133,33 +133,33 @@ blockConsumer t =
                        (PayoutId Nothing)
                        time
                    ])
-                Db.onConflictDefault
-        Db.runLogged t $
-          Db.runInsert $
-          Db.insert
+                Pg.onConflictDefault
+        Pg.runLogged t $
+          Pg.runInsert $
+          Pg.insert
             (cycles schema)
-            (Db.insertValues [Cycle cycleNum cycleTime blockNum blockNum time])
-            Db.onConflictDefault
+            (Pg.insertValues [Cycle cycleNum cycleTime blockNum blockNum time])
+            Pg.onConflictDefault
       handleBlock Tezos.BlockEvent {number = blockNumber, cycleNumber, time} = do
         handleCycle blockNumber cycleNumber time
-        Db.runLogged t $
-          Db.runUpdate $
-          Db.update
+        Pg.runLogged t $
+          Pg.runUpdate $
+          Pg.update
             (cycles schema)
-            (\Cycle {latestBlock} -> [latestBlock Db.<-. Db.val_ blockNumber])
-            (\Cycle {number} -> number Db.==. Db.val_ cycleNumber)
-   in (Db.runLogged t selectNextBlock, handleBlock)
+            (\Cycle {latestBlock} -> [latestBlock Pg.<-. Pg.val_ blockNumber])
+            (\Cycle {number} -> number Pg.==. Pg.val_ cycleNumber)
+   in (Pg.runLogged t selectNextBlock, handleBlock)
 
 paymentConsumer :: T -> Consumers PaymentEvents
 paymentConsumer t =
-  let nextPayment = Db.runLogged t selectNextPayment
+  let nextPayment = Pg.runLogged t selectNextPayment
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
       f PaymentEvent {idx, from, size, time = paymentTime} = do
-        Db.runLogged t (wasPaymentAlreadyHandled idx) >>= (`when` return ())
-        isPlatformDelegate_ <- Db.runLogged t $ isPlatformDelegate from
+        Pg.runLogged t (wasPaymentAlreadyHandled idx) >>= (`when` return ())
+        isPlatformDelegate_ <- Pg.runLogged t $ isPlatformDelegate from
         time <- now
         when isPlatformDelegate_ $ do
-          billsOutstanding_ <- Db.runLogged t $ billsOutstanding $ retag from -- TODO: better address management for union of implicit and originated addresses
+          billsOutstanding_ <- Pg.runLogged t $ billsOutstanding $ retag from -- TODO: better address management for union of implicit and originated addresses
           let (billIdsPaid, refund) =
                 foldr
                   (\Bill {id, size} (paid, rem) ->
@@ -170,7 +170,7 @@ paymentConsumer t =
                   billsOutstanding_
           dividendsPaid <-
             foldr (<>) [] <$>
-            mapM (Db.runLogged t . dividendsForBill) billIdsPaid
+            mapM (Pg.runLogged t . dividendsForBill) billIdsPaid
           -- Issue dividends and record issuance
           -- TODO: could group dividends by delegator
           forM_ dividendsPaid $ \dividend@Dividend {delegator, size, payout} -> do
@@ -178,46 +178,46 @@ paymentConsumer t =
             id <- nextUUID
             -- TODO: make sure this can't fail
             issuePayout $ PayoutRequest id (retag delegator) size
-            Db.runLoggedTransaction t $ do
-              Db.runInsert $
-                Db.insert
+            Pg.runLoggedTransaction t $ do
+              Pg.runInsert $
+                Pg.insert
                   (payouts schema)
-                  (Db.insertValues [Payout id time])
-                  Db.onConflictDefault
-              Db.runUpdate $
-                Db.save
+                  (Pg.insertValues [Payout id time])
+                  Pg.onConflictDefault
+              Pg.runUpdate $
+                Pg.save
                   (dividends schema)
                   (dividend {payout = PayoutId $ Just id} :: Dividend)
           -- Mark bills paid
-          Db.runLogged t $
-            Db.runUpdate $
-            Db.update
+          Pg.runLogged t $
+            Pg.runUpdate $
+            Pg.update
               (bills schema)
-              (\Bill {paidAt} -> [paidAt Db.<-. Db.val_ (Just paymentTime)])
-              (\Bill {id} -> id `Db.in_` (Db.val_ <$> billIdsPaid))
+              (\Bill {paidAt} -> [paidAt Pg.<-. Pg.val_ (Just paymentTime)])
+              (\Bill {id} -> id `Pg.in_` (Pg.val_ <$> billIdsPaid))
           -- Issue refund if necessary
           when (refund > fixedQty @Mutez 0) $ do
             refundId <- nextUUID
             issuePayout $ PayoutRequest refundId from refund
             -- ^ TODO: make sure this can't fail
-            Db.runLoggedTransaction t $ do
-              Db.runInsert $
-                Db.insert
+            Pg.runLoggedTransaction t $ do
+              Pg.runInsert $
+                Pg.insert
                   (payouts schema)
-                  (Db.insertValues [Payout refundId time])
-                  Db.onConflictDefault
-              Db.runInsert $
-                Db.insert
+                  (Pg.insertValues [Payout refundId time])
+                  Pg.onConflictDefault
+              Pg.runInsert $
+                Pg.insert
                   (refunds schema)
-                  (Db.insertValues
+                  (Pg.insertValues
                      [Refund (PaymentIndex idx) refund (PayoutId refundId) time])
-                  Db.onConflictDefault
-        Db.runLogged t $
-          Db.runInsert $
-          Db.insert
+                  Pg.onConflictDefault
+        Pg.runLogged t $
+          Pg.runInsert $
+          Pg.insert
             (payments schema)
-            (Db.insertValues [Payment idx time])
-            Db.onConflictDefault
+            (Pg.insertValues [Payment idx time])
+            Pg.onConflictDefault
    in (nextPayment, f)
 
 instance Service T where
@@ -233,7 +233,7 @@ instance Service T where
       Yaml.decodeFileThrow configFile
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    with (PoolConfig (sec 30) 5 dbConfig :<|> amqpConfig :<|> redisConfig) $ \(dbPool :<|> amqp :<|> redis) -> do
+    with (PoolConfig 5 (sec 30) dbConfig :<|> amqpConfig :<|> redisConfig) $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {dbPool, amqp, redis, accessControlClient}
