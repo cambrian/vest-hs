@@ -18,7 +18,7 @@ import Tezos.Node.Prelude
 import Tezos.Prelude
 import Vest hiding (hash)
 
-data T = T
+newtype T = T
   { httpClient :: Http.Client
   }
 
@@ -30,6 +30,9 @@ instance Resource T where
     return $ T {httpClient}
   cleanup :: T -> IO ()
   cleanup = cleanupLogged . httpClient
+
+instance Loadable T where
+  configName = "tezos-node"
 
 getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
 getRewardInfo T {httpClient} cycleNumber delegateIds = do

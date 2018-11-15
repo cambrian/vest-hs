@@ -11,40 +11,25 @@ import TezosChainWatcher.Api
 import TezosDelegationCore.Db
 import TezosDelegationCore.Internal as TezosDelegationCore
 import TezosHotWallet.Api
-import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
 
-data Config = Config
-  { dbConfig :: Pg.Config
-  , amqpConfig :: Amqp.Config
-  , redisConfig :: RedisConfig
-  } deriving (Generic, FromJSON)
-
 data Args = Args
-  { configFile :: FilePath
+  { configDir :: FilePath
   , seedFile :: FilePath
-  , accessControlPublicKeyFile :: FilePath
   } deriving (Data)
 
 defaultArgs_ :: Args
 defaultArgs_ =
   Args
-    { configFile =
-        "config.yaml" &= help "YAML config file" &= explicit &=
+    { configDir =
+        "services/config/local" &= help "Config directory" &= explicit &=
         CmdArgs.name "config" &=
         CmdArgs.name "c" &=
         typFile
     , seedFile =
         "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
         CmdArgs.name "d" &=
-        typFile
-    , accessControlPublicKeyFile =
-        "access-control-public-key.yaml" &=
-        help "YAML access control public key file" &=
-        explicit &=
-        CmdArgs.name "key" &=
-        CmdArgs.name "k" &=
         typFile
     } &=
   help "Payout and refund server for the delegation marketplace." &=
@@ -228,12 +213,10 @@ instance Service T where
                           :<|> PaymentEvents
   type RpcSpec T = ()
   defaultArgs = defaultArgs_
-  init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
-    Config {dbConfig, amqpConfig, redisConfig} <-
-      Yaml.decodeFileThrow configFile
+  init Args {configDir, seedFile} f = do
+    accessControlPublicKey <- load configDir
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
-    accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    with (PoolConfig 5 (sec 30) dbConfig :<|> amqpConfig :<|> redisConfig) $ \(dbPool :<|> amqp :<|> redis) -> do
+    withLoadable configDir $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {dbPool, amqp, redis, accessControlClient}

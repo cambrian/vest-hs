@@ -4,45 +4,27 @@ module TezosHotWallet
 
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import qualified Http
-import qualified Postgres as Pg
 import TezosHotWallet.Api as TezosHotWallet
 import TezosHotWallet.Internal as TezosHotWallet
-import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
 
-data Config = Config
-  { dbConfig :: Pg.Config
-  , amqpConfig :: Amqp.Config
-  , redisConfig :: RedisConfig
-  , tezosConfig :: Http.Config
-  } deriving (Generic, FromJSON)
-
 data Args = Args
-  { configFile :: FilePath
+  { configDir :: FilePath
   , seedFile :: FilePath
-  , accessControlPublicKeyFile :: FilePath
   } deriving (Data)
 
 defaultArgs_ :: Args
 defaultArgs_ =
   Args
-    { configFile =
-        "config.yaml" &= help "YAML config file" &= explicit &=
+    { configDir =
+        "services/config/local" &= help "Config directory" &= explicit &=
         CmdArgs.name "config" &=
         CmdArgs.name "c" &=
         typFile
     , seedFile =
         "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
         CmdArgs.name "d" &=
-        typFile
-    , accessControlPublicKeyFile =
-        "access-control-public-key.yaml" &=
-        help "YAML access control public key file" &=
-        explicit &=
-        CmdArgs.name "key" &=
-        CmdArgs.name "k" &=
         typFile
     } &=
   help "Server to transact Tezos on behalf of Vest." &=
@@ -61,14 +43,10 @@ instance Service T where
   type EventsConsumed T = ()
   type RpcSpec T = Api
   defaultArgs = defaultArgs_
-  init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
-    Config {dbConfig, amqpConfig, redisConfig, tezosConfig} <-
-      Yaml.decodeFileThrow configFile
+  init Args {configDir, seedFile} f = do
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
-    accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
-    with
-      (PoolConfig 5 (sec 30) dbConfig :<|> amqpConfig :<|> redisConfig :<|>
-       tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
+    accessControlPublicKey <- load configDir
+    withLoadable configDir $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {dbPool, amqp, redis, tezos, accessControlClient}

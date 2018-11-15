@@ -20,7 +20,7 @@ defaultArgs_ =
   Args
     { configDir =
         "services/config/local" &= help "Config directory" &= explicit &=
-        CmdArgs.name "configdir" &=
+        CmdArgs.name "config" &=
         CmdArgs.name "c" &=
         typDir
     , seedFile =

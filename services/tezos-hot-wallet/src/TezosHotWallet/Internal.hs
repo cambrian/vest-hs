@@ -3,8 +3,8 @@ module TezosHotWallet.Internal
   ) where
 
 import qualified AccessControl.Client
-import qualified Http
 import qualified Postgres
+import qualified Tezos.Node
 import qualified Transport.Amqp as Amqp
 import Vest
 
@@ -12,7 +12,7 @@ data T = T
   { dbPool :: Pool Postgres.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
-  , tezos :: Http.Client
+  , tezos :: Tezos.Node.T
   , accessControlClient :: AccessControl.Client.T
   } deriving (HasNamespace)
 

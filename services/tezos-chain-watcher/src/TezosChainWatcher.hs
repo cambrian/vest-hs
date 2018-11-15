@@ -4,47 +4,30 @@ module TezosChainWatcher
 
 import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
-import qualified Http
 import qualified Postgres as Pg
 import qualified Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
-import qualified Transport.Amqp as Amqp
 import Vest hiding (hash)
 import qualified Vest as CmdArgs (name)
 
-data Config = Config
-  { dbConfig :: Pg.Config
-  , amqpConfig :: Amqp.Config
-  , redisConfig :: RedisConfig
-  , tezosConfig :: Http.Config
-  } deriving (Generic, FromJSON)
-
 data Args = Args
-  { configFile :: FilePath
+  { configDir :: FilePath
   , seedFile :: FilePath
-  , accessControlPublicKeyFile :: FilePath
   } deriving (Data)
 
 defaultArgs_ :: Args
 defaultArgs_ =
   Args
-    { configFile =
-        "config.yaml" &= help "YAML config file" &= explicit &=
+    { configDir =
+        "services/config/local" &= help "Config directory" &= explicit &=
         CmdArgs.name "config" &=
         CmdArgs.name "c" &=
         typFile
     , seedFile =
         "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
         CmdArgs.name "d" &=
-        typFile
-    , accessControlPublicKeyFile =
-        "access-control-public-key.yaml" &=
-        help "YAML access control public key file" &=
-        explicit &=
-        CmdArgs.name "key" &=
-        CmdArgs.name "k" &=
         typFile
     } &=
   help "Monitoring server for the Tezos blockchain." &=
@@ -168,16 +151,12 @@ instance Service T where
                    :<|> RewardInfoEndpoint
                    :<|> OriginatedMappingEndpoint
   defaultArgs = defaultArgs_
-  init Args {configFile, seedFile, accessControlPublicKeyFile} f = do
-    Config {dbConfig, amqpConfig, redisConfig, tezosConfig} <-
-      Yaml.decodeFileThrow configFile
+  init Args {configDir, seedFile} f = do
     seed <- Yaml.decodeFileThrow seedFile -- TODO: What's up with padding?
-    accessControlPublicKey <- Yaml.decodeFileThrow accessControlPublicKeyFile
+    accessControlPublicKey <- load configDir
     lastConsumedBlockNumber <- newEmptyTMVarIO
     (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
-    with
-      (PoolConfig 5 (sec 30) dbConfig :<|> amqpConfig :<|> redisConfig :<|>
-       tezosConfig) $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
+    withLoadable configDir $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       let t =
