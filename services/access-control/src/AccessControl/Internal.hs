@@ -14,12 +14,6 @@ newtype ACPublicKey = ACPublicKey
   { unwrap :: PublicKey
   } deriving newtype (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
--- | sad but necessary for the loadable instance
-instance Resource ACPublicKey where
-  type ResourceConfig ACPublicKey = ACPublicKey
-  make = return
-  cleanup _ = return ()
-
 instance Loadable ACPublicKey where
   configName = "access-control/public-key"
 
@@ -34,6 +28,9 @@ data Subject = Subject
   { name :: Text
   , permissions :: HashSet Permission.T
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
+
+instance Loadable (HashMap PublicKey Subject) where
+  configName = "access-control/subjects"
 
 data T = T
   { subjects :: HashMap PublicKey Subject

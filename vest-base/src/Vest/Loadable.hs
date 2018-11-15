@@ -5,52 +5,64 @@
 --   ...
 module Vest.Loadable
   ( Loadable(..)
+  , LoadableData(..)
+  , LoadableResource(..)
   ) where
 
 import Data.Pool
 import qualified Data.Yaml as Yaml
 import Vest.Prelude
 
--- This can't be defined because GHC does not support constraints on associated types
--- instance {-# OVERLAPPABLE #-} FromJSON a => Resource a where
---   type ResourceConfig a = FilePath
---   make = Yaml.decodeFileThrow
---   cleanup _ = return ()
-class Resource a =>
-      Loadable a
-  where
+class Loadable a where
   configName :: Text
+  configFile :: Text
+  configFile = configName @a <> ".yaml"
+  configPath :: FilePath -> FilePath
+  configPath = (<> "/" <> convertString (configFile @a))
+
+class LoadableData a where
+  load :: FilePath -> IO a
+
+instance (Loadable a, FromJSON a) => LoadableData a where
+  load = Yaml.decodeFileThrow . configPath @a
+
+class Resource a =>
+      LoadableResource a
+  where
   makeLoadable :: FilePath -> IO a
-  default makeLoadable :: FromJSON (ResourceConfig a) =>
-    FilePath -> IO a
-  makeLoadable dir = do
-    let configFile = dir <> "/" <> convertString (configName @a) <> ".yaml"
-    config <- Yaml.decodeFileThrow configFile
-    makeLogged config
   withLoadable :: FilePath -> (a -> IO b) -> IO b
   withLoadable dir = bracket (makeLoadable dir) cleanupLogged
+
+instance {-# OVERLAPPABLE #-} ( Loadable a
+                              , Resource a
+                              , FromJSON (ResourceConfig a)
+                              ) =>
+                              LoadableResource a where
+  makeLoadable dir = do
+    config <- Yaml.decodeFileThrow $ configPath @a dir
+    makeLogged config
 
 data LoadablePoolConfig = LoadablePoolConfig
   { numResources :: Word
   , idleTime :: Duration
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
-instance Loadable a => Loadable (Pool a) where
-  configName = configName @a <> "-pool"
+instance (Loadable a, Resource a, FromJSON (ResourceConfig a)) =>
+         LoadableResource (Pool a) where
   makeLoadable dir = do
-    let poolFile = dir <> "/" <> convertString (configName @a) <> "-pool.yaml"
-    LoadablePoolConfig {numResources, idleTime} <- Yaml.decodeFileThrow poolFile
+    let poolPath = dir <> "/" <> convertString (configName @a) <> "-pool.yaml"
+    LoadablePoolConfig {numResources, idleTime} <- Yaml.decodeFileThrow poolPath
+    resourceConfig <- Yaml.decodeFileThrow $ configPath @a dir
     createPool
-      (makeLoadable dir)
+      (makeLogged resourceConfig)
       cleanupLogged
       1
       idleTime
       (fromIntegral numResources)
 
-instance (Loadable a, Loadable b) =>
-         Loadable (a
-                   :<|> b) where
-  configName = configName @a <> "-" <> configName @b
+instance (LoadableResource a, LoadableResource b) =>
+         LoadableResource (a
+                           :<|> b) where
   makeLoadable dir = do
     aThread <- async $ makeLoadable @a dir
     bThread <- async $ makeLoadable @b dir

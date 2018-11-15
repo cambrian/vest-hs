@@ -7,34 +7,22 @@ import AccessControl.Internal as AccessControl
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
-import qualified Transport.Amqp as Amqp
 import Vest
 import qualified Vest as CmdArgs (name)
 
-data Config = Config
-  { amqpConfig :: Amqp.Config
-  , redisConfig :: RedisConfig
-  } deriving (Generic, FromJSON)
-
 data Args = Args
-  { configFile :: FilePath
-  , subjectsFile :: FilePath
+  { configDir :: FilePath
   , seedFile :: FilePath
   } deriving (Data)
 
 defaultArgs_ :: Args
 defaultArgs_ =
   Args
-    { configFile =
-        "config.yaml" &= help "YAML config file" &= explicit &=
-        CmdArgs.name "config" &=
+    { configDir =
+        "services/config/local" &= help "Config directory" &= explicit &=
+        CmdArgs.name "configdir" &=
         CmdArgs.name "c" &=
-        typFile
-    , subjectsFile =
-        "subjects.yaml" &= help "Subjects file" &= explicit &=
-        CmdArgs.name "subjects" &=
-        CmdArgs.name "s" &=
-        typFile
+        typDir
     , seedFile =
         "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
         CmdArgs.name "d" &=
@@ -62,15 +50,14 @@ instance Service T where
   type EventsProduced T = ()
   type EventsConsumed T = ()
   defaultArgs = defaultArgs_
-  init Args {configFile, subjectsFile, seedFile} f = do
-    Config {amqpConfig, redisConfig} <- Yaml.decodeFileThrow configFile
-    (subjects :: HashMap PublicKey Subject) <- Yaml.decodeFileThrow subjectsFile
+  init Args {configDir, seedFile} f = do
+    subjects <- load configDir
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     let (publicKey, secretKey) = seedKeyPair seed
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
-    with (redisConfig :<|> amqpConfig) $ \(redis :<|> amqp) ->
+    withLoadable configDir $ \(amqp :<|> redis) ->
       f $
       T
         { subjects
