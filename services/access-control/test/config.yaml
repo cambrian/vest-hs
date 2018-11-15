@@ -1,9 +1,0 @@
-# Local defaults.
-amqpConfig:
-  hostname: "localhost"
-  virtualHost: "/"
-  username: "guest"
-  password: "guest"
-redisConfig:
-  host: "localhost"
-  port: 6379

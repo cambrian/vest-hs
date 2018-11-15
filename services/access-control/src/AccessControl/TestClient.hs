@@ -28,11 +28,8 @@ instance HasRpcTransport Amqp.T T where
 instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient
 
-instance Resource T where
-  type ResourceConfig T = Amqp.Config
-  make amqpConfig = do
-    amqp <- makeLogged amqpConfig
-    accessControlClient <-
-      AccessControl.Client.make amqp (panic "should be unused") seed
-    return $ T {amqp, accessControlClient}
-  cleanup = cleanupLogged . amqp
+make :: Amqp.T -> IO T
+make amqp = do
+  accessControlClient <-
+    AccessControl.Client.make amqp (panic "should be unused") seed
+  return $ T {amqp, accessControlClient}

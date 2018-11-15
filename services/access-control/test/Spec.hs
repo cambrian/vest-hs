@@ -10,17 +10,14 @@ import Test
 import qualified Transport.Amqp as Amqp
 import Vest
 
-configFile :: FilePath
-configFile = "access-control/test/config.yaml"
+testConfigDir :: FilePath
+testConfigDir = "access-control/test/config"
+
+localConfigDir :: FilePath
+localConfigDir = "config/local"
 
 seedFile :: FilePath
 seedFile = "access-control/test/seed.yaml"
-
-pubKeyFile :: FilePath
-pubKeyFile = "access-control/test/access-control-public-key.yaml"
-
-subjectsFile :: FilePath
-subjectsFile = "access-control/test/subjects.yaml"
 
 -- | This is a test server that has access controlled endpoints.
 -- Not to be confused with AccessControl.TestServer
@@ -54,8 +51,8 @@ instance Service TestServer where
   type EventsConsumed TestServer = ()
   defaultArgs = ()
   init () f = do
-    accessControlPublicKey <- Yaml.decodeFileThrow pubKeyFile
-    with Amqp.localConfig $ \amqp -> do
+    accessControlPublicKey <- load testConfigDir
+    withLoadable localConfigDir $ \amqp -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey "testServerSeed"
       f $ TestServer {amqp, accessControlClient}
@@ -67,14 +64,18 @@ instance Service TestServer where
 generatePublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file
 generatePublicKey =
-  testCaseRaw "Generate Access Control Public Key" pubKeyFile $ do
+  testCaseRaw
+    "Generate Access Control Public Key"
+    "access-control/test/config/access-control/public-key.yaml" $ do
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
-    return $ Yaml.encode $ fst $ seedKeyPair seed
+    return $ Yaml.encode $ AccessControl.ACPublicKey $ fst $ seedKeyPair seed
 
 generateSubjects :: TestTree
 -- ^ somewhat hacky way to generate the subjects.yaml file
 generateSubjects =
-  testCaseRaw "Generate Access Control Subjects" subjectsFile $ do
+  testCaseRaw
+    "Generate Access Control Subjects"
+    "access-control/test/config/access-control/subjects.yaml" $ do
     let subjects =
           HashMap.fromList
             [ ( TestClient.pubKey
@@ -109,18 +110,20 @@ tests =
   testWithService
     @AccessControl.T
     (AccessControl.Args
-       { AccessControl.configFile = configFile
-       , AccessControl.subjectsFile = subjectsFile
+       { AccessControl.configDir = testConfigDir
        , AccessControl.seedFile = seedFile
        }) $
   testWithService @TestServer () $
-  testWithResource @TestClient.T Amqp.localConfig $ \testClient ->
-    testGroup
-      "Tests"
-      [ testCase "dummy" "access-control/test/dummy.gold" $ return "dummy"
-      , ignoreTest $
-        testGroup "Tests" [testPermitted testClient, testForbidden testClient]
-      ]
+  testWithLoadableResource localConfigDir $ \amqp ->
+    let testClient = amqp >>= TestClient.make
+     in testGroup
+          "Tests"
+          [ testCase "dummy" "access-control/test/dummy.gold" $ return "dummy"
+          , ignoreTest $
+            testGroup
+              "Tests"
+              [testPermitted testClient, testForbidden testClient]
+          ]
 
 main :: IO ()
 main = defaultMain $ testGroup "All" [generateDataFiles, tests]

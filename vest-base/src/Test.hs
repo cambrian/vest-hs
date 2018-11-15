@@ -3,6 +3,7 @@ module Test
   , testCase
   , testCaseRaw
   , testWithResource
+  , testWithLoadableResource
   , testWithService
   , ignoreIO
   , TestService
@@ -54,6 +55,15 @@ testWithResource ::
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
 testWithResource config =
   Tasty.withResource (makeLogged @a config) (cleanupLogged @a)
+
+testWithLoadableResource ::
+     forall a. LoadableResource a
+  => FilePath
+  -> (IO a -> TestTree)
+  -> TestTree
+-- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
+testWithLoadableResource configDir =
+  Tasty.withResource (makeLoadable @a configDir) (cleanupLogged @a)
 
 testWithService ::
      forall a. Service a

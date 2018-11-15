@@ -51,9 +51,10 @@ instance Service T where
   type EventsConsumed T = ()
   defaultArgs = defaultArgs_
   init Args {configDir, seedFile} f = do
-    subjects <- load configDir
     (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
     let (publicKey, secretKey) = seedKeyPair seed
+        acPublicKey = ACPublicKey publicKey
+    subjects <- load configDir
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
@@ -63,7 +64,7 @@ instance Service T where
         { subjects
         , amqp
         , redis
-        , publicKey = ACPublicKey publicKey
+        , publicKey = acPublicKey
         , secretKey
         , minTokenTime
         , bumpMinTokenTime
