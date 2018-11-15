@@ -76,7 +76,7 @@ instance Service T where
         { subjects
         , amqp
         , redis
-        , publicKey
+        , publicKey = ACPublicKey publicKey
         , secretKey
         , minTokenTime
         , bumpMinTokenTime

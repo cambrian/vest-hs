@@ -121,3 +121,6 @@ ensurePostgresSchema schema = do
   case verifyExists of
     VerificationSucceeded -> return ()
     VerificationFailed _ -> createSchema Postgres.migrationBackend schema
+
+instance Loadable Connection where
+  configName = "postgres"

@@ -8,17 +8,18 @@ module Vest.Loadable
   ) where
 
 import Data.Pool
-import Data.Text.Manipulate
 import qualified Data.Yaml as Yaml
 import Vest.Prelude
 
+-- This can't be defined because GHC does not support constraints on associated types
+-- instance {-# OVERLAPPABLE #-} FromJSON a => Resource a where
+--   type ResourceConfig a = FilePath
+--   make = Yaml.decodeFileThrow
+--   cleanup _ = return ()
 class Resource a =>
       Loadable a
   where
   configName :: Text
-  default configName :: HasNamespace a =>
-    Text
-  configName = toSpinal $ namespace @a
   makeLoadable :: FilePath -> IO a
   default makeLoadable :: FromJSON (ResourceConfig a) =>
     FilePath -> IO a

@@ -60,7 +60,6 @@ dependencies:
 - tasty-expected-failure  >= 0.11
 - tasty-golden            >= 2.3
 - text                    >= 1.2
-- text-manipulate         >= 0.2
 - time                    >= 1.8
 - transformers            >= 0.5
 - unix                    >= 2.7

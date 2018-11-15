@@ -10,6 +10,7 @@ import Database.Redis
 import Database.Redis as Vest.Redis (ConnectInfo(..))
 import qualified GHC.Base
 import qualified Network.Socket.Internal as Internal (PortNumber(..))
+import Vest.Loadable
 import Vest.Prelude
 
 data RedisTransactionException =
@@ -48,3 +49,6 @@ instance Resource Connection where
   make = checkedConnect . toConnectInfo
   cleanup :: Connection -> IO ()
   cleanup = disconnect
+
+instance Loadable Connection where
+  configName = "redis"

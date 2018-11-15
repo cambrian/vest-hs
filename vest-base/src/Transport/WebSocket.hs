@@ -213,3 +213,6 @@ instance RpcTransport T where
 
 instance HasRpcTransport T T where
   rpcTransport = identity
+
+instance Loadable T where
+  configName = "websocket"

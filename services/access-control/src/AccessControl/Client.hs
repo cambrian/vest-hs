@@ -12,15 +12,15 @@ import Vest
 -- Contains logic for both signing and verification. Not split up because most services will
 -- probably use both functions.
 data T = T
-  { accessControlPublicKey :: PublicKey
+  { acPublicKey :: AccessControl.ACPublicKey
   , publicKey :: PublicKey
   , secretKey :: SecretKey
   , readToken :: STM AccessControl.SignedToken
   , readMinTokenTime :: STM Time
   }
 
-make :: Amqp.T -> PublicKey -> ByteString -> IO T
-make amqp accessControlPublicKey seed = do
+make :: Amqp.T -> AccessControl.ACPublicKey -> ByteString -> IO T
+make amqp acPublicKey seed = do
   let (publicKey, secretKey) = seedKeyPair seed
       getToken =
         makeClient amqp (Proxy :: Proxy AccessControl.TokenEndpoint) publicKey
@@ -30,7 +30,7 @@ make amqp accessControlPublicKey seed = do
   void $ streamNext tokens
   return $
     T
-      { accessControlPublicKey
+      { acPublicKey
       , publicKey
       , secretKey
       , readToken = justSTM $ readLatestValueSTM tokens
@@ -44,8 +44,8 @@ instance {-# OVERLAPPING #-} Permission.Is p => HasAuthSigner (Auth.T p) T where
 
 instance {-# OVERLAPPING #-} Permission.Is p =>
                              HasAuthVerifier (Auth.T p) T where
-  authVerifier T {accessControlPublicKey, readMinTokenTime} =
-    Auth.Verifier accessControlPublicKey readMinTokenTime
+  authVerifier T {acPublicKey, readMinTokenTime} =
+    Auth.Verifier acPublicKey readMinTokenTime
 
 -- This is a shorthand to allow service implementers to write:
 --

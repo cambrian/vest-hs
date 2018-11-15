@@ -60,7 +60,7 @@ instance Service T where
         { subjects = HashMap.fromList []
         , amqp
         , redis
-        , publicKey
+        , publicKey = ACPublicKey publicKey
         , secretKey
         , minTokenTime
         , bumpMinTokenTime
