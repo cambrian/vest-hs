@@ -1,7 +1,6 @@
 module Transport.Amqp
   ( T(..)
   , Config(..)
-  , localConfig
   ) where
 
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
@@ -30,15 +29,6 @@ data Config = Config
   , username :: Text
   , password :: Text
   } deriving (Generic, FromJSON)
-
-localConfig :: Config
-localConfig =
-  Config
-    { hostname = "localhost"
-    , virtualHost = "/"
-    , username = "guest"
-    , password = "guest"
-    }
 
 -- Has logic for being both a server and client. Probably not worth separating.
 data T = T

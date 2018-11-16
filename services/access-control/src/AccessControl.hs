@@ -29,7 +29,6 @@ instance Service T where
   init configPaths f = do
     (seed :<|> subjects) <- load configPaths
     let (publicKey, secretKey) = seedKeyPair seed
-        acPublicKey = ACPublicKey publicKey
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
@@ -39,7 +38,7 @@ instance Service T where
         { subjects
         , amqp
         , redis
-        , publicKey = acPublicKey
+        , publicKey = ACPublicKey publicKey
         , secretKey
         , minTokenTime
         , bumpMinTokenTime

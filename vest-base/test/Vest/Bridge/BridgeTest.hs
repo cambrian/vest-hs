@@ -56,11 +56,20 @@ type TestRpcApi transport
      :<|> EchoTextsStreamingEndpoint transport
      :<|> TimeoutEndpoint transport
 
+amqpConfig :: Amqp.Config
+amqpConfig =
+  Amqp.Config
+    { hostname = "localhost"
+    , virtualHost = "/"
+    , username = "guest"
+    , password = "guest"
+    }
+
 makeWebSocketConfig :: IO WebSocket.Config
 makeWebSocketConfig = do
   portNum <- nextCount >>- (+ 13000) . fromIntegral
   return $
-    WebSocket.localConfig
+    WebSocket.Config
       { WebSocket.servers =
           [ ( Tagged $ namespace @T
             , WebSocket.ServerInfo
@@ -70,6 +79,7 @@ makeWebSocketConfig = do
                 })
           ]
       , WebSocket.servePort = Tagged portNum
+      , WebSocket.pingInterval = 30
       }
 
 withT :: (T -> IO a) -> IO a
@@ -77,7 +87,7 @@ withT f = do
   webSocketConfig <- makeWebSocketConfig
   with defaultRedisConfig $ \redis ->
     with webSocketConfig $ \webSocket ->
-      with Amqp.localConfig (\amqp -> f $ T {amqp, webSocket, redis})
+      with amqpConfig (\amqp -> f $ T {amqp, webSocket, redis})
 
 echoDirect :: a -> IO a
 echoDirect = return

@@ -4,8 +4,6 @@ module Transport.WebSocket
   , ServerInfo(..)
   , RequestMessage(..)
   , ResponseMessage(..)
-  , localConfig
-  , localConfigOn
   ) where
 
 import Data.Aeson.TypeScript.TH
@@ -48,13 +46,6 @@ data Config = Config
   , pingInterval :: Int
   , servers :: [(Text' "Server", ServerInfo)]
   } deriving (Generic, FromJSON)
-
-localConfigOn :: Word16 -> Config
-localConfigOn port =
-  Config {servePort = Tagged port, pingInterval = 30, servers = []}
-
-localConfig :: Config
-localConfig = localConfigOn 3000
 
 -- Note: The "localhost" literal does not work with wsClient.
 isLocalHost :: (Eq a, IsString a) => a -> Bool
