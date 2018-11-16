@@ -1,11 +1,13 @@
--- Currently intended as an executable for mocked testing data.
 module TezosOperationQueue
   ( module TezosOperationQueue
   ) where
 
--- import qualified Db
+import qualified AccessControl.Client
+import qualified Postgres as Pg
 import qualified Tezos
+import TezosChainWatcher.Api (BlockEvents)
 import TezosOperationQueue.Api as TezosOperationQueue
+import TezosOperationQueue.Db
 import TezosOperationQueue.Internal as TezosOperationQueue
 import Vest
 
@@ -15,16 +17,25 @@ type Api = InjectEndpoint
 inject :: T -> Tezos.SignedOperationContents -> IO ()
 inject _ _ = return ()
 
+blockEventConsumer :: T -> Consumers BlockEvents
+blockEventConsumer t =
+  let getInitialBlockNumber = Pg.runLogged t selectNextBlockNumber
+   in (getInitialBlockNumber, panic "unimplemented")
+
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
-  type EventsConsumed T = ()
+  type EventsConsumed T = BlockEvents
   type RpcSpec T = Api
   summary = "tezos-operation-queue v0.1.0"
   description = "RPC queue for Tezos operations signed on the front-end."
-  init configPaths f =
-    withLoadable configPaths $ \webSocket -> f $ T {webSocket}
+  init configPaths f = do
+    (accessControlPublicKey :<|> seed) <- load configPaths
+    withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> webSocket) -> do
+      accessControlClient <-
+        AccessControl.Client.make amqp accessControlPublicKey seed
+      f $ T {dbPool, amqp, redis, webSocket, accessControlClient}
   rpcHandlers = inject
   valuesPublished _ = ()
   eventProducers _ = ()
-  eventConsumers _ = ()
+  eventConsumers = blockEventConsumer

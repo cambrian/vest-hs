@@ -4,6 +4,7 @@ module TezosDelegationCore.Db
 
 import Postgres
 import qualified Tezos
+import qualified Tezos.Rpc as Tezos
 import Vest
 
 data CycleT f = Cycle
@@ -293,7 +294,7 @@ selectNextBlock = do
     latestBlock <$> limit_ 1 (orderBy_ (desc_ . number) $ all_ $ cycles schema)
   return $
     case m of
-      Nothing -> 0
+      Nothing -> fromIntegral Tezos.firstReadableBlockNumber
       Just n -> n + 1
 
 wasCycleAlreadyHandled :: Word64 -> Pg Bool

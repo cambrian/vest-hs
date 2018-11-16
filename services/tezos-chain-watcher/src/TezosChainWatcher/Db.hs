@@ -148,7 +148,7 @@ selectNextBlockNumber = do
   return $
     case m of
       Just (Just num) -> num + 1
-      _ -> fromIntegral Tezos.firstReadableBlockNumber + 1
+      _ -> fromIntegral Tezos.firstReadableBlockNumber
 
 selectBlockInfoForOpHash ::
      Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))

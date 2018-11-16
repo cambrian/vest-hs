@@ -2,7 +2,6 @@ module TezosDelegationCore
   ( module TezosDelegationCore
   ) where
 
--- import TezosDelegationCore.Api as TezosDelegationCore
 import qualified AccessControl.Client
 import qualified Postgres as Pg
 import qualified Tezos

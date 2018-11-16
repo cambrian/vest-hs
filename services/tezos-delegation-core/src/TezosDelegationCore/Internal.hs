@@ -17,8 +17,8 @@ data T = T
 instance HasNamespace T where
   type Namespace T = "tezos-delegation-core"
 
-instance HasRedisConnection T where
-  redisConnection = redis
+instance Postgres.HasConnection T where
+  withConnection t = withResource $ dbPool t
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
@@ -26,8 +26,8 @@ instance HasRpcTransport Amqp.T T where
 instance HasEventTransport Amqp.T T where
   eventTransport = amqp
 
+instance HasRedisConnection T where
+  redisConnection = redis
+
 instance AccessControl.Client.Has T where
   accessControlClient = accessControlClient
-
-instance Postgres.HasConnection T where
-  withConnection t = withResource $ dbPool t
