@@ -1,6 +1,6 @@
 import qualified Http
 import Test (ignoreIO)
-import Tezos
+import Tezos.Rpc
 import Vest
 
 publicTezosConfig :: ResourceConfig Http.Client

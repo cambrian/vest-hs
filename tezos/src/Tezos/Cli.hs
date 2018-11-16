@@ -5,7 +5,13 @@ module Tezos.Cli
 import Tezos.Prelude
 import Vest
 
--- This should probably have one more parameter in front, which either specifies our keys or some
--- config information to extract keys from hardware/filesystem.
-makePayout :: Address -> FixedQty XTZ -> IO OperationHash
-makePayout _recipient _size = panic "unimplemented"
+data T = T
+  { cliPath :: FilePath
+  , addressSecret :: AddressSecret
+  } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
+
+instance Loadable T where
+  configName = "tezos-cli"
+
+makePayout :: T -> Address -> FixedQty XTZ -> IO OperationHash
+makePayout _t _recipient _size = panic "unimplemented"

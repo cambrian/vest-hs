@@ -6,6 +6,7 @@ import qualified AccessControl.Client
 import qualified Data.Yaml as Yaml
 import qualified Postgres as Pg
 import qualified Tezos
+import qualified Tezos.Rpc as Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher

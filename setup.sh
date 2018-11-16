@@ -1,4 +1,6 @@
 #!/bin/bash
+# TODO: Split this into local/prod setups (or more likely, use Docker and pre-set things like the
+# PATH in the Docker image).
 CYAN='\033[0;36m'
 NC='\033[0m'
 
@@ -27,11 +29,12 @@ stack install hindent > ~/.vest-hs/hindent-install.log 2>&1
 echo "Installing testing dependencies."
 stack install tasty-discover > ~/.vest-hs/tasty-install.log 2>&1
 echo "Installing external dependencies."
-brew install diffutils redis rabbitmq libpq postgres > ~/.vest-hs/brew-install.log 2>&1
-echo "Configuring Redis to use keyspace events."
+brew install node diffutils redis rabbitmq libpq postgres > ~/.vest-hs/brew-install.log 2>&1
+echo "Configuring local Redis to use keyspace events."
 sed -i -e 's/notify-keyspace-events ""/notify-keyspace-events "Kg"/g' /usr/local/etc/redis.conf
-echo -e "${CYAN}1. Run [source ~/.bash_profile] to apply your PATH."
+echo -e "${CYAN}1. Run [source ~/.bash_profile] to apply your new PATH."
 echo -e "2. Run [createuser --superuser USERNAME] for a local DB user."
 echo -e "3. Run [createdb --owner=USERNAME DBNAME] to create a DB."
 echo -e "4. Run ./dev.sh to build all the modules for Haskero."
-echo -e "5. Restart the entire VS Code application.${NC}"
+echo -e "5. Run ./deps.sh to build any volatile dependencies."
+echo -e "6. Restart the entire VS Code application.${NC}"

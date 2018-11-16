@@ -1,21 +1,21 @@
-module Tezos.Node.Internal
-  ( module Tezos.Node.Internal
+module Tezos.Rpc.Internal
+  ( module Tezos.Rpc.Internal
   ) where
 
 import Control.Retry
 import Data.Aeson
 import qualified Http
-import Tezos.Node.Prelude hiding
-  ( Operation(..)
-  , Origination(..)
-  , Transaction(..)
-  )
-import qualified Tezos.Node.Prelude as Node
-  ( Operation(..)
-  , Origination(..)
-  , Transaction(..)
-  )
 import Tezos.Prelude
+import Tezos.Rpc.Prelude hiding
+  ( Operation(..)
+  , Origination(..)
+  , Transaction(..)
+  )
+import qualified Tezos.Rpc.Prelude as Rpc
+  ( Operation(..)
+  , Origination(..)
+  , Transaction(..)
+  )
 import Vest hiding (hash)
 
 data UnexpectedResultException =
@@ -163,12 +163,12 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
       , delegations
       }
 
-extractOriginations :: Text -> Node.Operation -> [Origination]
+extractOriginations :: Text -> Rpc.Operation -> [Origination]
 extractOriginations hash nodeOp =
   case nodeOp of
-    Node.OriginationOp Node.Origination { source = originator
-                                        , metadata = OriginationMetadata {operation_result = OriginationResult {originated_contracts = contracts}}
-                                        } ->
+    Rpc.OriginationOp Rpc.Origination { source = originator
+                                      , metadata = OriginationMetadata {operation_result = OriginationResult {originated_contracts = contracts}}
+                                      } ->
       fmap
         (\originated ->
            Origination
@@ -179,14 +179,14 @@ extractOriginations hash nodeOp =
         (fromMaybe [] contracts)
     _ -> []
 
-extractTransaction :: Text -> Node.Operation -> IO (Maybe Transaction)
+extractTransaction :: Text -> Rpc.Operation -> IO (Maybe Transaction)
 extractTransaction hash nodeOp =
   case nodeOp of
-    Node.TransactionOp Node.Transaction { source = from
-                                        , destination = to
-                                        , fee = feeRaw
-                                        , amount = sizeRaw
-                                        } -> do
+    Rpc.TransactionOp Rpc.Transaction { source = from
+                                      , destination = to
+                                      , fee = feeRaw
+                                      , amount = sizeRaw
+                                      } -> do
       fee <- toFixedQtyUnsafe feeRaw
       size <- toFixedQtyUnsafe sizeRaw
       return $
