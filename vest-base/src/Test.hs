@@ -27,8 +27,9 @@ testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =
   goldenVsStringDiff name diffCmd path . fmap convertString
 
-newtype TestService a = TestService
+data TestService a = TestService
   { serviceThread :: Async Void
+  , watcherThread :: Async ()
   }
 
 instance Service a => Resource (TestService a) where
@@ -39,13 +40,16 @@ instance Service a => Resource (TestService a) where
     paths <- mapM resolveDir' configDirs
     serviceThread <- async $ run @a paths return
     -- Rethrow exceptions since nobody's waiting on the serviceThread
-    void . async $ do
-      threadResult <- waitCatch serviceThread
-      case threadResult of
-        Left exc -> evilThrowTo mainThread exc
-        Right r -> absurd r
-    return $ TestService {serviceThread}
-  cleanup = cancel . serviceThread
+    watcherThread <-
+      async $ do
+        threadResult <- waitCatch serviceThread
+        case threadResult of
+          Left exc -> evilThrowTo mainThread exc
+          Right r -> absurd r
+    return $ TestService {serviceThread, watcherThread}
+  cleanup TestService {serviceThread, watcherThread} = do
+    cancel watcherThread
+    cancel serviceThread
 
 testWithResource ::
      forall a. Resource a
