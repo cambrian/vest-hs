@@ -11,7 +11,7 @@ data T = T
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 instance Loadable T where
-  configName = "tezos-cli"
+  configFile = [relfile|tezos-cli.yaml|]
 
 makePayout :: T -> Address -> FixedQty XTZ -> IO OperationHash
 makePayout _t _recipient _size = panic "unimplemented"
