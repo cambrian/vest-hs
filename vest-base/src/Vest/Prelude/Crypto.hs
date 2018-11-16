@@ -21,16 +21,18 @@ hash256 = BLAKE2b.hash 32 mempty
 
 instance Hashable PublicKey
 
--- TODO: Custom instance that doesn't include the unpublickey: thing.
+-- We don't use newtype deriving here because the Show instance doesn't, and we need show/read
+-- to be round-trippable
 deriving instance Read PublicKey
 
-instance ToJSON PublicKey
+-- TODO: doctests for serialization roundtrips
+deriving newtype instance ToJSON PublicKey
 
-instance FromJSON PublicKey
+deriving newtype instance FromJSON PublicKey
 
-instance ToJSONKey PublicKey
+deriving newtype instance ToJSONKey PublicKey
 
-instance FromJSONKey PublicKey
+deriving newtype instance FromJSONKey PublicKey
 
 deriving instance Read Signature
 

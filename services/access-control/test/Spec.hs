@@ -10,14 +10,14 @@ import Test
 import qualified Transport.Amqp as Amqp
 import Vest
 
+acConfigDir :: FilePath
+acConfigDir = "access-control/test/config/access-control"
+
 testConfigDir :: FilePath
 testConfigDir = "access-control/test/config"
 
 localConfigDir :: FilePath
 localConfigDir = "config/local"
-
-testConfigPaths :: [FilePath]
-testConfigPaths = [testConfigDir, localConfigDir]
 
 -- | This is a test server that has access controlled endpoints.
 -- Not to be confused with AccessControl.TestServer
@@ -50,8 +50,7 @@ instance Service TestServer where
   type EventsConsumed TestServer = ()
   summary = ""
   description = ""
-  init _ f = do
-    paths <- mapM resolveDir' testConfigPaths
+  init paths f = do
     accessControlPublicKey <- load paths
     withLoadable paths $ \amqp -> do
       accessControlClient <-
@@ -109,18 +108,11 @@ generateDataFiles =
 
 tests :: TestTree
 tests =
-  testWithService @AccessControl.T testConfigDir $
-  testWithService @TestServer "" $
+  testWithService @AccessControl.T [acConfigDir, localConfigDir] $
+  testWithService @TestServer [testConfigDir, localConfigDir] $
   testWithLoadableResource localConfigDir $ \amqp ->
     let testClient = amqp >>= TestClient.make
-     in testGroup
-          "Tests"
-          [ testCase "dummy" "access-control/test/dummy.gold" $ return "dummy"
-          , ignoreTest $
-            testGroup
-              "Tests"
-              [testPermitted testClient, testForbidden testClient]
-          ]
+     in testGroup "Tests" [testPermitted testClient, testForbidden testClient]
 
 main :: IO ()
 main = defaultMain $ testGroup "All" [generateDataFiles, tests]

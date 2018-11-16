@@ -1,4 +1,4 @@
-- - unPublicKey: plFB2bWlHlisKBXbISyF4GY+9UGpJTcWKkQw2wyCe1k=
-  - name: TestClient
-    permissions:
-    - B
+plFB2bWlHlisKBXbISyF4GY+9UGpJTcWKkQw2wyCe1k=:
+  name: TestClient
+  permissions:
+  - B
