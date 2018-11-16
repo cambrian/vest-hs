@@ -8,7 +8,7 @@
 -- test = do
 --   testWithService @AccessControl.TestInstance [localConfigDir] $ do ...
 --
--- Also see AccessControl.TestClient for a general purpose client able to hit amqp endpoints.
+-- Also see AccessControl.TestClient for a general purpose client that can hit amqp endpoints.
 module AccessControl.TestInstance
   ( module AccessControl.TestInstance
   ) where

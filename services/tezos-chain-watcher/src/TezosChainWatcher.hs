@@ -135,20 +135,19 @@ instance Service T where
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      let t =
-            T
-              { dbPool
-              , amqp
-              , redis
-              , tezos
-              , accessControlClient
-              , lastConsumedBlockNumber
-              , blockEventConsumerWriter
-              , blockEventConsumerStream
-              }
-      Pg.runLogged t $ Pg.ensurePostgresSchema checkedSchema
+      Pg.runLogged dbPool $ Pg.ensurePostgresSchema checkedSchema
       -- ^ This action should fail if data loss might occur.
-      f t
+      f $
+        T
+          { dbPool
+          , amqp
+          , redis
+          , tezos
+          , accessControlClient
+          , lastConsumedBlockNumber
+          , blockEventConsumerWriter
+          , blockEventConsumerStream
+          }
   rpcHandlers t = monitorOp t :<|> rewardInfo t :<|> originatedMapping t
   valuesPublished _ = ()
   eventProducers t = (makeBlockEventStream t, materializeBlockEvent t)
