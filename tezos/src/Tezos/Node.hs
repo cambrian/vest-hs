@@ -32,7 +32,7 @@ instance Resource T where
   cleanup = cleanupLogged . httpClient
 
 instance Loadable T where
-  configName = "tezos-node"
+  configFile = [relfile|tezos-node.yaml|]
 
 getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
 getRewardInfo T {httpClient} cycleNumber delegateIds = do

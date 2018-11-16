@@ -11,6 +11,7 @@ import Data.Bifunctor (Bifunctor(..))
 import Data.Bitraversable (Bitraversable(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Type.Bool as Vest.Prelude.TypeLevel
+import GHC.Generics
 import GHC.TypeLits as Vest.Prelude.TypeLevel (AppendSymbol)
 import Vest.Prelude.Core
 
@@ -84,3 +85,11 @@ type family NubSymbols symbols where
               :<|> b) = Nub (NubSymbols a :++ NubSymbols b)
 
 type HasUniqueSymbols symbols = Symbols symbols ~ NubSymbols symbols
+
+type family TypeName a :: Symbol where
+  TypeName (M1 D ('MetaData name _ _ _) f ()) = name
+  TypeName a = TypeName (Rep a ())
+
+type family ModuleName a :: Symbol where
+  ModuleName (M1 D ('MetaData _ module_ _ _) f ()) = module_ -- module is a reserved symbol
+  ModuleName a = ModuleName (Rep a ())

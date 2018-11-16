@@ -15,7 +15,7 @@ newtype ACPublicKey = ACPublicKey
   } deriving newtype (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 instance Loadable ACPublicKey where
-  configName = "access-control/public-key"
+  configFile = [relfile|access-control-public-key.yaml|]
 
 data Token = Token
   { publicKey :: PublicKey
@@ -30,7 +30,7 @@ data Subject = Subject
   } deriving (Read, Show, Generic, ToJSON, FromJSON)
 
 instance Loadable (HashMap PublicKey Subject) where
-  configName = "access-control/subjects"
+  configFile = [relfile|subjects.yaml|]
 
 data T = T
   { subjects :: HashMap PublicKey Subject
@@ -40,7 +40,10 @@ data T = T
   , secretKey :: SecretKey
   , minTokenTime :: Stream ValueBuffer Time
   , bumpMinTokenTime :: IO ()
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "access-control"
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp

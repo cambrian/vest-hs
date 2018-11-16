@@ -14,7 +14,10 @@ data T = T
   { amqp :: Amqp.T
   , webSocket :: WebSocket.T
   , redis :: RedisConnection
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "bridge-test"
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp
@@ -59,7 +62,7 @@ makeWebSocketConfig = do
   return $
     WebSocket.localConfig
       { WebSocket.servers =
-          [ ( namespace' @T @"Server"
+          [ ( Tagged $ namespace @T
             , WebSocket.ServerInfo
                 { uri = Tagged "127.0.0.1"
                 , port = Tagged portNum

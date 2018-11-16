@@ -5,7 +5,6 @@ module TezosStats
 
 -- import qualified AccessControl.Client as AccessControlClient
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Yaml as Yaml
 
 -- import qualified Db
 import qualified Tezos
@@ -13,53 +12,7 @@ import TezosStats.Api as TezosStats
 import TezosStats.Internal as TezosStats
 
 -- import qualified Transport.Amqp as Amqp
-import qualified Transport.WebSocket as WebSocket
 import Vest
-import qualified Vest as CmdArgs (name)
-
-data Config = Config
-    -- dbConfig :: Db.Config
-  { webSocketConfig :: WebSocket.Config
-  -- , amqpConfig :: Amqp.Config
-  -- , redisConfig :: RedisConfig
-  , streamDelayMillis :: Natural -- do you really need this??
-  } deriving (Generic, FromJSON)
-
-data Args = Args
-  { configFile :: FilePath
-  , stubDataFile :: FilePath
-  -- , seedFile :: FilePath
-  -- , accessControlPublicKeyFile :: FilePath
-  } deriving (Data)
-
-defaultArgs_ :: Args
-defaultArgs_ =
-  Args
-    { configFile =
-        "config.yaml" &= help "YAML config file" &= explicit &=
-        CmdArgs.name "config" &=
-        CmdArgs.name "c" &=
-        typFile
-    , stubDataFile =
-        "stub-data.json" &= help "JSON stub data" &= explicit &=
-        CmdArgs.name "stub-data" &=
-        CmdArgs.name "s" &=
-        typFile
-    -- , seedFile =
-    --     "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
-    --     CmdArgs.name "d" &=
-    --     typFile
-    -- , accessControlPublicKeyFile =
-    --     "access-control-public-key.yaml" &=
-    --     help "YAML access control public key file" &=
-    --     explicit &=
-    --     CmdArgs.name "key" &=
-    --     CmdArgs.name "k" &=
-    --     typFile
-    } &=
-  help "Front-end stats server for Tezos." &=
-  summary "tezos-stats v0.1.0" &=
-  program "tezos-stats"
 
 type Api
    = OverviewEndpoint
@@ -113,19 +66,27 @@ type AuxiliaryTypes
      :<|> Raw TimeRate
      :<|> Raw TimeSize
 
+newtype RawStubData =
+  RawStubData Text
+  deriving newtype (IsString, FromJSON)
+
+instance Loadable RawStubData where
+  configFile = [relfile|stub-data.json|]
+
+instance LoadableData RawStubData where
+  load _paths = panic "TODO"
+
 instance Service T where
-  type ServiceArgs T = Args
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
   type RpcSpec T = Api
-  defaultArgs = defaultArgs_
-  init Args {configFile, stubDataFile} f = do
-    Config {webSocketConfig, streamDelayMillis} <-
-      Yaml.decodeFileThrow configFile
-    rawStubData <- readFile stubDataFile
-    with webSocketConfig $ \webSocket ->
-      f $ T {webSocket, rawStubData, streamDelayMillis}
+  summary = "tezos-stats v0.1.0"
+  description = "Front-end stats server for Tezos."
+  init configPaths f = do
+    (RawStubData rawStubData) <- load configPaths
+    withLoadable configPaths $ \webSocket ->
+      f $ T {webSocket, rawStubData, streamDelayMillis = 500}
   rpcHandlers t = overview t :<|> bakersFn t :<|> implicit t :<|> operation t
   valuesPublished _ = ()
   eventProducers _ = ()

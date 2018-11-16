@@ -7,26 +7,13 @@ module DummyManager
 import DummyManager.Api as DummyManager
 import qualified DummyManager.Auth as DummyAuth
 import DummyManager.Internal as DummyManager
-import qualified Transport.WebSocket as WebSocket
 import Vest
-import qualified Vest as CmdArgs (name)
 
-data Args = Args
-  { port :: Word16
-  } deriving (Eq, Show, Read, Generic, Data)
-
-defaultArgs_ :: Args
-defaultArgs_ =
-  Args
-    { port =
-        3000 &= help "Port to serve on" &= CmdArgs.name "port" &=
-        CmdArgs.name "p" &=
-        typ "PORT"
-    } &=
-  help "Dummy manager service." &=
-  summary "dummy-manager v0.1.0" &=
-  program "dummy-manager"
-
+-- newtype DummyManagerPort =
+--   DummyManagerPort Word16
+--   deriving newtype (Num, FromJSON)
+-- instance Loadable DummyManagerPort where
+--   configName = "port"
 type Api
    = AddIntsEndpoint
      :<|> AddIntsBadEndpoint
@@ -75,14 +62,14 @@ handlers =
   unitStream
 
 instance Service T where
-  type ServiceArgs T = Args
   type RpcSpec T = Api
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  defaultArgs = defaultArgs_
-  init Args {port} f =
-    with (WebSocket.localConfigOn port) $ \webSocket -> f $ T {webSocket}
+  summary = "dummy-manager v0.1.0"
+  description = "Dummy manager service."
+  init configPaths f =
+    withLoadable configPaths $ \webSocket -> f $ T {webSocket}
   rpcHandlers _ = handlers
   valuesPublished _ = ()
   eventProducers _ = ()

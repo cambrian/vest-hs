@@ -7,6 +7,7 @@ import Vest.Prelude.Blockchain as Reexports
 import Vest.Prelude.Core as Reexports
 import Vest.Prelude.Counter as Reexports
 import Vest.Prelude.Crypto as Reexports
+import Vest.Prelude.Loadable as Reexports
 import Vest.Prelude.Log as Reexports
 import Vest.Prelude.Money as Reexports
 import Vest.Prelude.Namespace as Reexports

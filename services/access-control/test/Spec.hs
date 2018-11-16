@@ -16,8 +16,8 @@ testConfigDir = "access-control/test/config"
 localConfigDir :: FilePath
 localConfigDir = "config/local"
 
-seedFile :: FilePath
-seedFile = "access-control/test/seed.yaml"
+testConfigPaths :: [FilePath]
+testConfigPaths = [testConfigDir, localConfigDir]
 
 -- | This is a test server that has access controlled endpoints.
 -- Not to be confused with AccessControl.TestServer
@@ -27,7 +27,7 @@ data TestServer = TestServer
   }
 
 instance HasNamespace TestServer where
-  namespace = "TestServer"
+  type Namespace TestServer = "test-server"
 
 instance HasRpcTransport Amqp.T TestServer where
   rpcTransport = amqp
@@ -43,16 +43,17 @@ type ForbiddenEndpoint
    = Endpoint ('Auth (AccessControl.Auth.T 'Permission.InvalidateAuthTokens)) TestServer Amqp.T "forbiddenEndpoint" () ('Direct ())
 
 instance Service TestServer where
-  type ServiceArgs TestServer = ()
   type RpcSpec TestServer = PermittedEndpoint
                             :<|> ForbiddenEndpoint
   type ValueSpec TestServer = ()
   type EventsProduced TestServer = ()
   type EventsConsumed TestServer = ()
-  defaultArgs = ()
-  init () f = do
-    accessControlPublicKey <- load testConfigDir
-    withLoadable localConfigDir $ \amqp -> do
+  summary = ""
+  description = ""
+  init _ f = do
+    paths <- mapM resolveDir' testConfigPaths
+    accessControlPublicKey <- load paths
+    withLoadable paths $ \amqp -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey "testServerSeed"
       f $ TestServer {amqp, accessControlClient}
@@ -66,8 +67,9 @@ generatePublicKey :: TestTree
 generatePublicKey =
   testCaseRaw
     "Generate Access Control Public Key"
-    "access-control/test/config/access-control/public-key.yaml" $ do
-    (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
+    "access-control/test/config/access-control-public-key.yaml" $ do
+    path <- resolveDir' $ testConfigDir <> "/access-control"
+    seed <- load [path]
     return $ Yaml.encode $ AccessControl.ACPublicKey $ fst $ seedKeyPair seed
 
 generateSubjects :: TestTree
@@ -107,13 +109,8 @@ generateDataFiles =
 
 tests :: TestTree
 tests =
-  testWithService
-    @AccessControl.T
-    (AccessControl.Args
-       { AccessControl.configDir = testConfigDir
-       , AccessControl.seedFile = seedFile
-       }) $
-  testWithService @TestServer () $
+  testWithService @AccessControl.T testConfigDir $
+  testWithService @TestServer "" $
   testWithLoadableResource localConfigDir $ \amqp ->
     let testClient = amqp >>= TestClient.make
      in testGroup

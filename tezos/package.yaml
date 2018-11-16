@@ -53,6 +53,7 @@ default-extensions:
 - OverloadedStrings
 - PatternSynonyms
 - PolyKinds
+- QuasiQuotes
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving

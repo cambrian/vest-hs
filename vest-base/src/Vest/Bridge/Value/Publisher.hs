@@ -29,12 +29,10 @@ type family Values spec where
           :<|> b) = (Values a
                      :<|> Values b)
 
-class (HasNamespace t) =>
-      Publisher t spec
-  where
+class Publisher t spec where
   publish :: t -> Proxy spec -> Values spec -> IO ()
 
-instance HasNamespace t => Publisher t () where
+instance Publisher t () where
   publish _ _ _ = return ()
 
 instance ( HasUniqueValueNames (a

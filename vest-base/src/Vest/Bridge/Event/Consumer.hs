@@ -30,12 +30,9 @@ instance (Consumer t a, Consumer t b) =>
     consume t (Proxy :: Proxy a) aConsumers
     consume t (Proxy :: Proxy b) bConsumers
 
-instance ( Serializable fmt (IndexOf a)
-         , Deserializable fmt (RpcResponse a)
+instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name a))
          , Deserializable fmt a
-         , HasNamespace server
          , HasNamespace t
-         , HasRpcTransport transport t
          , HasEventTransport transport t
          , HasRedisConnection t
          , KnownEventName name
@@ -44,7 +41,7 @@ instance ( Serializable fmt (IndexOf a)
          Consumer t (Event_ fmt server transport name a) where
   consume t _ (getStartIndex, f) = do
     let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
-        lockId = retag $ eventName <> "/consumer/" <> Tagged (namespace @t)
+        lockId = Tagged $ untag eventName <> "/consumer/" <> namespace @t
     void . async $
       withDistributedLock t lockId $ do
         let materialize =

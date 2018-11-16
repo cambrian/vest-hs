@@ -14,7 +14,10 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Node.T
   , accessControlClient :: AccessControl.Client.T
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "tezos-hot-wallet"
 
 instance HasRedisConnection T where
   redisConnection = redis

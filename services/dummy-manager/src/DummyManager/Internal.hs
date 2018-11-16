@@ -7,7 +7,10 @@ import Vest
 
 data T = T
   { webSocket :: WebSocket.T
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "dummy-manager"
 
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket

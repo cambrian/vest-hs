@@ -6,31 +6,7 @@ import AccessControl.Api as AccessControl
 import AccessControl.Internal as AccessControl
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
-import qualified Data.Yaml as Yaml
 import Vest
-import qualified Vest as CmdArgs (name)
-
-data Args = Args
-  { configDir :: FilePath
-  , seedFile :: FilePath
-  } deriving (Data)
-
-defaultArgs_ :: Args
-defaultArgs_ =
-  Args
-    { configDir =
-        "services/config/local" &= help "Config directory" &= explicit &=
-        CmdArgs.name "config" &=
-        CmdArgs.name "c" &=
-        typDir
-    , seedFile =
-        "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
-        CmdArgs.name "d" &=
-        typFile
-    } &=
-  help "Internal access control server." &=
-  summary "access-control v0.1.0" &=
-  program "access-control"
 
 accessToken :: T -> PublicKey -> IO SignedToken
 accessToken T {subjects, secretKey} publicKey = do
@@ -43,22 +19,23 @@ accessToken T {subjects, secretKey} publicKey = do
   return signedToken
 
 instance Service T where
-  type ServiceArgs T = Args
   type RpcSpec T = TokenEndpoint
                    :<|> InvalidateAllExistingTokensEndpoint
   type ValueSpec T = TokenVersionValue
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  defaultArgs = defaultArgs_
-  init Args {configDir, seedFile} f = do
-    (seed :: ByteString) <- Yaml.decodeFileThrow seedFile
+  summary = "Access Control v0.1.0"
+  description = "Internal role based access control server"
+  init configPaths f = do
+    seed <- load configPaths
+    subjects <- load configPaths
+    -- (seed :<|> subjects) <- load configPaths
     let (publicKey, secretKey) = seedKeyPair seed
         acPublicKey = ACPublicKey publicKey
-    subjects <- load configDir
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
-    withLoadable configDir $ \(amqp :<|> redis) ->
+    withLoadable configPaths $ \(amqp :<|> redis) ->
       f $
       T
         { subjects

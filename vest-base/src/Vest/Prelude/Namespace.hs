@@ -3,9 +3,10 @@ module Vest.Prelude.Namespace
   ) where
 
 import Data.List (span)
-import Data.Text (breakOn, stripPrefix, takeWhile)
-import Vest.Prelude.Core hiding (takeWhile)
+import Data.Text (breakOn, stripPrefix)
+import Vest.Prelude.Core
 import Vest.Prelude.Serialize
+import Vest.Prelude.TypeLevel (symbolText)
 
 -- TODO: Make doctests for pretty serialization roundtrip, isstring.
 newtype Namespaced (ns :: k) a =
@@ -36,14 +37,15 @@ getNamespace' (Namespaced (ns, _)) = ns
 unnamespaced :: Namespaced ns a -> a
 unnamespaced (Namespaced (_, a)) = a
 
-class HasNamespace t where
+class KnownSymbol (Namespace t) =>
+      HasNamespace t
+  where
+  type Namespace t :: Symbol
+  -- type Namespace t = ModuleName t
+  -- ^ TODO: why doesn't this work?
   namespace :: Text
-  default namespace :: Typeable t =>
-    Text
-  namespace = takeWhile (/= '.') $ moduleName @t
-  -- ^ Turns "DummyManager.Internal" (for example) into "DummyManager". We can reconsider this in
-  -- the future if we ever need multiple namespaces within the same root module name.
-  namespace' :: forall ns. Text' ns
-  namespace' = Tagged $ namespace @t
+  namespace = symbolText (Proxy :: Proxy (Namespace t))
   namespaced :: forall ns a. a -> Namespaced ns a
-  namespaced a = Namespaced (namespace' @t @ns, a)
+  namespaced a = Namespaced (Tagged $ namespace @t, a) -- ^ TODO: automatic instances for generic/typeable/whatever happens to work via
+-- deriving (HasDefaultNamespace)
+-- or similar

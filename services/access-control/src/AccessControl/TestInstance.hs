@@ -19,10 +19,9 @@ import qualified AccessControl.Permission
 import qualified Data.ByteString as ByteString
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
-import qualified Transport.Amqp as Amqp
 import Vest
 
-testAccessControlSeed :: ByteString
+testAccessControlSeed :: Seed
 testAccessControlSeed = "testSeed"
 
 testAccessControlPubKey :: PublicKey
@@ -42,19 +41,20 @@ accessToken T {secretKey} publicKey = do
   return signedToken
 
 instance Service T where
-  type ServiceArgs T = ()
   type RpcSpec T = TokenEndpoint
                    :<|> InvalidateAllExistingTokensEndpoint
   type ValueSpec T = TokenVersionValue
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  defaultArgs = ()
-  init () f = do
+  summary = "Access Control Test Server"
+  description =
+    "Test instance for access control service. Grants every permission to every user."
+  init configPaths f = do
     let (publicKey, secretKey) = seedKeyPair testAccessControlSeed
     (tokenTimeWriter, minTokenTime) <- newStream
     let bumpMinTokenTime = now >>= writeStream tokenTimeWriter
     bumpMinTokenTime
-    with (defaultRedisConfig :<|> Amqp.localConfig) $ \(redis :<|> amqp) ->
+    withLoadable configPaths $ \(redis :<|> amqp) ->
       f $
       T
         { subjects = HashMap.fromList []

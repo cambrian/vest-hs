@@ -83,8 +83,11 @@ import Data.Text as Vest.Prelude.Core (pack, unpack)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 import Data.Typeable (tyConModule, tyConName, typeRepTyCon)
 import Data.VectorSpace as Vest.Prelude.Core
+import qualified Data.Yaml as Yaml
 import qualified Foreign.StablePtr as StablePtr
 import Network.HostName (getHostName)
+import Path as Vest.Prelude.Core hiding ((<.>))
+import Path.IO as Vest.Prelude.Core
 import System.Posix.Process (getProcessID)
 import System.Posix.Types (CPid(CPid))
 import System.Random as Vest.Prelude.Core
@@ -230,7 +233,13 @@ instance Num a => AdditiveGroup a where
   (^+^) = (+)
   negateV = negate
   (^-^) = (-)
+
 -- | Compiler doesn't like this
 -- instance Num a => VectorSpace a where
 --   type Scalar a = a
 --   (*^) = (*)
+readYamlFile :: FromJSON a => Path b File -> IO a
+readYamlFile = Yaml.decodeFileThrow . toFilePath
+
+writeYamlFile :: ToJSON a => Path b File -> a -> IO ()
+writeYamlFile path = Yaml.encodeFile (toFilePath path)

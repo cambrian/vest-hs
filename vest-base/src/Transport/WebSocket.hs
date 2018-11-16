@@ -215,4 +215,4 @@ instance HasRpcTransport T T where
   rpcTransport = identity
 
 instance Loadable T where
-  configName = "websocket"
+  configFile = [relfile|websocket.yaml|]

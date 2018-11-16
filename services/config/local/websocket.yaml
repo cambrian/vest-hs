@@ -1,4 +1,4 @@
 # This is intended for websocket servers only (not websocket clients).
-servePort: 13000
+servePort: 3000
 pingInterval: 30
 servers: []

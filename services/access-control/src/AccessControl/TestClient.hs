@@ -12,14 +12,14 @@ data T = T
   , accessControlClient :: AccessControl.Client.T
   }
 
-seed :: ByteString
+seed :: Seed
 seed = "testSeed"
 
 pubKey :: PublicKey
 pubKey = fst $ seedKeyPair seed
 
 instance HasNamespace T where
-  namespace = "TestClient"
+  type Namespace T = "TestClient"
 
 instance HasRpcTransport Amqp.T T where
   rpcTransport = amqp

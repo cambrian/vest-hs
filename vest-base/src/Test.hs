@@ -32,7 +32,7 @@ newtype TestService a = TestService
   }
 
 instance Service a => Resource (TestService a) where
-  type ResourceConfig (TestService a) = ServiceArgs a
+  type ResourceConfig (TestService a) = FilePath
   resourceName = "TestService " <> namespace @a
   make args = do
     mainThread <- myThreadId
@@ -63,15 +63,19 @@ testWithLoadableResource ::
   -> TestTree
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
 testWithLoadableResource configDir =
-  Tasty.withResource (makeLoadable @a configDir) (cleanupLogged @a)
+  Tasty.withResource
+    (do path <- resolveDir' configDir
+        makeLoadable @a [path])
+    (cleanupLogged @a)
 
 testWithService ::
      forall a. Service a
-  => ServiceArgs a
+  => FilePath
   -> TestTree
   -> TestTree
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
-testWithService args test = testWithResource @(TestService a) args (const test)
+testWithService configDir test =
+  testWithResource @(TestService a) configDir (const test)
 
 ignoreIO :: a -> IO ()
 ignoreIO _ = return ()

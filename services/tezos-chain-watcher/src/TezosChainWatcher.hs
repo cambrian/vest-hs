@@ -3,36 +3,12 @@ module TezosChainWatcher
   ) where
 
 import qualified AccessControl.Client
-import qualified Data.Yaml as Yaml
 import qualified Postgres as Pg
 import qualified Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
 import Vest hiding (hash)
-import qualified Vest as CmdArgs (name)
-
-data Args = Args
-  { configDir :: FilePath
-  , seedFile :: FilePath
-  } deriving (Data)
-
-defaultArgs_ :: Args
-defaultArgs_ =
-  Args
-    { configDir =
-        "services/config/local" &= help "Config directory" &= explicit &=
-        CmdArgs.name "config" &=
-        CmdArgs.name "c" &=
-        typFile
-    , seedFile =
-        "seed.yaml" &= help "YAML seed file" &= explicit &= CmdArgs.name "seed" &=
-        CmdArgs.name "d" &=
-        typFile
-    } &=
-  help "Monitoring server for the Tezos blockchain." &=
-  summary "tezos-chain-watcher v0.1.0" &=
-  program "tezos-chain-watcher"
 
 -- TODO: Determine a good value for this.
 confirmationThreshold :: Word64
@@ -143,20 +119,20 @@ blockEventConsumer t =
    in (getInitialBlockNumber, consumeBlockEvent)
 
 instance Service T where
-  type ServiceArgs T = Args
   type ValueSpec T = ()
   type EventsProduced T = BlockEvents
   type EventsConsumed T = BlockEvents
   type RpcSpec T = MonitorOpEndpoint
                    :<|> RewardInfoEndpoint
                    :<|> OriginatedMappingEndpoint
-  defaultArgs = defaultArgs_
-  init Args {configDir, seedFile} f = do
-    seed <- Yaml.decodeFileThrow seedFile -- TODO: What's up with padding?
-    accessControlPublicKey <- load configDir
+  summary = "Tezos Chain Watcher v0.1.0"
+  description = "Tezos chain watcher"
+  init configPaths f = do
+    seed <- load configPaths
+    accessControlPublicKey <- load configPaths
     lastConsumedBlockNumber <- newEmptyTMVarIO
     (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
-    withLoadable configDir $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
+    withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       let t =

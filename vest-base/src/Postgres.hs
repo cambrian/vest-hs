@@ -1,3 +1,8 @@
+-- Even though this module represents a connection to a postgres database, it is not directly
+-- loadable itself (unlike redis, amqp for example). This is because services generally connect
+-- to their own specific databases instead of a shared database.
+-- This means that when defining services that use databases, you need to newtype
+-- Postgres.Connection so that you can provide a specific loadable instance.
 module Postgres
   ( module Reexports
   , Config(..)
@@ -93,6 +98,9 @@ instance Resource Connection where
   make = connect . pgConnectInfo
   cleanup = close
 
+instance Loadable Connection where
+  configFile = [relfile|postgres.yaml|]
+
 -- | Slightly different pattern from the normal HasX classes to encourage connection pooling.
 class HasConnection t where
   withConnection :: t -> (Connection -> IO a) -> IO a
@@ -121,6 +129,3 @@ ensurePostgresSchema schema = do
   case verifyExists of
     VerificationSucceeded -> return ()
     VerificationFailed _ -> createSchema Postgres.migrationBackend schema
-
-instance Loadable Connection where
-  configName = "postgres"

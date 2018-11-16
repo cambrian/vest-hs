@@ -19,7 +19,7 @@ data T = T
   , readMinTokenTime :: STM Time
   }
 
-make :: Amqp.T -> AccessControl.ACPublicKey -> ByteString -> IO T
+make :: Amqp.T -> AccessControl.ACPublicKey -> Seed -> IO T
 make amqp acPublicKey seed = do
   let (publicKey, secretKey) = seedKeyPair seed
       getToken =

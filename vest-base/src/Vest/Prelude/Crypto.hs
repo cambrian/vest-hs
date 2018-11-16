@@ -4,6 +4,7 @@ module Vest.Prelude.Crypto
   ( module Reexports
   , hash256
   , SignedText'
+  , Seed
   , seedKeyPair
   , sign'
   , verify'
@@ -12,6 +13,7 @@ module Vest.Prelude.Crypto
 import qualified Crypto.Hash.BLAKE2.BLAKE2b as BLAKE2b
 import Crypto.Sign.Ed25519 as Reexports hiding (sign, sign', verify, verify')
 import Vest.Prelude.Core
+import Vest.Prelude.Loadable
 
 hash256 :: ByteString -> ByteString
 -- ^ Output is 256 bits.
@@ -32,12 +34,21 @@ instance FromJSONKey PublicKey
 
 deriving instance Read Signature
 
+-- Loadable seed for a service's private/public key
+newtype Seed = Seed
+  { raw :: ByteString
+  } deriving newtype (Eq, Read, Show, IsString, FromJSON, ToJSON)
+
+instance Loadable Seed where
+  configFile = [relfile|seed.yaml|]
+
+seedKeyPair :: Seed -> (PublicKey, SecretKey)
+seedKeyPair =
+  fromMaybe (panic "impossible") . createKeypairFromSeed_ . hash256 . raw
+
 -- | We provide a signed type only for Texts, to avoid promoting extra serialization roundtrips for
 -- verifying arbitrary types.
 type SignedText' t = (Signature, Text' t)
-
-seedKeyPair :: ByteString -> (PublicKey, SecretKey)
-seedKeyPair = fromMaybe (panic "impossible") . createKeypairFromSeed_ . hash256
 
 sign' :: SecretKey -> Text' t -> SignedText' t
 sign' secret text' = (dsign secret $ encodeUtf8 $ untag text', text')

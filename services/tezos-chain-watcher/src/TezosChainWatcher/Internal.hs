@@ -18,7 +18,10 @@ data T = T
   , lastConsumedBlockNumber :: TMVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
   , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "tezos-chain-watcher"
 
 instance HasRedisConnection T where
   redisConnection = redis

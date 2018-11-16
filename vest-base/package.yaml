@@ -39,7 +39,8 @@ dependencies:
 - monad-parallel          >= 0.7
 - mtl                     >= 2.2
 - network                 >= 2.6
-- pipes-concurrency       >= 2.0
+- path                    >= 0.6
+- path-io                 >= 1.4
 - postgresql-simple       >= 0.5
 - protolude               >= 0.2
 - random                  >= 1.1

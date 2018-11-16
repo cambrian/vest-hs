@@ -242,4 +242,4 @@ instance HasEventTransport T T where
   eventTransport = identity
 
 instance Loadable T where
-  configName = "amqp"
+  configFile = [relfile|amqp.yaml|]

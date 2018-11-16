@@ -11,6 +11,7 @@ extra-deps:
 - beam-postgres-0.3.2.2
 - contravariant-1.5
 - ede-0.2.9
+- path-io-1.4.0
 - req-1.2.1
 - safe-money-0.7
 - safe-money-aeson-0.1

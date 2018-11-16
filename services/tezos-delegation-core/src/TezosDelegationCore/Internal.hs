@@ -12,7 +12,10 @@ data T = T
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , accessControlClient :: AccessControl.Client.T
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "tezos-delegation-core"
 
 instance HasRedisConnection T where
   redisConnection = redis

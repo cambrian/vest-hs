@@ -34,12 +34,10 @@ type family Producers spec where
              :<|> b) = (Producers a
                         :<|> Producers b)
 
-class (HasNamespace t) =>
-      Producer t spec
-  where
+class Producer t spec where
   produce :: t -> Proxy spec -> Producers spec -> IO ()
 
-instance HasNamespace t => Producer t () where
+instance Producer t () where
   produce _ _ _ = return ()
 
 instance ( HasUniqueEventNames (a
@@ -53,12 +51,9 @@ instance ( HasUniqueEventNames (a
     produce t (Proxy :: Proxy a) aProducers
     produce t (Proxy :: Proxy b) bProducers
 
-instance ( HasNamespace t
-         , HasRpcTransport transport t
+instance ( Server t (EventMaterializeEndpoint (Event_ fmt t transport name a))
          , HasEventTransport transport t
          , HasRedisConnection t
-         , Deserializable fmt (IndexOf a)
-         , Serializable fmt (RpcResponse a)
          , Serializable fmt a
          , KnownEventName name
          ) =>

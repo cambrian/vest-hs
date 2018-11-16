@@ -4,6 +4,7 @@ module Vest.Prelude.Log
   ( LogLevel(..)
   , LogMessage
   , log
+  , log_
   ) where
 
 import Data.IORef
@@ -41,3 +42,6 @@ log level context a =
   withLogLock $ do
     time <- now
     putErrText $ show (time, level, context, a)
+
+log_ :: LogLevel -> Text -> IO ()
+log_ level context = log level context ()

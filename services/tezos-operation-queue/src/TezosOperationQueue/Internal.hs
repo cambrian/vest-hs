@@ -15,7 +15,10 @@ data T = T
   { webSocket :: WebSocket.T
   -- , redis :: RedisConnection
   -- , accessControlClient :: AccessControlClient.T
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "tezos-operation-queue"
 
 instance HasRpcTransport WebSocket.T T where
   rpcTransport = webSocket

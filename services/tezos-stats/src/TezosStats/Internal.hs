@@ -16,7 +16,10 @@ data T = T
   -- , accessControlClient :: AccessControlClient.T
   , rawStubData :: Text
   , streamDelayMillis :: Natural
-  } deriving (HasNamespace)
+  }
+
+instance HasNamespace T where
+  type Namespace T = "tezos-stats"
 
 -- instance HasRedisConnection T where
 --   redisConnection = redis
