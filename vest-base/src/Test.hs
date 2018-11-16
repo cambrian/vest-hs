@@ -39,7 +39,7 @@ instance Service a => Resource (TestService a) where
     mainThread <- myThreadId
     paths <- mapM resolveDir' configDirs
     serviceThread <- async $ run @a paths return
-    -- Rethrow exceptions since nobody's waiting on the serviceThread
+    -- Wait on the service thread so exceptions don't get dropped.
     watcherThread <-
       async $ do
         threadResult <- waitCatch serviceThread
