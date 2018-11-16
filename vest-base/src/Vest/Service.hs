@@ -9,8 +9,8 @@ import Vest.Prelude hiding (takeWhile)
 
 -- | All services take only the config directory; any service-specific configuration can be done via
 -- config files. A service will look in configDir/namespace/ first, then configDir/ for its configs.
--- Configs containing priveleged info should be git-crypted.
-newtype Args = Args
+-- Configs containing privileged info should be git-crypted.
+data Args = Args -- This must be a data and not a newtype for cmdargs &= annotations to work.
   { configDir :: FilePath
   } deriving (Data)
 
@@ -27,12 +27,12 @@ class ( HasNamespace a
   type EventsProduced a
   type EventsConsumed a
   exe :: Text
-  -- ^ executable name for this service
+  -- ^ Executable name for this service.
   exe = namespace @a
   summary :: Text
-  -- ^ displayed when user passes --version or --help
+  -- ^ Displayed when user passes --version or --help.
   description :: Text
-  -- ^ displayed when user passes --help
+  -- ^ Displayed when user passes --help.
   init :: [Path Abs Dir] -> (a -> IO b) -> IO b
   rpcHandlers :: a -> Handlers (RpcSpec a)
   valuesPublished :: a -> Values (ValueSpec a)
@@ -41,7 +41,7 @@ class ( HasNamespace a
   serviceConfigDir :: Path Rel Dir
   serviceConfigDir = [reldir|$(namespace @a)|]
   configPaths :: FilePath -> IO [Path Abs Dir]
-  -- ^ will throw if configDir is not well formed
+  -- ^ Will throw if configDir is not well formed.
   configPaths configDir = do
     d <- resolveDir' configDir
     return [d </> serviceConfigDir @a, d]
@@ -62,8 +62,8 @@ class ( HasNamespace a
     Args
       { configDir =
           "services/config/local" &= help "Config directory" &= explicit &=
-          name "config" &=
-          name "c" &=
+          CmdArgs.name "config" &=
+          CmdArgs.name "c" &=
           typDir
       } &=
     program (unpack $ exe @a) &=
