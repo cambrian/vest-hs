@@ -52,7 +52,7 @@ blockConsumer t =
                 fixedOf Ceiling $ rationalOf grossDelegateReward ^* platformFee
               paymentOwed = totalDividends + vestCut
           billId <- nextUUID
-          -- Insert entries into Pg
+          -- Insert entries into Pg.
           Pg.runLoggedTransaction t $ do
             Pg.runInsert $
               Pg.insert
@@ -120,7 +120,8 @@ paymentConsumer t =
         isPlatformDelegate_ <- Pg.runLogged t $ isPlatformDelegate from
         time <- now
         when isPlatformDelegate_ $ do
-          billsOutstanding_ <- Pg.runLogged t $ billsOutstanding $ retag from -- TODO: better address management for union of implicit and originated addresses
+          billsOutstanding_ <- Pg.runLogged t $ billsOutstanding $ retag from
+          -- ^ TODO: Better address management for union of implicit and originated addresses.
           let (billIdsPaid, refund) =
                 foldr
                   (\Bill {id, size} (paid, rem) ->
@@ -132,12 +133,12 @@ paymentConsumer t =
           dividendsPaid <-
             foldr (<>) [] <$>
             mapM (Pg.runLogged t . dividendsForBill) billIdsPaid
-          -- Issue dividends and record issuance
-          -- TODO: could group dividends by delegator
+          -- Issue dividends and record issuance.
+          -- TODO: Could group dividends by delegator.
           forM_ dividendsPaid $ \dividend@Dividend {delegator, size, payout} -> do
             when (isJust $ payoutId payout) $ return ()
             id <- nextUUID
-            -- TODO: make sure this can't fail
+            -- TODO: Make sure this can't fail.
             issuePayout $ PayoutRequest id (retag delegator) size
             Pg.runLoggedTransaction t $ do
               Pg.runInsert $
@@ -149,18 +150,18 @@ paymentConsumer t =
                 Pg.save
                   (dividends schema)
                   (dividend {payout = PayoutId $ Just id} :: Dividend)
-          -- Mark bills paid
+          -- Mark bills paidm
           Pg.runLogged t $
             Pg.runUpdate $
             Pg.update
               (bills schema)
               (\Bill {paidAt} -> [paidAt Pg.<-. Pg.val_ (Just paymentTime)])
               (\Bill {id} -> id `Pg.in_` (Pg.val_ <$> billIdsPaid))
-          -- Issue refund if necessary
+          -- Issue refund if necessarym
           when (refund > fixedQty @Mutez 0) $ do
             refundId <- nextUUID
             issuePayout $ PayoutRequest refundId from refund
-            -- ^ TODO: make sure this can't fail
+            -- ^ TODO: Make sure this can't fail.
             Pg.runLoggedTransaction t $ do
               Pg.runInsert $
                 Pg.insert
@@ -196,7 +197,10 @@ instance Service T where
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      f $ T {dbPool, amqp, redis, accessControlClient}
+      let t = T {dbPool, amqp, redis, accessControlClient}
+      Pg.runLogged t $ Pg.ensurePostgresSchema checkedSchema
+      -- ^ This action should fail if data loss might occur.
+      f t
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()

@@ -16,6 +16,8 @@ dependencies:
 - base                  >= 4.10
 - bytestring            >= 0.10
 - retry                 >= 0.7
+- text                  >= 1.2
+- typed-process         >= 0.2
 - unordered-containers  >= 0.2
 - vest-base
 

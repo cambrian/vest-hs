@@ -9,11 +9,6 @@ import qualified DummyManager.Auth as DummyAuth
 import DummyManager.Internal as DummyManager
 import Vest
 
--- newtype DummyManagerPort =
---   DummyManagerPort Word16
---   deriving newtype (Num, FromJSON)
--- instance Loadable DummyManagerPort where
---   configName = "port"
 type Api
    = AddIntsEndpoint
      :<|> AddIntsBadEndpoint

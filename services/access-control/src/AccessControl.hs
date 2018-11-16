@@ -25,7 +25,7 @@ instance Service T where
   type EventsProduced T = ()
   type EventsConsumed T = ()
   summary = "Access Control v0.1.0"
-  description = "Internal role-based access control server"
+  description = "Internal role-based access control server."
   init configPaths f = do
     seed <- load configPaths
     subjects <- load configPaths

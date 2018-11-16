@@ -1,0 +1,4 @@
+scheme: "Https"
+host: "rpc.tezrpc.me"
+port: 443
+path: ""

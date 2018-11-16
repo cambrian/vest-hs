@@ -18,14 +18,15 @@ instance Service T where
   type EventsConsumed T = ()
   type RpcSpec T = Api
   summary = "Tezos Hot Wallet v0.1.0"
-  description = "Vest's Hot Wallet for Tezos"
+  description = "The Vest hot wallet manager for Tezos."
   init configPaths f = do
     seed <- load configPaths
     accessControlPublicKey <- load configPaths
-    withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
+    tezosCli <- load configPaths
+    withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      f $ T {dbPool, amqp, redis, tezos, accessControlClient}
+      f $ T {dbPool, amqp, redis, tezosCli, accessControlClient}
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = panic "unimplemented"
