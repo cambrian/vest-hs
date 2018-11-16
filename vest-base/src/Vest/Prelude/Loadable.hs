@@ -5,7 +5,7 @@
 -- data A
 --
 -- instance Loadable A where
---   configName = [relfile|a|]
+--   configName = [relfile|a.yaml|]
 --
 -- To use:
 --
@@ -13,9 +13,6 @@
 --   ...
 --
 -- For our loadable A, this will look for "a.yaml" within configDirs.
---
--- Currently configDirs must be all relative paths or all absolute paths. I'm debating making this
--- less type safe and simply allowing [FilePath] instead.
 module Vest.Prelude.Loadable
   ( Loadable(..)
   , LoadableData(..)
@@ -45,7 +42,7 @@ class Loadable a where
 class LoadableData a where
   load :: [Path Abs Dir] -> IO a
 
-instance {-# OVERLAPPABLE #-} (Loadable a, FromJSON a) => LoadableData a where
+instance (Loadable a, FromJSON a) => LoadableData a where
   load paths = configPathUnsafe @a paths >>= readYamlFile
 
 instance (LoadableData a, LoadableData b) =>
