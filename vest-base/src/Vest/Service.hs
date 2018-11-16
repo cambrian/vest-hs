@@ -38,13 +38,12 @@ class ( HasNamespace a
   valuesPublished :: a -> Values (ValueSpec a)
   eventProducers :: a -> Producers (EventsProduced a)
   eventConsumers :: a -> Consumers (EventsConsumed a)
-  serviceConfigDir :: Path Rel Dir
-  serviceConfigDir = [reldir|$(namespace @a)|]
   configPaths :: FilePath -> IO [Path Abs Dir]
   -- ^ Will throw if configDir is not well formed.
   configPaths configDir = do
     d <- resolveDir' configDir
-    return [d </> serviceConfigDir @a, d]
+    serviceConfigDir <- parseRelDir $ unpack $ namespace @a
+    return [d </> serviceConfigDir, d]
   run :: [Path Abs Dir] -> (a -> IO b) -> IO Void
   -- ^ This function runs a service with an arbitrary body function.
   run paths f =

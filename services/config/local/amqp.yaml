@@ -1,4 +1,4 @@
-hostname: "localhost"
-virtualHost: "/"
-username: "guest"
-password: "guest"
+hostname: localhost
+virtualHost: /
+username: guest
+password: guest

@@ -7,10 +7,9 @@ module Postgres
   ( module Reexports
   , Config(..)
   , HasConnection(..)
-  , InvalidStateException(..)
   , runLogged
   , runLoggedTransaction
-  , ensurePostgresSchema
+  , ensureSchema
   ) where
 
 import Database.Beam as Reexports hiding (insert)
@@ -27,10 +26,6 @@ import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
 import GHC.Base (String)
 import qualified Money
 import Vest
-
-data InvalidStateException =
-  InvalidStateException
-  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 deriving instance Read a => Read (PgJSON a)
 
@@ -116,15 +111,20 @@ runLogged t f =
   withConnection t $ \c -> runBeamPostgresDebug (log Debug "SQL query") c f
 
 runLoggedTransaction :: HasConnection t => t -> Pg a -> IO a
--- ^ TODO: Also log transaction open/close.
+-- ^ If parsing interleaved transaction logs is annoying, get a uuid and include it in the log
+-- context.
 runLoggedTransaction t f =
-  withConnection t $ \c ->
-    withTransactionSerializable c $
-    runBeamPostgresDebug (log Debug "SQL transaction") c f
+  withConnection t $ \c -> do
+    log_ Debug "Begin SQL transaction."
+    a <-
+      withTransactionSerializable c $
+      runBeamPostgresDebug (log Debug "SQL transaction") c f
+    log_ Debug "End SQL transaction."
+    return a
 
-ensurePostgresSchema ::
-     (Database Postgres db) => CheckedDatabaseSettings Postgres db -> Pg ()
-ensurePostgresSchema schema = do
+ensureSchema ::
+     Database Postgres db => CheckedDatabaseSettings Postgres db -> Pg ()
+ensureSchema schema = do
   verifyExists <- verifySchema Postgres.migrationBackend schema
   case verifyExists of
     VerificationSucceeded -> return ()
