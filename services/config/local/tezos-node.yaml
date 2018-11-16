@@ -1,4 +1,4 @@
-scheme: "Https"
-host: "rpc.tezrpc.me"
+scheme: Https
+host: rpc.tezrpc.me
 port: 443
-path: ""
+path:

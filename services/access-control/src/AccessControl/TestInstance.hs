@@ -6,7 +6,7 @@
 --
 -- test :: TestTree
 -- test = do
---   testWithService @AccessControl.TestInstance () $ do ...
+--   testWithService @AccessControl.TestInstance [localConfigDir] $ do ...
 --
 -- Also see AccessControl.TestClient for a general purpose client able to hit amqp endpoints.
 module AccessControl.TestInstance

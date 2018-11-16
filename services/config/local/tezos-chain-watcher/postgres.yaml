@@ -1,5 +1,5 @@
-host: "localhost"
+host: localhost
 port: 5432
-user: "tezos-chain-watcher"
-password: "password"
-database: "tezos-chain-watcher"
+user: tezos-chain-watcher
+password: password
+database: tezos-chain-watcher

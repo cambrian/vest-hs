@@ -69,8 +69,7 @@ instance Resource DistributedLock where
     threadId <- myThreadId
     async $
       forever $
-      pubSubForever redis pubSub (return ()) `catch`
-      (\(e :: SomeException) -> throwTo threadId e)
+      pubSubForever redis pubSub (return ()) `catchAny` throwTo threadId
     -- ^ Setup a manager thread for pubSub (see hedis docs).
     runRedis redis (acquire pubSub redisKey ttlSeconds pollInterval)
     (_, cancelRenewer) <-
