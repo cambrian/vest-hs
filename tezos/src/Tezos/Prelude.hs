@@ -14,6 +14,8 @@ type OriginatedAddress = Text' "TzOriginatedHash"
 
 type Address = Text' "TzAddressHash" -- Either type of account hash.
 
+type AddressSecret = Text' "TzAddressSecret"
+
 type SignedOperationContents = Text' "TzSignedOperationContents"
 
 data DelegationInfo = DelegationInfo

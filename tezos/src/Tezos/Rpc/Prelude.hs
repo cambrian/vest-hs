@@ -1,5 +1,5 @@
-module Tezos.Node.Prelude
-  ( module Tezos.Node.Prelude
+module Tezos.Rpc.Prelude
+  ( module Tezos.Rpc.Prelude
   ) where
 
 import Data.Aeson

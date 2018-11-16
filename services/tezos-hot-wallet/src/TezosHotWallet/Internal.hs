@@ -4,7 +4,7 @@ module TezosHotWallet.Internal
 
 import qualified AccessControl.Client
 import qualified Postgres
-import qualified Tezos.Node
+import qualified Tezos.Rpc
 import qualified Transport.Amqp as Amqp
 import Vest
 
@@ -12,7 +12,7 @@ data T = T
   { dbPool :: Pool Postgres.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
-  , tezos :: Tezos.Node.T
+  , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
   }
 

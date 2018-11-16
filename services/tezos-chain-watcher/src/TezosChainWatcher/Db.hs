@@ -4,6 +4,7 @@ module TezosChainWatcher.Db
 
 import Postgres
 import qualified Tezos
+import qualified Tezos.Rpc as Tezos
 import Vest hiding (from, hash, to)
 
 data BlockT f = Block

@@ -1,4 +1,4 @@
-module Tezos.Node
+module Tezos.Rpc
   ( module Reexports
   , T(..)
   , getRewardInfo
@@ -9,13 +9,13 @@ module Tezos.Node
 
 import Control.Retry
 import qualified Http
-import Tezos.Node.Internal
-import Tezos.Node.Internal as Reexports
+import Tezos.Prelude
+import Tezos.Rpc.Internal
+import Tezos.Rpc.Internal as Reexports
   ( blocksPerCycle
   , firstReadableBlockNumber
   )
-import Tezos.Node.Prelude
-import Tezos.Prelude
+import Tezos.Rpc.Prelude
 import Vest hiding (hash)
 
 newtype T = T
@@ -32,7 +32,7 @@ instance Resource T where
   cleanup = cleanupLogged . httpClient
 
 instance Loadable T where
-  configFile = [relfile|tezos-node.yaml|]
+  configFile = [relfile|tezos-rpc.yaml|]
 
 getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
 getRewardInfo T {httpClient} cycleNumber delegateIds = do

@@ -2,6 +2,5 @@ module Tezos
   ( module Reexports
   ) where
 
-import Tezos.Cli as Reexports
-import Tezos.Node as Reexports
+-- Import CLI/RPC qualified as Tezos.
 import Tezos.Prelude as Reexports

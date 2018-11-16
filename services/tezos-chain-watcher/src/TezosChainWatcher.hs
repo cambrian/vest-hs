@@ -5,6 +5,7 @@ module TezosChainWatcher
 import qualified AccessControl.Client
 import qualified Postgres as Pg
 import qualified Tezos
+import qualified Tezos.Rpc as Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
