@@ -278,10 +278,13 @@ data Schema f = Schema
 
 instance Database Postgres Schema
 
-schema :: DatabaseSettings Postgres Schema
-schema = defaultDbSettings
+checkedSchema :: CheckedDatabaseSettings Postgres Schema
+checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 
--- TODO: reduce duplication?
+schema :: DatabaseSettings Postgres Schema
+schema = unCheckDatabase checkedSchema
+
+-- TODO: Reduce duplication?
 selectNextBlock :: Pg Word64
 selectNextBlock = do
   m <-

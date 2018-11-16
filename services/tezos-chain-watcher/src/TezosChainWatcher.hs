@@ -127,7 +127,7 @@ instance Service T where
                    :<|> RewardInfoEndpoint
                    :<|> OriginatedMappingEndpoint
   summary = "Tezos Chain Watcher v0.1.0"
-  description = "Tezos chain watcher"
+  description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
     seed <- load configPaths
     accessControlPublicKey <- load configPaths
