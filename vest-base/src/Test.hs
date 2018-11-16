@@ -27,25 +27,29 @@ testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =
   goldenVsStringDiff name diffCmd path . fmap convertString
 
-newtype TestService a = TestService
+data TestService a = TestService
   { serviceThread :: Async Void
+  , watcherThread :: Async ()
   }
 
 instance Service a => Resource (TestService a) where
-  type ResourceConfig (TestService a) = FilePath
+  type ResourceConfig (TestService a) = [FilePath]
   resourceName = "TestService " <> namespace @a
-  make args = do
+  make configDirs = do
     mainThread <- myThreadId
-    serviceThread <- async $ run @a args return
-    exceptionWatcher <-
+    paths <- mapM resolveDir' configDirs
+    serviceThread <- async $ run @a paths return
+    -- Wait on the service thread so exceptions don't get dropped.
+    watcherThread <-
       async $ do
         threadResult <- waitCatch serviceThread
         case threadResult of
           Left exc -> evilThrowTo mainThread exc
-          Right _ -> return ()
-    cancel exceptionWatcher
-    return $ TestService {serviceThread}
-  cleanup = cancel . serviceThread
+          Right r -> absurd r
+    return $ TestService {serviceThread, watcherThread}
+  cleanup TestService {serviceThread, watcherThread} = do
+    cancel watcherThread
+    cancel serviceThread
 
 testWithResource ::
      forall a. Resource a
@@ -70,12 +74,13 @@ testWithLoadableResource configDir =
 
 testWithService ::
      forall a. Service a
-  => FilePath
+  => [FilePath]
   -> TestTree
   -> TestTree
+-- ^ Overrides the service's config dir logic; it will not automatically look for its namespace.
 -- We're forced to use the somewhat worse (IO a -> TestTree) rather than (a -> TestTree) by tasty.
-testWithService configDir test =
-  testWithResource @(TestService a) configDir (const test)
+testWithService configDirs test =
+  testWithResource @(TestService a) configDirs (const test)
 
 ignoreIO :: a -> IO ()
 ignoreIO _ = return ()

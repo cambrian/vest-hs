@@ -196,6 +196,7 @@ blockForever = do
 last :: [a] -> Maybe a
 last = lastMay
 
+-- | Consider requiring Ix (IndexOf a)
 class (Ord (IndexOf a), Enum (IndexOf a)) =>
       Indexable a
   where

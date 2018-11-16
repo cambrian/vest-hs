@@ -27,9 +27,7 @@ instance Service T where
   summary = "Access Control v0.1.0"
   description = "Internal role-based access control server."
   init configPaths f = do
-    seed <- load configPaths
-    subjects <- load configPaths
-    -- (seed :<|> subjects) <- load configPaths
+    (seed :<|> subjects) <- load configPaths
     let (publicKey, secretKey) = seedKeyPair seed
         acPublicKey = ACPublicKey publicKey
     (tokenTimeWriter, minTokenTime) <- newStream

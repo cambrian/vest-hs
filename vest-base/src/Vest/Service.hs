@@ -45,10 +45,9 @@ class ( HasNamespace a
   configPaths configDir = do
     d <- resolveDir' configDir
     return [d </> serviceConfigDir @a, d]
-  run :: FilePath -> (a -> IO b) -> IO Void
+  run :: [Path Abs Dir] -> (a -> IO b) -> IO Void
   -- ^ This function runs a service with an arbitrary body function.
-  run configDir f = do
-    paths <- configPaths @a configDir
+  run paths f =
     init paths $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
       publish a (Proxy :: Proxy (ValueSpec a)) $ valuesPublished a
@@ -72,4 +71,5 @@ class ( HasNamespace a
   start :: IO Void
   start = do
     Args {configDir} <- cmdArgs $ args @a
-    run @a configDir return
+    paths <- configPaths @a configDir
+    run @a paths return

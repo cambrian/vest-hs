@@ -20,9 +20,7 @@ instance Service T where
   summary = "Tezos Hot Wallet v0.1.0"
   description = "The Vest hot wallet manager for Tezos."
   init configPaths f = do
-    seed <- load configPaths
-    accessControlPublicKey <- load configPaths
-    tezosCli <- load configPaths
+    (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed

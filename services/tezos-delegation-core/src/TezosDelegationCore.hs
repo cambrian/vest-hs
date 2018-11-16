@@ -192,8 +192,7 @@ instance Service T where
   description =
     "Tracks how much delegates owe their delegators for each reward event, and issues payouts on behalf of delegates."
   init configPaths f = do
-    seed <- load configPaths
-    accessControlPublicKey <- load configPaths
+    (accessControlPublicKey :<|> seed) <- load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
