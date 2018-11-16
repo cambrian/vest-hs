@@ -196,7 +196,7 @@ instance Service T where
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      Pg.runLogged dbPool $ Pg.ensurePostgresSchema checkedSchema
+      Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
       -- ^ This action should fail if data loss might occur.
       f $ T {dbPool, amqp, redis, accessControlClient}
   rpcHandlers _ = ()
