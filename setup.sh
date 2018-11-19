@@ -29,7 +29,8 @@ stack install hindent > ~/.vest-hs/hindent-install.log 2>&1
 echo "Installing testing dependencies."
 stack install tasty-discover > ~/.vest-hs/tasty-install.log 2>&1
 echo "Installing external dependencies."
-brew install node diffutils redis rabbitmq libpq postgres > ~/.vest-hs/brew-install.log 2>&1
+brew install git-crypt node diffutils redis rabbitmq libpq postgres \
+  > ~/.vest-hs/brew-install.log 2>&1
 echo "Configuring local Redis to use keyspace events."
 sed -i -e 's/notify-keyspace-events ""/notify-keyspace-events "Kg"/g' /usr/local/etc/redis.conf
 echo -e "${CYAN}1. Run [source ~/.bash_profile] to apply your new PATH."
