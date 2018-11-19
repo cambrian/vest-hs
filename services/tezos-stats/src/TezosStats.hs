@@ -73,9 +73,6 @@ newtype RawStubData =
 instance Loadable RawStubData where
   configFile = [relfile|stub-data.json|]
 
-instance LoadableData RawStubData where
-  load _paths = panic "TODO"
-
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()

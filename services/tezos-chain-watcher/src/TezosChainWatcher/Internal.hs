@@ -4,7 +4,6 @@ module TezosChainWatcher.Internal
 
 import qualified AccessControl.Client
 import qualified Postgres
-import qualified Tezos
 import qualified Tezos.Rpc
 import qualified Transport.Amqp as Amqp
 import Vest
@@ -15,9 +14,7 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
-  , lastConsumedBlockNumber :: TMVar Word64
-  , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
-  , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
+  , confirmationLag :: Int
   }
 
 instance HasNamespace T where

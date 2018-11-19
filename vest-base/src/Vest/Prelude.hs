@@ -28,13 +28,14 @@ gapFilledStream ::
 gapFilledStream materializer startIndex stream = do
   (writer, masterStream) <- newStream
   let f a idx =
-        if idx < index a
-          then do
+        case compare idx (index a) of
+          LT -> do
             a' <- materializer idx
             void $ writeStream writer a'
             f a $ succ idx
-          else do
+          EQ -> do
             void $ writeStream writer a
             return $ succ $ index a
+          GT -> return idx
   void . async $ foldMStream f startIndex stream >> closeStream writer
   return masterStream

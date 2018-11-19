@@ -10,6 +10,7 @@ import Vest hiding (from, hash, to)
 data BlockT f = Block
   { blockNumber :: C f Word64
   , blockHash :: C f Tezos.BlockHash
+  , blockPredecessor :: C f Tezos.BlockHash
   , blockCycleNumber :: C f Word64
   , blockFee :: C f (FixedQty XTZ)
   , blockTime :: C f Time
@@ -224,7 +225,7 @@ selectBlockEventByNumber queryNumber = do
     all_ (blocks schema)
   case blockMaybe of
     Nothing -> return Nothing
-    Just (Block number hash cycleNumber fee time _) -> do
+    Just (Block number hash predecessor cycleNumber fee time _) -> do
       operations <- selectTezosOperationsByBlockNumber number
       originations <- concatMapM selectTezosOriginationsByOpHash operations
       transactions <- concatMapM selectTezosTransactionsByOpHash operations
@@ -233,6 +234,7 @@ selectBlockEventByNumber queryNumber = do
         Tezos.BlockEvent
           { number
           , hash
+          , predecessor
           , cycleNumber
           , fee
           , time
@@ -280,6 +282,7 @@ insertBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
 insertBlockEvent createdAt blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
+                       , predecessor
                        , cycleNumber
                        , fee
                        , time
@@ -290,7 +293,8 @@ insertBlockEvent createdAt blockEvent = do
   runInsert $
     insert
       (blocks schema)
-      (insertValues [Block number hash cycleNumber fee time createdAt])
+      (insertValues
+         [Block number hash predecessor cycleNumber fee time createdAt])
       onConflictDefault
   insertTezosOpHashes number createdAt operations
   insertTezosOriginations createdAt originations

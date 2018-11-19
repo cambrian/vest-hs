@@ -57,6 +57,7 @@ data Transaction = Transaction
 data BlockEvent = BlockEvent
   { number :: Word64
   , hash :: BlockHash
+  , predecessor :: BlockHash
   , cycleNumber :: Word64
   , fee :: FixedQty XTZ
   , time :: Time

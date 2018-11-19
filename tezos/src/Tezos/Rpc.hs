@@ -56,28 +56,47 @@ materializeBlockEventDurable T {httpClient} blockNumber =
        event <- materializeBlockEvent_ httpClient (fromIntegral blockNumber)
        log Debug "materialized block event" blockNumber >> return event)
 
--- | Recovering when a chunked stream fails is messier than just polling every minute for a new
--- block, so we opt for the latter solution when streaming block events.
-streamNewBlockEventsDurable :: T -> IO (Stream QueueBuffer BlockEvent)
-streamNewBlockEventsDurable T {httpClient} = do
-  let streamFrom blockNumber writer = do
-        recovering
-          blockRetryPolicy -- Configurable retry limit?
-          recoveryCases
-          (const $ do
-             log Debug "producing block event" blockNumber
-             event <-
-               materializeBlockEvent_ httpClient (fromIntegral blockNumber)
-             writeStream writer event
-             log Debug "produced block event" blockNumber)
+-- | This function polls every minute for the next sequential block (Tezos also has a monitoring API
+-- based on chunked HTTP responses, but it is not very reliable in prod). Auto-retry is built in
+-- when HTTP requests fail.
+--
+-- This function also handles, within reason, the possibility of a chain forking.
+--
+-- Consider a queue of block hashes E, D, C, B, A and a desired confirmation lag of 5. When the next
+-- block F comes in, we will stream block A and edit the queue to be F, E, D, C, B.
+--
+-- If the next block we see is F, but it claims its predecessor is C, we will write nothing and edit
+-- the queue to look like F, C, B, A. More specifically, the next block to write (A) has not reached
+-- 5 confirmations after the chain re-org.
+--
+-- If F points to a predecessor not in the queue, we can only error and fix it manually.
+streamNewBlockEventsDurable :: T -> Int -> IO (Stream QueueBuffer BlockEvent)
+streamNewBlockEventsDurable T {httpClient} confirmationLag = do
+  let streamQueuedFrom blockQueue blockNumber writer = do
+        event <-
+          recovering
+            blockRetryPolicy -- Configurable retry limit?
+            recoveryCases
+            (const $
+             materializeBlockEvent_ httpClient (fromIntegral blockNumber))
         -- ^ Eagerly runs (and probably fails the first time) each block, which is useful if we've
         -- gotten behind due to a network outage. This works, but could be improved.
-        streamFrom (blockNumber + 1) writer
-  LevelInfo {level = startBlockNumber} <-
+        (newBlockQueue, nextEventMaybe) <-
+          updateBlockQueue confirmationLag blockQueue event
+        case nextEventMaybe of
+          Nothing -> return ()
+          Just nextEvent -> do
+            log Debug "producing block event" blockNumber
+            writeStream writer nextEvent
+            log Debug "produced block event" blockNumber
+        streamQueuedFrom newBlockQueue (blockNumber + 1) writer
+  LevelInfo {level = headBlockNumber} <-
     Http.request httpClient $
     Http.buildRequest (Proxy :: Proxy GetBlockLevel) mainChain headBlockHash
   (writer, stream) <- newStream
-  async $ streamFrom startBlockNumber writer
+  let startBlockNumber =
+        min (headBlockNumber - confirmationLag) firstReadableBlockNumber
+  async $ streamQueuedFrom [] startBlockNumber writer
   return stream
 
 toCycleEventStream ::

@@ -14,7 +14,7 @@ module Postgres
 
 import Database.Beam as Reexports hiding (insert)
 import Database.Beam.Backend.SQL as Reexports
-import Database.Beam.Migrate as Reexports
+import Database.Beam.Migrate as Reexports hiding (time)
 import Database.Beam.Migrate.Simple
 import Database.Beam.Postgres as Reexports
 import qualified Database.Beam.Postgres as Postgres

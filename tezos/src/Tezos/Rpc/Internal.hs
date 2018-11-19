@@ -6,6 +6,7 @@ import Control.Retry
 import Data.Aeson
 import qualified Http
 import Tezos.Prelude
+import qualified Tezos.Prelude as Prelude (BlockEvent(..))
 import Tezos.Rpc.Prelude hiding
   ( Operation(..)
   , Origination(..)
@@ -197,7 +198,7 @@ extractTransaction hash nodeOp =
 
 toBlockEvent :: Block -> IO BlockEvent
 toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
-  let BlockHeader {level = number, timestamp} = header
+  let BlockHeader {level = number, predecessor, timestamp} = header
       BlockMetadata {level = LevelInfo {cycle = cycleNumber}} = metadata
       operationGroups = concat operationsRaw
       operations = fmap (\OperationGroup {hash} -> Tagged hash) operationGroups
@@ -215,6 +216,7 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
     BlockEvent
       { number = fromIntegral number -- Int to Word64.
       , hash = Tagged hash
+      , predecessor = Tagged predecessor
       , cycleNumber = fromIntegral cycleNumber
       , fee = opFee
       , time = timestamp
@@ -241,6 +243,27 @@ materializeBlockEvent_ httpClient blockNumber = do
   when (level /= blockNumber) $ throw UnexpectedResultException
   -- ^ Sometimes the genesis block 0 randomly pops out of a query...
   toBlockEvent block
+
+-- | Please see streamNewBlockEventsDurable to understand this fn.
+-- TODO: Make this return Either to avoid gratuitous IO?
+updateBlockQueue ::
+     Int -> [BlockEvent] -> BlockEvent -> IO ([BlockEvent], Maybe BlockEvent)
+updateBlockQueue confirmationLag queue newEvent = do
+  let BlockEvent {predecessor} = newEvent
+  augmentedQueue <-
+    case head queue of
+      Nothing -> return [newEvent]
+      Just _ -> do
+        let dropQueue =
+              dropWhile (\BlockEvent {hash} -> predecessor /= hash) queue
+        when (null dropQueue) $ throw UnexpectedResultException
+        return dropQueue
+  if length augmentedQueue > confirmationLag
+    then do
+      newQueue <- fromJustUnsafe BugException $ initMay augmentedQueue
+      lastItem <- Just <$> fromJustUnsafe BugException (last augmentedQueue)
+      return (newQueue, lastItem)
+    else return (augmentedQueue, Nothing)
 
 materializeRetryPolicy :: RetryPolicy
 materializeRetryPolicy = exponentialBackoff $ 2 * 1000000
