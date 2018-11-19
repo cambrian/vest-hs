@@ -90,14 +90,13 @@ generateSubjects =
 generatePublicKey :: Text -> TestTree
 -- ^ Even hackier way to generate the access-control-public-key.yaml file for prod and local
 -- environments.
--- TODO: this should be a commit hook
+-- TODO: this should be a pre-commit hook
 generatePublicKey env =
   testCaseRaw
     ("Generate Access Control Public Key - " <> unpack env)
-    ("confg/" <> unpack env <> "/access-control-public-key.yaml") $ do
+    ("config/" <> unpack env <> "/access-control-public-key.yaml") $ do
     path <- resolveDir' $ "config/" <> unpack env <> "/access-control"
     seed <- load [path]
-    panic "asdfs"
     return $ Yaml.encode $ AccessControl.ACPublicKey $ fst $ seedKeyPair seed
 
 testPermitted :: IO TestClient.T -> TestTree
@@ -119,7 +118,11 @@ generateDataFiles :: TestTree
 generateDataFiles =
   testGroup
     "Generate data files"
-    [generateTestPublicKey, generateSubjects, generatePublicKey "local"]
+    [ generateTestPublicKey
+    , generateSubjects
+    , generatePublicKey "local"
+    , generatePublicKey "prod"
+    ]
 
 tests :: TestTree
 tests =
