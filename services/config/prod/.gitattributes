@@ -1,0 +1,4 @@
+# This pattern encrypts the whole directory with subdirs. Necessary because .gitattributes doesn't
+# support directories like .gitignore does.
+* filter=git-crypt diff=git-crypt
+	.gitattributes !filter !diff
