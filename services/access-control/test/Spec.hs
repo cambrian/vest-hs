@@ -61,11 +61,11 @@ instance Service TestServer where
   eventProducers _ = ()
   eventConsumers _ = ()
 
-generatePublicKey :: TestTree
+generateTestPublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file
-generatePublicKey =
+generateTestPublicKey =
   testCaseRaw
-    "Generate Access Control Public Key"
+    "Generate Access Control Public Key - test"
     "access-control/test/config/access-control-public-key.yaml" $ do
     path <- resolveDir' $ testConfigDir <> "/access-control"
     seed <- load [path]
@@ -87,6 +87,19 @@ generateSubjects =
             ]
     return $ Yaml.encode subjects
 
+generatePublicKey :: Text -> TestTree
+-- ^ Even hackier way to generate the access-control-public-key.yaml file for prod and local
+-- environments.
+-- TODO: this should be a commit hook
+generatePublicKey env =
+  testCaseRaw
+    ("Generate Access Control Public Key - " <> unpack env)
+    ("confg/" <> unpack env <> "/access-control-public-key.yaml") $ do
+    path <- resolveDir' $ "config/" <> unpack env <> "/access-control"
+    seed <- load [path]
+    panic "asdfs"
+    return $ Yaml.encode $ AccessControl.ACPublicKey $ fst $ seedKeyPair seed
+
 testPermitted :: IO TestClient.T -> TestTree
 testPermitted t =
   testCase "Permitted" "access-control/test/permitted.gold" $ do
@@ -104,7 +117,9 @@ testForbidden t =
 
 generateDataFiles :: TestTree
 generateDataFiles =
-  testGroup "Generate data files" [generatePublicKey, generateSubjects]
+  testGroup
+    "Generate data files"
+    [generateTestPublicKey, generateSubjects, generatePublicKey "local"]
 
 tests :: TestTree
 tests =
