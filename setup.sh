@@ -33,9 +33,4 @@ brew install git-crypt node diffutils redis rabbitmq libpq postgres \
   > ~/.vest-hs/brew-install.log 2>&1
 echo "Configuring local Redis to use keyspace events."
 sed -i -e 's/notify-keyspace-events ""/notify-keyspace-events "Kg"/g' /usr/local/etc/redis.conf
-echo -e "${CYAN}1. Run [source ~/.bash_profile] to apply your new PATH."
-echo -e "2. Run [createuser --superuser USERNAME] for a local DB user."
-echo -e "3. Run [createdb --owner=USERNAME DBNAME] to create a DB."
-echo -e "4. Run ./dev.sh to build all the modules for Haskero."
-echo -e "5. Run ./deps.sh to build any volatile dependencies."
-echo -e "6. Restart the entire VS Code application.${NC}"
+echo -e "${CYAN}Please follow the remaining instructions in SETUP.${NC}"
