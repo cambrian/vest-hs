@@ -20,6 +20,10 @@ rejectionThreshold :: Word64
 rejectionThreshold = 5
 
 -- Params are (start block number), (op block number, op block hash), and (current block number).
+--
+-- Can you clean up this fn signature? At least make it something like
+-- Either Word64 (Word64, Tezos.BlockHash)
+-- if not separating it into 2 endpoints.
 monitorOpResponse ::
      Word64 -> Maybe (Word64, Tezos.BlockHash) -> Word64 -> MonitorOpResponse
 monitorOpResponse startBlockNumber Nothing currentBlockNumber =
