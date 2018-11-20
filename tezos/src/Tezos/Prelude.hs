@@ -8,11 +8,13 @@ type BlockHash = Text' "TzBlockHash"
 
 type OperationHash = Text' "TzOperationHash"
 
-type ImplicitAddress = Text' "TzImplicitPkh"
+type Address = Text' "TzAddress"
 
-type OriginatedAddress = Text' "TzOriginatedHash"
+-- | The proper way to do this would be to have pure untagging and checked tagging that throws on
+-- invalid inputs, but this will do for the time being.
+type ImplicitAddress = Tagged "Implicit" Address
 
-type Address = Text' "TzAddressHash" -- Either type of account hash.
+type OriginatedAddress = Tagged "Originated" Address
 
 type AddressSecret = Text' "TzAddressSecret"
 

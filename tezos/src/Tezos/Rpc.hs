@@ -43,7 +43,8 @@ getRewardInfo T {httpClient} cycleNumber delegateIds = do
   snapshotBlockHash <-
     getSnapshotBlockHash httpClient rewardBlockCycle snapshotBlockCycle
   mapM
-    (getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash . untag)
+    (getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash .
+     untag . untag)
     delegateIds
 
 materializeBlockEventDurable :: T -> IndexOf BlockEvent -> IO BlockEvent

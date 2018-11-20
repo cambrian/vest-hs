@@ -117,6 +117,8 @@ getSnapshotBlockHash httpClient bakingCycleNumber snapshotCycleNumber = do
 -- | Calculates reward info based on a delegate, the last block in a baking cycle, and the snapshot
 -- block where baking rights were calculated for the baking cycle. This interface allows efficient
 -- requests, even though the snapshot block is redundant information.
+--
+-- Please refactor to take proper tezos types instead of Text
 getRewardInfoSingle :: Http.Client -> Text -> Text -> Text -> IO RewardInfo
 getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
   frozenBalanceCycles <-
@@ -143,7 +145,7 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
   let delegators = delegated_contracts delegateSnapshot
   delegations <-
     mapConcurrently
-      (\delegator -> do
+      (\delegatorRaw -> do
          size <-
            Http.request
              httpClient
@@ -151,13 +153,13 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
                 (Proxy :: Proxy GetContractBalance)
                 mainChain
                 snapshotBlockHash
-                delegator) >>=
+                delegatorRaw) >>=
            toFixedQtyUnsafe
-         return DelegationInfo {delegator = Tagged delegator, size})
+         return DelegationInfo {delegator = Tagged $ Tagged delegatorRaw, size})
       delegators
   return
     RewardInfo
-      { delegate = Tagged delegateId
+      { delegate = Tagged $ Tagged delegateId
       , reward
       , stakingBalance
       , delegatedBalance
@@ -167,24 +169,24 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
 extractOriginations :: Text -> Rpc.Operation -> [Origination]
 extractOriginations hash nodeOp =
   case nodeOp of
-    Rpc.OriginationOp Rpc.Origination { source = originator
-                                      , metadata = OriginationMetadata {operation_result = OriginationResult {originated_contracts = contracts}}
+    Rpc.OriginationOp Rpc.Origination { source
+                                      , metadata = OriginationMetadata {operation_result = OriginationResult {originated_contracts}}
                                       } ->
       fmap
         (\originated ->
            Origination
              { hash = Tagged hash
-             , originator = Tagged originator
-             , originated = Tagged originated
+             , originator = Tagged $ Tagged source
+             , originated = Tagged $ Tagged originated
              })
-        (fromMaybe [] contracts)
+        (fromMaybe [] originated_contracts)
     _ -> []
 
 extractTransaction :: Text -> Rpc.Operation -> IO (Maybe Transaction)
 extractTransaction hash nodeOp =
   case nodeOp of
-    Rpc.TransactionOp Rpc.Transaction { source = from
-                                      , destination = to
+    Rpc.TransactionOp Rpc.Transaction { source
+                                      , destination
                                       , fee = feeRaw
                                       , amount = sizeRaw
                                       } -> do
@@ -193,7 +195,12 @@ extractTransaction hash nodeOp =
       return $
         Just $
         Transaction
-          {hash = Tagged hash, from = Tagged from, to = Tagged to, fee, size}
+          { hash = Tagged hash
+          , from = Tagged source
+          , to = Tagged destination
+          , fee
+          , size
+          }
     _ -> return Nothing
 
 toBlockEvent :: Block -> IO BlockEvent

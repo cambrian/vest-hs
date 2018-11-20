@@ -3,11 +3,17 @@ module TezosHotWallet
   ) where
 
 import qualified AccessControl.Client
+import qualified Postgres as Pg
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosHotWallet.Api as TezosHotWallet
+import TezosHotWallet.Db
 import TezosHotWallet.Internal as TezosHotWallet
 import Vest
 
+-- blockConsumer :: Consumers BlockEvents
+-- blockConsumer =
+--   let ixMaterializer = Pg.selectFirstMissing $ blocks schema
+--       f BlockEvent {number, transactions}
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = PaymentEvents
@@ -20,6 +26,7 @@ instance Service T where
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
+      Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
       f $ T {dbPool, amqp, redis, tezosCli, accessControlClient}
   rpcHandlers _ = panic "unimplemented"
   valuesPublished _ = ()

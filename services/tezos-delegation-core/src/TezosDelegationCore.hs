@@ -21,7 +21,8 @@ blockConsumer :: T -> Consumers BlockEvents
 blockConsumer t =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
       handleCycle blockNum cycleNum cycleTime = do
-        Pg.runLogged t (wasCycleAlreadyHandled cycleNum) >>= (`when` return ())
+        Pg.runLogged t (Pg.wasHandled (cycles schema) cycleNum) >>=
+          (`when` return ())
         delegates <- Pg.runLogged t $ delegatesTrackedAtCycle cycleNum
         rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNum delegates
         time <- now
@@ -112,15 +113,15 @@ blockConsumer t =
 
 paymentConsumer :: T -> Consumers PaymentEvents
 paymentConsumer t =
-  let nextPayment = Pg.runLogged t selectNextPayment
+  let nextPayment = Pg.runLogged t $ Pg.selectFirstMissing $ payments schema
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
       f PaymentEvent {idx, from, size, time = paymentTime} = do
-        Pg.runLogged t (wasPaymentAlreadyHandled idx) >>= (`when` return ())
+        Pg.runLogged t (Pg.wasHandled (payments schema) idx) >>=
+          (`when` return ())
         isPlatformDelegate_ <- Pg.runLogged t $ isPlatformDelegate from
         time <- now
         when isPlatformDelegate_ $ do
-          billsOutstanding_ <- Pg.runLogged t $ billsOutstanding $ retag from
-          -- ^ TODO: Better address management for union of implicit and originated addresses.
+          billsOutstanding_ <- Pg.runLogged t $ billsOutstanding $ Tagged from
           let (billIdsPaid, refund) =
                 foldr
                   (\Bill {id, size} (paid, rem) ->
@@ -138,7 +139,7 @@ paymentConsumer t =
             when (isJust $ payoutId payout) $ return ()
             id <- nextUUID
             -- TODO: Make sure this can't fail.
-            issuePayout $ PayoutRequest id (retag delegator) size
+            issuePayout $ PayoutRequest id (untag delegator) size
             Pg.runLoggedTransaction t $ do
               Pg.runInsert $
                 Pg.insert
@@ -196,7 +197,6 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      -- ^ This action should fail if data loss might occur.
       f $ T {dbPool, amqp, redis, accessControlClient}
   rpcHandlers _ = ()
   valuesPublished _ = ()

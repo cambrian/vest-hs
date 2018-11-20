@@ -5,6 +5,7 @@ module Postgres
   , runLogged
   , runLoggedTransaction
   , ensureSchema
+  , IndexableTable(..)
   ) where
 
 import Data.Time (LocalTime)
@@ -15,7 +16,7 @@ import Database.Beam.Migrate.Simple
 import Database.Beam.Postgres as Reexports
 import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
-import Database.Beam.Postgres.Migrate as Postgres (migrationBackend)
+import qualified Database.Beam.Postgres.Migrate as Postgres (migrationBackend)
 import Database.Beam.Postgres.Syntax as Reexports
 import Database.PostgreSQL.Simple.FromField as Reexports
 import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
@@ -123,8 +124,38 @@ runLoggedTransaction t f =
 
 ensureSchema ::
      Database Postgres db => CheckedDatabaseSettings Postgres db -> Pg ()
+-- ^ Will fail if data loss might occur.
 ensureSchema schema = do
   verifyExists <- verifySchema Postgres.migrationBackend schema
   case verifyExists of
     VerificationSucceeded -> return ()
     VerificationFailed _ -> createSchema Postgres.migrationBackend schema
+
+-- | I don't love the overloading of "Index", but not sure what might be better
+-- TODO: rewrite selectFirstMissing to actually look for gaps
+class (Table a) =>
+      IndexableTable a
+  where
+  indexColumn :: a f -> C f Word64
+  wasHandled ::
+       (Database Postgres db, FromBackendRow Postgres (a Identity))
+    => DatabaseEntity Postgres db (TableEntity a)
+    -> Word64
+    -> Pg Bool
+  wasHandled table idx =
+    not . null <$>
+    runSelectReturningList
+      (select $ filter_ (\row -> indexColumn row ==. val_ idx) $ all_ table)
+  selectFirstMissing ::
+       Database Postgres db
+    => DatabaseEntity Postgres db (TableEntity a)
+    -> Pg Word64
+  selectFirstMissing table = do
+    m <-
+      runSelectReturningOne $
+      select $ aggregate_ max_ $ indexColumn @a <$> all_ table
+    return $
+      case m of
+        Nothing -> 0
+        Just Nothing -> 0
+        Just (Just num) -> num + 1

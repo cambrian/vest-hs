@@ -34,6 +34,9 @@ deriving instance Read (PrimaryKey CycleT Identity)
 
 deriving instance Show (PrimaryKey CycleT Identity)
 
+instance IndexableTable CycleT where
+  indexColumn = number
+
 data DelegateT f = Delegate
   { address :: C f Tezos.ImplicitAddress
   , name :: C f Text
@@ -266,6 +269,9 @@ deriving instance Read (PrimaryKey PaymentT Identity)
 
 deriving instance Show (PrimaryKey PaymentT Identity)
 
+instance IndexableTable PaymentT where
+  indexColumn = idx
+
 data Schema f = Schema
   { cycles :: f (TableEntity CycleT)
   , delegates :: f (TableEntity DelegateT)
@@ -287,7 +293,6 @@ checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 schema :: DatabaseSettings Postgres Schema
 schema = unCheckDatabase checkedSchema
 
--- TODO: Reduce duplication?
 selectNextBlock :: Pg Word64
 selectNextBlock = do
   m <-
@@ -298,10 +303,6 @@ selectNextBlock = do
     case m of
       Nothing -> fromIntegral Tezos.firstReadableBlockNumber
       Just n -> n + 1
-
-wasCycleAlreadyHandled :: Word64 -> Pg Bool
-wasCycleAlreadyHandled cycle =
-  isJust <$> runSelectReturningOne (lookup_ (cycles schema) $ CycleNumber cycle)
 
 delegatesTrackedAtCycle :: Word64 -> Pg [Tezos.ImplicitAddress]
 delegatesTrackedAtCycle cycle =
@@ -318,22 +319,6 @@ wasRewardAlreadyProcessed cycle delegate =
   runSelectReturningOne
     (lookup_ (rewards schema) $
      RewardPKey (CycleNumber cycle) (DelegateAddress delegate))
-
-selectNextPayment :: Pg Word64
-selectNextPayment = do
-  m <-
-    runSelectReturningOne $
-    select $ aggregate_ max_ $ idx <$> all_ (payments schema)
-  return $
-    case m of
-      Nothing -> 0
-      Just Nothing -> 0
-      Just (Just num) -> num + 1
-
-wasPaymentAlreadyHandled :: Word64 -> Pg Bool
-wasPaymentAlreadyHandled paymentIdx =
-  isJust <$>
-  runSelectReturningOne (lookup_ (payments schema) $ PaymentIndex paymentIdx)
 
 billsOutstanding :: Tezos.ImplicitAddress -> Pg [Bill]
 billsOutstanding delegate_ =
@@ -356,4 +341,4 @@ isPlatformDelegate :: Tezos.Address -> Pg Bool
 isPlatformDelegate addr =
   isJust <$>
   runSelectReturningOne
-    (lookup_ (delegates schema) $ DelegateAddress $ retag addr)
+    (lookup_ (delegates schema) $ DelegateAddress $ Tagged addr)

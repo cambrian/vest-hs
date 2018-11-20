@@ -30,6 +30,9 @@ deriving instance Read (PrimaryKey BlockT Identity)
 
 deriving instance Show (PrimaryKey BlockT Identity)
 
+instance IndexableTable BlockT where
+  indexColumn = number
+
 data PayoutT f = Payout
   { id :: C f UUID
   , size :: C f (FixedQty XTZ)
