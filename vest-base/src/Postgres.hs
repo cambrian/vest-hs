@@ -1,8 +1,3 @@
--- Even though this module represents a connection to a postgres database, it is not directly
--- loadable itself (unlike redis, amqp for example). This is because services generally connect
--- to their own specific databases instead of a shared database.
--- This means that when defining services that use databases, you need to newtype
--- Postgres.Connection so that you can provide a specific loadable instance.
 module Postgres
   ( module Reexports
   , Config(..)
@@ -115,11 +110,11 @@ runLoggedTransaction :: HasConnection t => t -> Pg a -> IO a
 -- context.
 runLoggedTransaction t f =
   withConnection t $ \c -> do
-    log_ Debug "Begin SQL transaction."
+    log_ Debug "begin SQL transaction"
     a <-
       withTransactionSerializable c $
       runBeamPostgresDebug (log Debug "SQL transaction") c f
-    log_ Debug "End SQL transaction."
+    log_ Debug "end SQL transaction"
     return a
 
 ensureSchema ::

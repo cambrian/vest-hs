@@ -4,9 +4,14 @@ module TezosChainWatcher.Internal
 
 import qualified AccessControl.Client
 import qualified Postgres
+import qualified Tezos
 import qualified Tezos.Rpc
 import qualified Transport.Amqp as Amqp
 import Vest
+
+newtype TezosFinalizationLag =
+  TezosFinalizationLag Int
+  deriving newtype (FromJSON)
 
 data T = T
   { dbPool :: Pool Postgres.Connection
@@ -14,8 +19,14 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
-  , confirmationLag :: Int
+  , lastConsumedBlockNumber :: TMVar Word64
+  , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
+  , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
+  , finalizationLag :: TezosFinalizationLag
   }
+
+instance Loadable TezosFinalizationLag where
+  configFile = [relfile|tezos-finalization-lag.yaml|]
 
 instance HasNamespace T where
   type Namespace T = "tezos-chain-watcher"

@@ -229,10 +229,10 @@ recoveryCases :: [RetryStatus -> Handler IO Bool]
 recoveryCases =
   [ logRetries
       (\(_ :: Http.ServantError) -> return True)
-      (\b e r -> log Debug "Servant error" $ defaultLogMsg b e r)
+      (\b e r -> log Debug "Servant error" $ take 35 $ defaultLogMsg b e r)
   , logRetries
       (\(_ :: UnexpectedResultException) -> return True)
-      (\b e r -> log Debug "unexpected result" $ defaultLogMsg b e r)
+      (\b e r -> log Debug "unexpected result" $ take 38 $ defaultLogMsg b e r)
   ]
 
 materializeBlockEvent_ :: Http.Client -> Int -> IO BlockEvent
@@ -248,7 +248,7 @@ materializeBlockEvent_ httpClient blockNumber = do
 -- TODO: Make this return Either to avoid gratuitous IO?
 updateBlockQueue ::
      Int -> [BlockEvent] -> BlockEvent -> IO ([BlockEvent], Maybe BlockEvent)
-updateBlockQueue confirmationLag queue newEvent = do
+updateBlockQueue finalizationLag queue newEvent = do
   let BlockEvent {predecessor} = newEvent
   augmentedQueue <-
     case head queue of
@@ -257,8 +257,8 @@ updateBlockQueue confirmationLag queue newEvent = do
         let dropQueue =
               dropWhile (\BlockEvent {hash} -> predecessor /= hash) queue
         when (null dropQueue) $ throw UnexpectedResultException
-        return dropQueue
-  if length augmentedQueue > confirmationLag
+        return $ newEvent : dropQueue
+  if length augmentedQueue > finalizationLag
     then do
       newQueue <- fromJustUnsafe BugException $ initMay augmentedQueue
       lastItem <- Just <$> fromJustUnsafe BugException (last augmentedQueue)

@@ -8,11 +8,11 @@ import qualified Transport.Amqp as Amqp
 import Vest
 
 -- Writing this explicitly causes an auto-format shitshow.
-type OpBlockInfoResponse = (Word64, Tezos.BlockHash)
+type OpBlockInfoResponse = Maybe (Word64, Tezos.BlockHash)
 
 -- Eventually: Some kind of built-in endpoint batching?
 type OpBlockInfoEndpoint
-   = Endpoint_ 60 'Haskell 'NoAuth T Amqp.T "opBlockInfo" Tezos.OperationHash ('Streaming (Maybe OpBlockInfoResponse))
+   = Endpoint_ 60 'Haskell 'NoAuth T Amqp.T "opBlockInfo" Tezos.OperationHash ('Direct OpBlockInfoResponse)
 
 data RewardInfoRequest = RewardInfoRequest
   { cycleNumber :: Word64
@@ -29,3 +29,6 @@ type LatestBlockEventValue
    = ValueTopic T Amqp.T "latestBlockEvent" Tezos.BlockEvent
 
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
+
+type ProvisionalBlockEvents
+   = Event T Amqp.T "provisionalBlocks" Tezos.BlockEvent

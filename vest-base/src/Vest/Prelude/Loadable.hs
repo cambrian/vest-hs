@@ -42,12 +42,12 @@ class Loadable a where
 class LoadableData a where
   load :: [Path Abs Dir] -> IO a
 
-instance (Loadable a, FromJSON a) => LoadableData a where
+instance {-# OVERLAPPABLE #-} (Loadable a, FromJSON a) => LoadableData a where
   load paths = configPathUnsafe @a paths >>= readYamlFile
 
-instance (LoadableData a, LoadableData b) =>
-         LoadableData (a
-                       :<|> b) where
+instance {-# OVERLAPPING #-} (LoadableData a, LoadableData b) =>
+                             LoadableData (a
+                                           :<|> b) where
   load paths = do
     aThread <- async $ load @a paths
     bThread <- async $ load @b paths

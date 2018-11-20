@@ -7,7 +7,7 @@
 5. Restart the entire VS Code application.
 
 ## Database
-1. Run `createuser --superuser USERNAME` to create a local Postgres user `USERNAME`.
+1. Run `createuser -P --superuser USERNAME` to create a local Postgres user `USERNAME`.
 2. Run `createdb --owner=USERNAME DBNAME` to create a local database `DBNAME`.
 
 ## Encryption
