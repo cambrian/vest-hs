@@ -112,8 +112,9 @@ blockConsumer t =
    in (Pg.runLogged t selectNextBlock, handleBlock)
 
 paymentConsumer :: T -> Consumers PaymentEvents
+-- TODO: transaction fees
 paymentConsumer t =
-  let nextPayment = Pg.runLogged t $ Pg.selectFirstMissing $ payments schema
+  let nextPayment = Pg.runLogged t $ Pg.nextUnseenIndex $ payments schema
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
       f PaymentEvent {idx, from, size, time = paymentTime} = do
         Pg.runLogged t (Pg.wasHandled (payments schema) idx) >>=

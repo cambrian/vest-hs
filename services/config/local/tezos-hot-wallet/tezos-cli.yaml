@@ -1,5 +1,5 @@
-cliPath: eztz-simple
-qualifiedNodeUri: https://rpc.tezrpc.me
+eztzExe: ~/.vest-hs/eztz-simple
+tezosNodeUri: https://rpc.tezrpc.me
 # This is the secret for bootstrap1 using liqdev sandbox.
 addressSecret: edsk3gUfUPyBSfrS9CCgmCiQsTCHGkviBDusMxDJstFtojtc1zcpsh
-timeoutInSeconds: 5
+timeoutSeconds: 5

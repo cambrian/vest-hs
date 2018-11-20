@@ -30,6 +30,8 @@ instance (Consumer t a, Consumer t b) =>
     consume t (Proxy :: Proxy a) aConsumers
     consume t (Proxy :: Proxy b) bConsumers
 
+-- TODO: remove locking, but adjust transport settings such that events are only
+-- delivered to one instance
 instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name a))
          , Deserializable fmt a
          , HasNamespace t

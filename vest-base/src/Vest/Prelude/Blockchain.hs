@@ -4,7 +4,7 @@ module Vest.Prelude.Blockchain
 
 import Vest.Prelude.Core
 
-data OpStatus
+data OperationStatus
   = Pending
   | Confirmed
   | Rejected

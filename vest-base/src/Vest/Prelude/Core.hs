@@ -6,6 +6,7 @@ module Vest.Prelude.Core
 import Control.Concurrent.Async as Vest.Prelude.Core
 import Control.Concurrent.STM.Delay as Vest.Prelude.Core
 import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
+import Control.Concurrent.STM.TSem as Vest.Prelude.Core
 import Control.Concurrent.STM.TVar as Vest.Prelude.Core
 import qualified Control.Exception as Evil (Exception, throwTo)
 import Control.Exception.Safe as Vest.Prelude.Core

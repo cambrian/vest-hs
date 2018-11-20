@@ -4,9 +4,22 @@ module TezosHotWallet.Internal
 
 import qualified AccessControl.Client
 import qualified Postgres
+import qualified Tezos
 import qualified Tezos.Cli
 import qualified Transport.Amqp as Amqp
 import Vest
+
+data PaymentEvent = PaymentEvent
+  { idx :: Word64
+  , hash :: Tezos.OperationHash
+  , from :: Tezos.Address
+  , size :: FixedQty XTZ
+  , time :: Time
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
+instance Indexable PaymentEvent where
+  type IndexOf PaymentEvent = Word64
+  index = idx
 
 data T = T
   { dbPool :: Pool Postgres.Connection
@@ -14,6 +27,9 @@ data T = T
   , redis :: RedisConnection
   , tezosCli :: Tezos.Cli.T
   , accessControlClient :: AccessControl.Client.T
+  , paymentWriter :: StreamWriter PaymentEvent
+  , paymentStream :: Stream QueueBuffer PaymentEvent
+  , payoutPendingVar :: TMVar ()
   }
 
 instance HasNamespace T where

@@ -118,7 +118,8 @@ getSnapshotBlockHash httpClient bakingCycleNumber snapshotCycleNumber = do
 -- block where baking rights were calculated for the baking cycle. This interface allows efficient
 -- requests, even though the snapshot block is redundant information.
 --
--- Please refactor to take proper tezos types instead of Text
+-- Please refactor to take tezos types instead of Text.
+-- You should give the other fns in this file a look over too.
 getRewardInfoSingle :: Http.Client -> Text -> Text -> Text -> IO RewardInfo
 getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
   frozenBalanceCycles <-

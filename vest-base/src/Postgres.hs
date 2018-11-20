@@ -132,7 +132,10 @@ ensureSchema schema = do
     VerificationFailed _ -> createSchema Postgres.migrationBackend schema
 
 -- | I don't love the overloading of "Index", but not sure what might be better
--- TODO: rewrite selectFirstMissing to actually look for gaps
+--
+-- Note: For Indexables, it's not advisable to use Postgres' serial type because serials produce
+-- gaps in the case of serialization failures. Instead, you should manually read the next unseen
+-- index and insert with that index in a transaction.
 class (Table a) =>
       IndexableTable a
   where
@@ -146,11 +149,11 @@ class (Table a) =>
     not . null <$>
     runSelectReturningList
       (select $ filter_ (\row -> indexColumn row ==. val_ idx) $ all_ table)
-  selectFirstMissing ::
+  nextUnseenIndex ::
        Database Postgres db
     => DatabaseEntity Postgres db (TableEntity a)
     -> Pg Word64
-  selectFirstMissing table = do
+  nextUnseenIndex table = do
     m <-
       runSelectReturningOne $
       select $ aggregate_ max_ $ indexColumn @a <$> all_ table

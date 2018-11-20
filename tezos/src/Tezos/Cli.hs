@@ -9,10 +9,10 @@ import Tezos.Prelude
 import Vest hiding (decodeUtf8)
 
 data T = T
-  { cliPath :: FilePath -- Expected to work without any further qualification.
-  , qualifiedNodeUri :: Text
+  { eztzExe :: FilePath -- Can be as short as eztz-simple if it's in your path
+  , tezosNodeUri :: Text
   , addressSecret :: AddressSecret
-  , timeoutInSeconds :: Int
+  , timeoutSeconds :: Int
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
 instance Loadable T where
@@ -21,20 +21,20 @@ instance Loadable T where
 -- | Returns Nothing if the payout was not successfully injected.
 makePayout ::
      T -> Address -> FixedQty XTZ -> FixedQty XTZ -> IO (Maybe OperationHash)
-makePayout T { cliPath
-             , qualifiedNodeUri
+makePayout T { eztzExe
+             , tezosNodeUri
              , addressSecret = Tagged addressSecret
-             , timeoutInSeconds
+             , timeoutSeconds
              } (Tagged recipient) size fee = do
-  let node = "-n " <> unpack qualifiedNodeUri
+  let node = "-n " <> unpack tezosNodeUri
       from = "-f " <> unpack addressSecret
       to = "-t " <> unpack recipient
       amount = "-a " <> unpack (show @Integer $ fromIntegral size)
       feeRaw = "-p " <> unpack (show @Integer $ fromIntegral fee)
-      timeout = "m " <> unpack (show timeoutInSeconds)
+      timeout = "m " <> unpack (show timeoutSeconds)
   -- ^ Sadly I could not find a Haskell library to auto-format options.
   (exitCode, output, _) <-
-    readProcess (proc cliPath [node, from, to, amount, feeRaw, timeout])
+    readProcess (proc eztzExe [node, from, to, amount, feeRaw, timeout])
   case exitCode of
     ExitFailure _ -> return Nothing
     ExitSuccess -> do

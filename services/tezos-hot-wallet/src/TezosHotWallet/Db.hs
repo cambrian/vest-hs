@@ -35,9 +35,10 @@ instance IndexableTable BlockT where
 
 data PayoutT f = Payout
   { id :: C f UUID
+  , to :: C f Tezos.Address
   , size :: C f (FixedQty XTZ)
-  , recipient :: C f Tezos.Address
   , opHash :: C (Nullable f) Tezos.OperationHash
+  , status :: C f
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -60,9 +61,41 @@ deriving instance Read (PrimaryKey PayoutT Identity)
 
 deriving instance Show (PrimaryKey PayoutT Identity)
 
+data PaymentT f = Payment
+  { idx :: C f Word64
+  , hash :: C f Tezos.OperationHash
+  , from :: C f Tezos.Address
+  , size :: C f (FixedQty XTZ)
+  , time :: C f Time
+  , createdAt :: C f Time
+  } deriving (Generic, Beamable)
+
+type Payment = PaymentT Identity
+
+deriving instance Eq Payment
+
+deriving instance Read Payment
+
+deriving instance Show Payment
+
+instance Table PaymentT where
+  data PrimaryKey PaymentT f = PaymentIdx (C f Word64)
+                               deriving (Generic, Beamable)
+  primaryKey Payment {idx} = PaymentIdx idx
+
+deriving instance Eq (PrimaryKey PaymentT Identity)
+
+deriving instance Read (PrimaryKey PaymentT Identity)
+
+deriving instance Show (PrimaryKey PaymentT Identity)
+
+instance IndexableTable PaymentT where
+  indexColumn = idx
+
 data Schema f = Schema
   { blocks :: f (TableEntity BlockT)
   , payouts :: f (TableEntity PayoutT)
+  , payments :: f (TableEntity PaymentT)
   } deriving (Generic)
 
 instance Database Postgres Schema
@@ -72,3 +105,6 @@ checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 
 schema :: DatabaseSettings Postgres Schema
 schema = unCheckDatabase checkedSchema
+-- unfulfilledPayouts :: Pg [Payment]
+-- unfulfilledPayments = do
+--   runSelectReturningList $ select $ filter_ (\Payour)
