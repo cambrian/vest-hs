@@ -7,6 +7,7 @@ module Postgres
   , ensureSchema
   ) where
 
+import Data.Time (LocalTime)
 import Database.Beam as Reexports hiding (insert)
 import Database.Beam.Backend.SQL as Reexports
 import Database.Beam.Migrate as Reexports hiding (time)
@@ -15,6 +16,7 @@ import Database.Beam.Postgres as Reexports
 import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
 import Database.Beam.Postgres.Migrate as Postgres (migrationBackend)
+import Database.Beam.Postgres.Syntax as Reexports
 import Database.PostgreSQL.Simple.FromField as Reexports
 import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
@@ -42,34 +44,36 @@ instance (HasSqlValueSyntax be Integer, KnownSymbol a, Money.GoodScale scale) =>
   sqlValueSyntax =
     sqlValueSyntax . Money.someDiscreteAmount . Money.toSomeDiscrete
 
+instance HasDefaultSqlDataType syntax Int64 =>
+         HasDefaultSqlDataType syntax (Money.Discrete' a scale) where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy Int64)
+
 instance HasDefaultSqlDataType syntax a =>
          HasDefaultSqlDataType syntax (Tagged t a) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy a)
 
-instance HasDefaultSqlDataType syntax Int =>
-         HasDefaultSqlDataType syntax (Money.Discrete' a scale) where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy Int)
-
-instance (IsSql92DataTypeSyntax syntax, HasDefaultSqlDataType syntax Text) =>
+instance (IsSql92DataTypeSyntax syntax, HasDefaultSqlDataType syntax LocalTime) =>
          HasDefaultSqlDataType syntax Time where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy Text)
+  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy LocalTime)
+
+instance HasDefaultSqlDataTypeConstraints syntax Int64 =>
+         HasDefaultSqlDataTypeConstraints syntax (Money.Discrete' a scale) where
+  defaultSqlDataTypeConstraints _ _ =
+    defaultSqlDataTypeConstraints (Proxy :: Proxy Int64) (Proxy :: Proxy syntax)
 
 instance HasDefaultSqlDataTypeConstraints syntax a =>
          HasDefaultSqlDataTypeConstraints syntax (Tagged t a) where
   defaultSqlDataTypeConstraints _ _ =
     defaultSqlDataTypeConstraints (Proxy :: Proxy a) (Proxy :: Proxy syntax)
 
-instance HasDefaultSqlDataTypeConstraints syntax Int =>
-         HasDefaultSqlDataTypeConstraints syntax (Money.Discrete' a scale) where
-  defaultSqlDataTypeConstraints _ _ =
-    defaultSqlDataTypeConstraints (Proxy :: Proxy Int) (Proxy :: Proxy syntax)
-
 instance ( IsSql92ColumnSchemaSyntax syntax
-         , HasDefaultSqlDataTypeConstraints syntax Text
+         , HasDefaultSqlDataTypeConstraints syntax LocalTime
          ) =>
          HasDefaultSqlDataTypeConstraints syntax Time where
   defaultSqlDataTypeConstraints _ _ =
-    defaultSqlDataTypeConstraints (Proxy :: Proxy Text) (Proxy :: Proxy syntax)
+    defaultSqlDataTypeConstraints
+      (Proxy :: Proxy LocalTime)
+      (Proxy :: Proxy syntax)
 
 data Config = Config
   { host :: String

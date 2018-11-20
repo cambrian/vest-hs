@@ -1,6 +1,6 @@
 {
   "BeamTable": {
-    "prefix": "beamTable",
+    "prefix": "Beam Table",
     "body": [
       "data ${1:Table}T f = ${1}",
       "  { ${2:primaryKey} :: C f ${3:Type}",
@@ -25,6 +25,22 @@
       "",
       "deriving instance Show (PrimaryKey ${1}T Identity)"
     ],
-    "description": "Beam Table"
+    // "description": "Beam Table"
+  },
+  "BeamSchema": {
+    "prefix": "Beam Schema",
+    "body": [
+      "data Schema f = Schema",
+      "  { ${1} :: f (TableEntity ${2}T)",
+      "  } deriving (Generic)",
+      "",
+      "instance Database Postgres Schema",
+      "",
+      "checkedSchema :: CheckedDatabaseSettings Postgres Schema",
+      "checkedSchema = defaultMigratableDbSettings @PgCommandSyntax",
+      "",
+      "schema :: DatabaseSettings Postgres Schema",
+      "schema = unCheckDatabase checkedSchema",
+    ]
   }
 }

@@ -28,7 +28,9 @@ instance TypeScript UTCTime where
 instance Read NominalDiffTime where
   readPrec = do
     n <- readPrec @Pico
-    ReadPrec.lift $ ReadP.char 's'
+    ReadPrec.lift $ do
+      void $ ReadP.char 's'
+      ReadP.eof
     return $ fromRational $ toRational n
 
 type Time = UTCTime

@@ -152,6 +152,8 @@ deriving instance Read (PrimaryKey DividendT Identity)
 
 deriving instance Show (PrimaryKey DividendT Identity)
 
+-- Presence in this table means that a particular payout has been accepted by the hot wallet, and
+-- will be completed. The size and recipient don't need to be stored here.
 data PayoutT f = Payout
   { id :: C f UUID
   , createdAt :: C f Time
