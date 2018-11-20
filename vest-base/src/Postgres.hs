@@ -76,6 +76,19 @@ instance ( IsSql92ColumnSchemaSyntax syntax
       (Proxy :: Proxy LocalTime)
       (Proxy :: Proxy syntax)
 
+-- -- | This would be for Enums... but we probably want to think of an alternate solution
+-- instance {-# OVERLAPPABLE #-} ( IsSql92DataTypeSyntax syntax
+--                               , HasDefaultSqlDataType syntax Int
+--                               ) =>
+--                               HasDefaultSqlDataType syntax a where
+--   defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy Int)
+-- instance {-# OVERLAPPABLE #-} ( IsSql92ColumnSchemaSyntax syntax
+--                               , HasDefaultSqlDataTypeConstraints syntax Int
+--                               ) =>
+--                               HasDefaultSqlDataTypeConstraints syntax a where
+--   defaultSqlDataTypeConstraints _ _ = defaultSqlDataTypeConstraints (Proxy :: Proxy Int) (Proxy :: Proxy syntax)
+-- instance Enum a => HasSqlEqualityCheck PgExpressionSyntax a where
+--   a ==. b =
 data Config = Config
   { host :: String
   , port :: Word16

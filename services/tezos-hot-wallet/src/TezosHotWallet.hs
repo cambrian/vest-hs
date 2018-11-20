@@ -5,6 +5,7 @@ module TezosHotWallet
 import qualified AccessControl.Client
 import qualified Postgres as Pg
 import qualified Tezos
+import qualified Tezos.Cli
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosHotWallet.Api as TezosHotWallet
 import TezosHotWallet.Db
@@ -47,8 +48,9 @@ payoutHandler t PayoutRequest {id, to, size} = do
     Pg.runInsert $
     Pg.insert
       (payouts schema)
-      (Pg.insertValues [Payout id to size Nothing time])
+      (Pg.insertValues [Payout id to size Nothing "NotIssued" time])
       Pg.onConflictDefault
+  void . atomically $ tryPutTMVar (newPaymentVar t) ()
 
 instance Service T where
   type ValueSpec T = ()
@@ -60,12 +62,27 @@ instance Service T where
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
     (paymentWriter, paymentStream) <- newStream
-    paymentPendingVar <- newEmptyTMVarIO
+    newPaymentVar <- newEmptyTMVarIO
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      void . async . forever $ do atomically $ takeTMVar paymentPendingVar
+      _pendingPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "Pending"
+      -- TODO: watch pending payouts
+      -- Payout handler thread
+      void . async . forever $ do
+        atomically $ takeTMVar newPaymentVar
+        newPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "NotIssued"
+        forM_ newPayouts $ \Payout {to, size} -> do
+          let fee = 0 -- TODO:
+          let tryPayoutUntilSuccess = do
+                m <- Tezos.Cli.makePayout tezosCli to size fee
+                case m of
+                  Nothing -> tryPayoutUntilSuccess
+                  Just hash -> return hash
+          _hash <- tryPayoutUntilSuccess
+          -- TODO: set state and watch
+          return ()
       f $
         T
           { dbPool
@@ -75,7 +92,7 @@ instance Service T where
           , accessControlClient
           , paymentWriter
           , paymentStream
-          , payoutPendingVar
+          , newPaymentVar
           }
   rpcHandlers _ = panic "unimplemented"
   valuesPublished _ = ()

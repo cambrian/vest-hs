@@ -9,4 +9,4 @@ data OperationStatus
   | Pending
   | Confirmed
   | Rejected
-  deriving (Eq, Ord, Read, Show, Enum, Generic, ToJSON, FromJSON, Hashable)
+  deriving (Eq, Ord, Read, Show, Generic, ToJSON, FromJSON, Hashable)
