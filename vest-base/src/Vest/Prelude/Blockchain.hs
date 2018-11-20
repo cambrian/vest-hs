@@ -5,7 +5,8 @@ module Vest.Prelude.Blockchain
 import Vest.Prelude.Core
 
 data OperationStatus
-  = Pending
+  = NotIssued
+  | Pending
   | Confirmed
   | Rejected
   deriving (Eq, Ord, Read, Show, Enum, Generic, ToJSON, FromJSON, Hashable)

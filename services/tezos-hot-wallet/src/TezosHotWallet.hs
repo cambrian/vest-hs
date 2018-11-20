@@ -61,11 +61,11 @@ instance Service T where
     (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
     (paymentWriter, paymentStream) <- newStream
     paymentPendingVar <- newEmptyTMVarIO
-    void . async . forever $ do atomically $ takeTMVar paymentPendingVar
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
+      void . async . forever $ do atomically $ takeTMVar paymentPendingVar
       f $
         T
           { dbPool
@@ -75,6 +75,7 @@ instance Service T where
           , accessControlClient
           , paymentWriter
           , paymentStream
+          , payoutPendingVar
           }
   rpcHandlers _ = panic "unimplemented"
   valuesPublished _ = ()
