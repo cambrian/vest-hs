@@ -2,13 +2,14 @@ import Data.Aeson.Types (Object)
 import qualified Data.Text as Text (replace)
 import Data.Text.Lazy (toStrict)
 import qualified DummyManager
+import System.Console.CmdArgs
 import System.Directory
 import System.FilePath
 import Text.EDE
 import qualified TezosOperationQueue
 import qualified TezosStats
 import Typescript
-import Vest
+import Vest hiding (Args, (</>), summary)
 
 callersToGenerate :: [Object]
 callersToGenerate =
@@ -72,5 +73,6 @@ main = do
   let Args {templateFile} = parsedArgs
   wd <- getCurrentDirectory
   template <- eitherParseFile $ wd </> unpack templateFile
+  -- ^ Eventually: Use the Path library for this kind of stuff.
   either (die . pack) (putText . Text.replace "\"" "'" . toStrict) $
     template >>= (`eitherRender` fromPairs ["services" .= callersToGenerate])
