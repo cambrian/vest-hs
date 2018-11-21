@@ -38,7 +38,7 @@ streamBlockEvent :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
 streamBlockEvent t = do
   let T {finalizationLag = TezosFinalizationLag finalizationLag} = t
   nextBlockNumber <- Pg.runLogged t $ selectNextBlockNumber Final
-  finalEventStream <-
+  (finalEventStream, _) <-
     Tezos.streamBlockEventsDurable (tezos t) finalizationLag nextBlockNumber
   -- Synchronously persist block events in the outgoing stream.
   mapMStream
@@ -56,21 +56,27 @@ streamBlockEvent t = do
 streamProvisionalEvent :: T -> IO (Stream QueueBuffer ProvisionalEvent)
 streamProvisionalEvent t = do
   nextBlockNumber <- Pg.runLogged t $ selectNextBlockNumber Provisional
-  -- nextBlockProvisionalId <- Pg.runLogged t selectNextBlockProvisionalId
-  -- provisionalIdVar <- newTVarIO nextBlockProvisionalId
-  provisionalEventStream <-
+  nextBlockProvisionalId <- Pg.runLogged t selectNextBlockProvisionalId
+  nextProvisionalIdVar <- newTVarIO nextBlockProvisionalId
+  (provisionalEventStream, _) <-
     Tezos.streamBlockEventsDurable (tezos t) 0 nextBlockNumber
   -- Synchronously persist provisional events in the outgoing stream.
   mapMStream
-    (return . (0, ))
-    -- (\blockEvent -> do
-    --    createdAt <- now
-    --    let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
-    --    log Debug "persisting block event" newBlockNumber
-    --    -- TODO: Correct persistence logic.
-    --    Pg.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
-    --    log Debug "persisted block event" newBlockNumber
-    --    return blockEvent)
+    (\blockEvent -> do
+       createdAt <- now
+       let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
+       log Debug "persisting provisional block event" newBlockNumber
+      -- Atomically read and increment the global provisionalId.
+       provisionalId <-
+         atomically $ do
+           oldValue <- readTVar nextProvisionalIdVar
+           writeTVar nextProvisionalIdVar (oldValue + 1)
+           return oldValue
+       Pg.runLoggedTransaction
+         t
+         (insertProvisionalBlockEvent createdAt provisionalId blockEvent)
+       log Debug "persisted provisional block event" newBlockNumber
+       return (provisionalId, blockEvent))
     provisionalEventStream
 
 -- | This service consumes block events for any threads that would normally listen on the raw event

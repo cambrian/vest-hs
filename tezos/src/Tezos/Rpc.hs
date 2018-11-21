@@ -58,11 +58,17 @@ getRewardInfo T {httpClient} cycleNumber delegateIds = do
 -- the queue to look like F, C, B, A. More specifically, the next block to write (A) has not reached
 -- 5 confirmations after the chain re-org.
 --
+-- Note that Blocks E and D will be streamed as invalidations in a separate stream from events.
+--
 -- If F points to a predecessor not in the queue, we can only error and fix it manually.
 streamBlockEventsDurable ::
-     T -> Int -> IndexOf BlockEvent -> IO (Stream QueueBuffer BlockEvent)
+     T
+  -> Int
+  -> IndexOf BlockEvent
+  -> IO (Stream QueueBuffer BlockEvent, Stream QueueBuffer [BlockHash]) -- Events/invalidations.
 streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
   (finalWriter, finalStream) <- newStream
+  (invalidationWriter, invalidationStream) <- newStream
   let streamQueuedFrom eventQueue blockNumber = do
         provisionalEvent <-
           recovering
@@ -70,27 +76,27 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
             recoveryCases
             (const $ materializeBlockEvent httpClient (fromIntegral blockNumber))
         let BlockEvent {number = provisionalNumber} = provisionalEvent
-        log Debug "queueing provisional block event" provisionalNumber
-        (newEventQueue, finalEventMaybe) <-
+        (newEventQueue, invalidationsOrEvent) <-
           updateEventQueue finalizationLag eventQueue provisionalEvent
         log Debug "queued provisional block event" provisionalNumber
-        case finalEventMaybe of
-          Nothing -> return ()
-          Just finalEvent -> do
-            let BlockEvent {number = finalNumber} = finalEvent
-            log Debug "producing block event" finalNumber
+        case invalidationsOrEvent of
+          Left invalidations -> do
+            writeStream invalidationWriter invalidations
+            log Debug "pushed block invalidations" invalidations
+          Right finalEvent -> do
             writeStream finalWriter finalEvent
+            let BlockEvent {number = finalNumber} = finalEvent
             log Debug "produced block event" finalNumber
         streamQueuedFrom newEventQueue (blockNumber + 1)
   async $ streamQueuedFrom [] startBlockNumber
-  return finalStream
+  return (finalStream, invalidationStream)
 
 toCycleEventStream ::
      Stream QueueBuffer BlockEvent
   -> IndexOf CycleEvent
   -> IO (Stream QueueBuffer CycleEvent)
-toCycleEventStream blockEventStream lastSeen = do
-  lastSeenVar <- newTVarIO lastSeen
+toCycleEventStream blockEventStream startLastSeen = do
+  lastSeenVar <- newTVarIO startLastSeen
   filterMapMStream
     (\BlockEvent {cycleNumber, time} -> do
        let lastCycleNumber = cycleNumber - 1

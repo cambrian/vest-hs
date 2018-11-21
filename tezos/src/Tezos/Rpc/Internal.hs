@@ -4,6 +4,7 @@ module Tezos.Rpc.Internal
 
 import Control.Retry
 import Data.Aeson
+import Data.List (span)
 import qualified Http
 import Tezos.Prelude
 import qualified Tezos.Prelude as Prelude (BlockEvent(..))
@@ -255,26 +256,32 @@ materializeBlockEvent httpClient blockNumber = do
   -- ^ Sometimes the genesis block 0 randomly pops out of a query...
   toBlockEvent block
 
--- | Please see streamNewBlockEventsDurable to understand this fn.
--- TODO: Make this return Either to avoid gratuitous IO?
+-- | Returns the updated event queue and EITHER a dequeued block event OR a list of invalidated
+-- block events.
+-- Eventually: Make this pure and avoid gratuitous IO.
 updateEventQueue ::
-     Int -> [BlockEvent] -> BlockEvent -> IO ([BlockEvent], Maybe BlockEvent)
+     Int
+  -> [BlockEvent]
+  -> BlockEvent
+  -> IO ([BlockEvent], Either [BlockHash] BlockEvent)
 updateEventQueue finalizationLag queue newEvent = do
   let BlockEvent {predecessor} = newEvent
-  augmentedQueue <-
+  (augmentedQueue, droppedQueue) <-
     case head queue of
-      Nothing -> return [newEvent]
+      Nothing -> return ([newEvent], [])
       Just _ -> do
-        let dropQueue =
-              dropWhile (\BlockEvent {hash} -> predecessor /= hash) queue
-        when (null dropQueue) $ throw UnexpectedResultException
-        return $ newEvent : dropQueue
+        let (droppedQueue, remainingQueue) =
+              span (\BlockEvent {hash} -> predecessor /= hash) queue
+        when (null remainingQueue) $ throw UnexpectedResultException
+        return (newEvent : remainingQueue, droppedQueue)
   if length augmentedQueue > finalizationLag
     then do
       newQueue <- fromJustUnsafe BugException $ initMay augmentedQueue
-      lastItem <- Just <$> fromJustUnsafe BugException (last augmentedQueue)
-      return (newQueue, lastItem)
-    else return (augmentedQueue, Nothing)
+      lastItem <- fromJustUnsafe BugException (last augmentedQueue)
+      return (newQueue, Right lastItem)
+    else return
+           ( augmentedQueue
+           , Left $ fmap (\BlockEvent {hash} -> hash) droppedQueue)
 
 materializeRetryPolicy :: RetryPolicy
 materializeRetryPolicy = exponentialBackoff $ 2 * 1000000

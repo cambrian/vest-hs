@@ -7,7 +7,7 @@ module TezosChainWatcher.Db
 import Postgres
 import qualified Tezos
 import qualified Tezos.Rpc as Tezos
-import Vest hiding (from, hash, to)
+import Vest hiding (from, hash, state, to)
 
 data BlockT f = Block
   { blockNumber :: C f Word64
@@ -183,35 +183,6 @@ selectNextBlockProvisionalId = do
       Just (Just num) -> num + 1
       _ -> 0
 
-selectBlockInfoForOpHash ::
-     BlockState -> Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
-selectBlockInfoForOpHash state hash =
-  runSelectReturningOne $
-  select $ do
-    op <-
-      filter_ (\Operation {operationHash} -> operationHash ==. val_ hash) $
-      all_ (operations schema)
-    block <- filterBlocksByState state $ all_ (blocks schema)
-    guard_ (operationBlockHash op ==. BlockHash (blockHash block))
-    let Block {blockNumber, blockHash} = block
-    pure (blockNumber, blockHash)
-
-selectOriginatedForImplicit ::
-     BlockState -> Tezos.ImplicitAddress -> Pg [Tezos.OriginatedAddress]
-selectOriginatedForImplicit state implicitAddress =
-  runSelectReturningList $
-  select $ do
-    origination <-
-      filter_
-        (\Origination {originationOriginator} ->
-           originationOriginator ==. val_ implicitAddress) $
-      all_ (originations schema)
-    block <- filterBlocksByState state $ all_ (blocks schema)
-    op <- all_ (operations schema)
-    guard_ (operationBlockHash op ==. BlockHash (blockHash block))
-    guard_ (originationHash origination ==. OperationHash (operationHash op))
-    pure $ originationOriginated origination
-
 toTezosOrigination :: Origination -> Tezos.Origination
 toTezosOrigination Origination { originationHash = OperationHash opHash
                                , originationOriginator = originator
@@ -270,6 +241,17 @@ toBlockEvent (Block number _ hash predecessor cycleNumber fee _ time _ _ _) = do
       , transactions
       }
 
+selectBlockEventByProvisionalId :: Int -> Pg (Maybe Tezos.BlockEvent)
+selectBlockEventByProvisionalId provisionalId = do
+  blockMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
+    all_ (blocks schema)
+  case blockMaybe of
+    Nothing -> return Nothing
+    Just block -> Just <$> toBlockEvent block
+
 -- Non-provisional blocks only.
 selectFinalBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
 selectFinalBlockEventByNumber queryNumber = do
@@ -278,17 +260,6 @@ selectFinalBlockEventByNumber queryNumber = do
     select $
     filter_ (\block -> blockNumber block ==. val_ queryNumber) $
     filterBlocksByState Final (all_ (blocks schema))
-  case blockMaybe of
-    Nothing -> return Nothing
-    Just block -> Just <$> toBlockEvent block
-
-selectBlockEventByProvisionalId :: Int -> Pg (Maybe Tezos.BlockEvent)
-selectBlockEventByProvisionalId provisionalId = do
-  blockMaybe <-
-    runSelectReturningOne $
-    select $
-    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
-    all_ (blocks schema)
   case blockMaybe of
     Nothing -> return Nothing
     Just block -> Just <$> toBlockEvent block
