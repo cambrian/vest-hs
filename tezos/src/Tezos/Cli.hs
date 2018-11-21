@@ -9,7 +9,7 @@ import Tezos.Prelude
 import Vest hiding (decodeUtf8)
 
 data T = T
-  { eztzExe :: FilePath -- Can be as short as eztz-simple if it's in your path
+  { eztzExe :: FilePath -- Can be as short as eztz-simple if it's in your path.
   , tezosNodeUri :: Text
   , addressSecret :: AddressSecret
   , timeoutSeconds :: Int
