@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 
+-- TODO: Remove redundancy in this module.
 module TezosChainWatcher.Db
   ( module TezosChainWatcher.Db
   ) where
@@ -333,12 +334,12 @@ insertProvisionalBlockEvent createdAt provisionalId blockEvent = do
   insertTezosOriginations createdAt originations
   insertTezosTransactions createdAt transactions
 
-finalizeProvisionalBlockEvent :: Time -> Int -> Pg Bool
-finalizeProvisionalBlockEvent updatedAt provisionalId = do
+finalizeProvisionalBlockEvent :: Time -> Tezos.BlockHash -> Pg Bool
+finalizeProvisionalBlockEvent updatedAt hash = do
   blockMaybe <-
     runSelectReturningOne $
     select $
-    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
+    filter_ (\block -> blockHash block ==. val_ hash) $
     filterBlocksByState Provisional $ all_ (blocks schema)
   case blockMaybe of
     Nothing -> return False
@@ -349,16 +350,30 @@ finalizeProvisionalBlockEvent updatedAt provisionalId = do
           (block {blockIsProvisional = False, blockUpdatedAt = Just updatedAt})
       return True
 
--- | Soft delete.
-deleteProvisionalBlockEvent :: Time -> Int -> Pg Bool
-deleteProvisionalBlockEvent deletedAt provisionalId = do
-  blockMaybe <-
-    runSelectReturningOne $
+-- | Soft delete by setting deletedAt.
+deleteProvisionalBlockEventsByHash :: Time -> [Tezos.BlockHash] -> Pg ()
+deleteProvisionalBlockEventsByHash deletedAt hashes = do
+  blocksToDelete <-
+    runSelectReturningList $
     select $
-    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
+    filter_ (\block -> blockHash block `in_` fmap val_ hashes) $
     filterBlocksByState Provisional $ all_ (blocks schema)
-  case blockMaybe of
-    Nothing -> return False
-    Just block -> do
-      runUpdate $ save (blocks schema) (block {blockDeletedAt = Just deletedAt})
-      return True
+  mapM_
+    (\block ->
+       runUpdate $
+       save (blocks schema) (block {blockDeletedAt = Just deletedAt}))
+    blocksToDelete
+
+-- | Soft delete by setting deletedAt.
+deleteOldProvisionalBlockEvents :: Time -> Word64 -> Pg ()
+deleteOldProvisionalBlockEvents deletedAt maxBlockNumberToDelete = do
+  blocksToDelete <-
+    runSelectReturningList $
+    select $
+    filter_ (\block -> blockNumber block <=. val_ maxBlockNumberToDelete) $
+    filterBlocksByState Provisional $ all_ (blocks schema)
+  mapM_
+    (\block ->
+       runUpdate $
+       save (blocks schema) (block {blockDeletedAt = Just deletedAt}))
+    blocksToDelete

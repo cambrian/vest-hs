@@ -38,19 +38,42 @@ streamBlockEvent :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
 streamBlockEvent t = do
   let T {finalizationLag = TezosFinalizationLag finalizationLag} = t
   nextBlockNumber <- Pg.runLogged t $ selectNextBlockNumber Final
-  (finalEventStream, _) <-
+  (finalEventStream, invalidationStream) <-
     Tezos.streamBlockEventsDurable (tezos t) finalizationLag nextBlockNumber
+  -- Asynchronously invalidate provisional events when necessary.
+  tapStream_
+    (\invalidations -> do
+       deletedAt <- now
+       log Debug "invalidating provisional block events" invalidations
+       Pg.runLoggedTransaction
+         t
+         (deleteProvisionalBlockEventsByHash deletedAt invalidations)
+       log Debug "invalidated provisional block events" invalidations)
+    invalidationStream
   -- Synchronously persist block events in the outgoing stream.
   mapMStream
-    (return . identity)
-    -- (\blockEvent -> do
-    --    createdAt <- now
-    --    let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
-    --    log Debug "persisting block event" newBlockNumber
-    --    -- TODO: Correct persistence logic.
-    --    Pg.runLoggedTransaction t (insertBlockEvent createdAt blockEvent)
-    --    log Debug "persisted block event" newBlockNumber
-    --    return blockEvent)
+    (\event -> do
+       updatedAt <- now
+       let deletedAt = updatedAt
+           Tezos.BlockEvent {hash, number} = event
+       atomically $
+         readTMVar (maxConsumedProvisionalBlockNumber t) >>= check . (number >=)
+        -- ^ Ensure that we have seen provisional events at this block level.
+       log Debug "cleaning old provisional block events" number
+       Pg.runLoggedTransaction
+         t
+         (deleteOldProvisionalBlockEvents deletedAt number)
+       log Debug "cleaned old provisional block events" number
+       log Debug "persisting block event" number
+       finalized <-
+         Pg.runLoggedTransaction
+           t
+           (finalizeProvisionalBlockEvent updatedAt hash)
+       unless finalized $ throw BugException
+        -- ^ Finalized events must start as provisional events. We might reconsider this in the
+        -- future, but this solution minimizes data duplication and mutable state in the DB.
+       log Debug "persisted block event" number
+       return event)
     finalEventStream
 
 streamProvisionalEvent :: T -> IO (Stream QueueBuffer ProvisionalEvent)
@@ -94,9 +117,9 @@ blockEventConsumer t =
       consumeBlockEvent x = updateBlockNumber x >> writeStream writer x
    in (getInitialBlockNumber, consumeBlockEvent)
 
--- | This consumer similarly stores the last consumed provisional block id. More importantly, it
+-- | This consumer tracks and store the last consumed provisional block ID. More importantly, it
 -- tracks the maximum block level seen in provisional blocks, which we use to make sure that we
--- don't persist finalized events until they are in a provisional state.
+-- don't persist finalized events until they are first seen in a provisional state.
 provisionalEventConsumer :: T -> Consumers ProvisionalBlockEvents
 provisionalEventConsumer t =
   let getInitialProvisionalId = Pg.runLogged t selectNextBlockProvisionalId

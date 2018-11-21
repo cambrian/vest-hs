@@ -121,9 +121,6 @@ getSnapshotBlockHash httpClient bakingCycleNumber snapshotCycleNumber = do
 -- | Calculates reward info based on a delegate, the last block in a baking cycle, and the snapshot
 -- block where baking rights were calculated for the baking cycle. This interface allows efficient
 -- requests, even though the snapshot block is redundant information.
---
--- Please refactor to take tezos types instead of Text.
--- You should give the other fns in this file a look over too.
 getRewardInfoSingle :: Http.Client -> Text -> Text -> Text -> IO RewardInfo
 getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
   frozenBalanceCycles <-
@@ -237,6 +234,15 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
       , transactions
       }
 
+materializeBlockEvent :: Http.Client -> Int -> IO BlockEvent
+materializeBlockEvent httpClient blockNumber = do
+  blockHash <- getBlockHash httpClient blockNumber
+  block <- getBlock httpClient blockHash
+  let Block {header = BlockHeader {level}} = block
+  when (level /= blockNumber) $ throw UnexpectedResultException
+  -- ^ Sometimes the genesis block 0 randomly pops out of a query...
+  toBlockEvent block
+
 recoveryCases :: [RetryStatus -> Handler IO Bool]
 recoveryCases =
   [ logRetries
@@ -247,44 +253,47 @@ recoveryCases =
       (\b e r -> log Debug "unexpected result" $ take 38 $ defaultLogMsg b e r)
   ]
 
-materializeBlockEvent :: Http.Client -> Int -> IO BlockEvent
-materializeBlockEvent httpClient blockNumber = do
-  blockHash <- getBlockHash httpClient blockNumber
-  block <- getBlock httpClient blockHash
-  let Block {header = BlockHeader {level}} = block
-  when (level /= blockNumber) $ throw UnexpectedResultException
-  -- ^ Sometimes the genesis block 0 randomly pops out of a query...
-  toBlockEvent block
-
--- | Returns the updated event queue and EITHER a dequeued block event OR a list of invalidated
--- block events.
--- Eventually: Make this pure and avoid gratuitous IO.
-updateEventQueue ::
-     Int
-  -> [BlockEvent]
-  -> BlockEvent
-  -> IO ([BlockEvent], Either [BlockHash] BlockEvent)
-updateEventQueue finalizationLag queue newEvent = do
-  let BlockEvent {predecessor} = newEvent
-  (augmentedQueue, droppedQueue) <-
-    case head queue of
-      Nothing -> return ([newEvent], [])
-      Just _ -> do
-        let (droppedQueue, remainingQueue) =
-              span (\BlockEvent {hash} -> predecessor /= hash) queue
-        when (null remainingQueue) $ throw UnexpectedResultException
-        return (newEvent : remainingQueue, droppedQueue)
-  if length augmentedQueue > finalizationLag
-    then do
-      newQueue <- fromJustUnsafe BugException $ initMay augmentedQueue
-      lastItem <- fromJustUnsafe BugException (last augmentedQueue)
-      return (newQueue, Right lastItem)
-    else return
-           ( augmentedQueue
-           , Left $ fmap (\BlockEvent {hash} -> hash) droppedQueue)
-
-materializeRetryPolicy :: RetryPolicy
-materializeRetryPolicy = exponentialBackoff $ 2 * 1000000
-
 blockRetryPolicy :: RetryPolicy
 blockRetryPolicy = constantDelay $ 60 * 1000000
+
+-- | Returns the updated event queue and a list of EITHER invalidated block hashes OR dequeued
+-- block events.
+updateEventQueueWith ::
+     Http.Client
+  -> Int
+  -> [BlockEvent]
+  -> BlockEvent
+  -> IO ([BlockEvent], Either [BlockHash] [BlockEvent])
+updateEventQueueWith httpClient finalizationLag queue newEvent = do
+  let minNumberInQueue = minimum $ fmap (\BlockEvent {number} -> number) queue
+  (augmentedQueue, droppedItems) <-
+    if null queue
+      then return ([newEvent], [])
+      else do
+        let stitchOrRewind eventsToAdd = do
+              BlockEvent {number, predecessor} <-
+                fromJustUnsafe BugException $ last eventsToAdd
+              when (number <= minNumberInQueue) $
+                throw UnexpectedResultException
+              let (droppedItems, remainingQueue) =
+                    span (\BlockEvent {hash} -> predecessor /= hash) queue
+              if null remainingQueue
+                then do
+                  forkPredecessor <-
+                    recovering
+                      blockRetryPolicy
+                      recoveryCases
+                      (const $ getBlock httpClient $ untag predecessor) >>=
+                    toBlockEvent
+                  -- ^ Rewind (until a predecessor is found in the queue).
+                  stitchOrRewind $ eventsToAdd ++ [forkPredecessor]
+                else return (eventsToAdd ++ remainingQueue, droppedItems)
+                -- ^ Stitch (new events to the front of the queue).
+        stitchOrRewind [newEvent]
+  if length augmentedQueue > finalizationLag
+    then do
+      let (newQueue, eventsToStream) = splitAt finalizationLag augmentedQueue
+      return (newQueue, Right eventsToStream)
+    else do
+      let hashesToInvalidate = fmap (\BlockEvent {hash} -> hash) droppedItems
+      return (augmentedQueue, Left hashesToInvalidate)

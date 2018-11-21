@@ -45,28 +45,34 @@ getRewardInfo T {httpClient} cycleNumber delegateIds = do
      untag . untag)
     delegateIds
 
--- | This function polls every minute for the next sequential block (Tezos also has a monitoring API
--- based on chunked HTTP responses, but it is not very reliable in prod). Auto-retry is built in
--- when HTTP requests fail.
+-- | This function polls every minute for the next sequential block and auto-retries when HTTP
+-- requests fail. (It is worth noting that Tezos has its own monitoring API, but it is based on
+-- chunked HTTP responses and is not very reliable in prod.)
 --
 -- This function also handles, within some notion of finality, the possibility of a chain forking.
 --
 -- Consider a queue of block hashes E, D, C, B, A and a desired finalization lag of 5. When the next
--- block F comes in, we will stream block A and edit the queue to be F, E, D, C, B.
+-- block F comes in, we will normally stream block A and edit the queue to be F, E, D, C, B.
 --
--- If the next block we see is F, but it claims its predecessor is C, we will write nothing and edit
--- the queue to look like F, C, B, A. More specifically, the next block to write (A) has not reached
--- 5 confirmations after the chain re-org.
+-- If the next block we see is F, but it claims its predecessor is some block X, we will rewind over
+-- predecessors until we see a block in our queue (B for instance). We edit the queue accordingly to
+-- reflect the re-organization, so it might look like F, X, Y, B, A.
 --
--- Note that Blocks E and D will be streamed as invalidations in a separate stream from events.
+-- Note that the next block to write (A) has not reached 5 confirmations after the chain re-org, so
+-- we write no events out.
 --
--- If F points to a predecessor not in the queue, we can only error and fix it manually.
+-- Note also that Blocks E, D, and C are now invalidated, so we stream them in a separate variable.
+--
+-- If the predecessors of F do not terminate in our block queue within the 5 block lag, a larger
+-- re-organization than we can handle has occurred. We can only error in this instance and fix the
+-- problem manually.
 streamBlockEventsDurable ::
      T
   -> Int
   -> IndexOf BlockEvent
   -> IO (Stream QueueBuffer BlockEvent, Stream QueueBuffer [BlockHash]) -- Events/invalidations.
 streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
+  let updateEventQueue = updateEventQueueWith httpClient finalizationLag
   (finalWriter, finalStream) <- newStream
   (invalidationWriter, invalidationStream) <- newStream
   let streamQueuedFrom eventQueue blockNumber = do
@@ -76,17 +82,23 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
             recoveryCases
             (const $ materializeBlockEvent httpClient (fromIntegral blockNumber))
         let BlockEvent {number = provisionalNumber} = provisionalEvent
-        (newEventQueue, invalidationsOrEvent) <-
-          updateEventQueue finalizationLag eventQueue provisionalEvent
-        log Debug "queued provisional block event" provisionalNumber
-        case invalidationsOrEvent of
+        (newEventQueue, invalidationsOrEvents) <-
+          updateEventQueue eventQueue provisionalEvent
+          -- ^ Recovers and retries internally if its HTTP requests fail.
+        when (finalizationLag > 0) $
+          log Debug "queued provisional block event" provisionalNumber
+        case invalidationsOrEvents of
           Left invalidations -> do
             writeStream invalidationWriter invalidations
             log Debug "pushed block invalidations" invalidations
-          Right finalEvent -> do
-            writeStream finalWriter finalEvent
-            let BlockEvent {number = finalNumber} = finalEvent
-            log Debug "produced block event" finalNumber
+          Right finalEvents ->
+            mapM_
+              (\finalEvent -> do
+                 writeStream finalWriter finalEvent
+                 let BlockEvent {number = finalNumber} = finalEvent
+                 let numberAndLag = (finalNumber, finalizationLag)
+                 log Debug "produced block event on lag" numberAndLag)
+              finalEvents
         streamQueuedFrom newEventQueue (blockNumber + 1)
   async $ streamQueuedFrom [] startBlockNumber
   return (finalStream, invalidationStream)
