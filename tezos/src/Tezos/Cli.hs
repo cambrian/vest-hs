@@ -18,7 +18,7 @@ data T = T
 instance Loadable T where
   configFile = [relfile|tezos-cli.yaml|]
 
--- NOTE: Functions still untested.
+-- TODO: Functions still untested.
 extractAddress :: T -> IO (Maybe Address)
 extractAddress T {eztzExe, tezosNodeUri, addressSecret = Tagged addressSecret} = do
   let node = "--node " <> unpack tezosNodeUri

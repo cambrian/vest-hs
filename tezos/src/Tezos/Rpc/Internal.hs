@@ -28,7 +28,7 @@ toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
 
 -- If Tezos ever hard-forks, our hard-coded constants might break. For now, they make this library
 -- significantly easier to implement.
--- TODO: How to use ratios here?
+-- Eventually: Use ratios here?
 blocksPerCycle :: Int
 blocksPerCycle = 4096
 
@@ -73,6 +73,9 @@ getBlock :: Http.Client -> Text -> IO Block
 getBlock httpClient hash =
   Http.request httpClient $
   Http.buildRequest (Proxy :: Proxy GetBlock) mainChain hash
+
+getHeadBlock :: Http.Client -> IO Block
+getHeadBlock httpClient = getBlock httpClient headBlockHash
 
 -- | Will throw if targetBlockNumber is in the future.
 getBlockHash :: Http.Client -> Int -> IO Text
@@ -243,8 +246,8 @@ recoveryCases =
       (\b e r -> log Debug "unexpected result" $ take 38 $ defaultLogMsg b e r)
   ]
 
-materializeBlockEvent_ :: Http.Client -> Int -> IO BlockEvent
-materializeBlockEvent_ httpClient blockNumber = do
+materializeBlockEvent :: Http.Client -> Int -> IO BlockEvent
+materializeBlockEvent httpClient blockNumber = do
   blockHash <- getBlockHash httpClient blockNumber
   block <- getBlock httpClient blockHash
   let Block {header = BlockHeader {level}} = block
@@ -254,9 +257,9 @@ materializeBlockEvent_ httpClient blockNumber = do
 
 -- | Please see streamNewBlockEventsDurable to understand this fn.
 -- TODO: Make this return Either to avoid gratuitous IO?
-updateBlockQueue ::
+updateEventQueue ::
      Int -> [BlockEvent] -> BlockEvent -> IO ([BlockEvent], Maybe BlockEvent)
-updateBlockQueue finalizationLag queue newEvent = do
+updateEventQueue finalizationLag queue newEvent = do
   let BlockEvent {predecessor} = newEvent
   augmentedQueue <-
     case head queue of

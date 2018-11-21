@@ -2,8 +2,7 @@ module Tezos.Rpc
   ( module Reexports
   , T(..)
   , getRewardInfo
-  , materializeBlockEventDurable
-  , streamNewBlockEventsDurable
+  , streamBlockEventsDurable
   , toCycleEventStream
   ) where
 
@@ -15,7 +14,6 @@ import Tezos.Rpc.Internal as Reexports
   ( blocksPerCycle
   , firstReadableBlockNumber
   )
-import Tezos.Rpc.Prelude
 import Vest hiding (hash)
 
 newtype T = T
@@ -47,14 +45,6 @@ getRewardInfo T {httpClient} cycleNumber delegateIds = do
      untag . untag)
     delegateIds
 
-materializeBlockEventDurable :: T -> IndexOf BlockEvent -> IO BlockEvent
-materializeBlockEventDurable T {httpClient} blockNumber =
-  recovering
-    materializeRetryPolicy -- Configurable retry limit?
-    recoveryCases
-    (const $ materializeBlockEvent_ httpClient (fromIntegral blockNumber))
-    -- ^ Consider adding logging back here. It got cluttery...
-
 -- | This function polls every minute for the next sequential block (Tezos also has a monitoring API
 -- based on chunked HTTP responses, but it is not very reliable in prod). Auto-retry is built in
 -- when HTTP requests fail.
@@ -69,37 +59,31 @@ materializeBlockEventDurable T {httpClient} blockNumber =
 -- 5 confirmations after the chain re-org.
 --
 -- If F points to a predecessor not in the queue, we can only error and fix it manually.
-streamNewBlockEventsDurable :: T -> Int -> IO (Stream QueueBuffer BlockEvent)
-streamNewBlockEventsDurable T {httpClient} finalizationLag = do
-  let streamQueuedFrom blockQueue blockNumber writer = do
-        event <-
+streamBlockEventsDurable ::
+     T -> Int -> IndexOf BlockEvent -> IO (Stream QueueBuffer BlockEvent)
+streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
+  (finalWriter, finalStream) <- newStream
+  let streamQueuedFrom eventQueue blockNumber = do
+        provisionalEvent <-
           recovering
-            blockRetryPolicy -- Configurable retry limit?
+            blockRetryPolicy
             recoveryCases
-            (const $
-             materializeBlockEvent_ httpClient (fromIntegral blockNumber))
-        -- ^ Eagerly runs (and probably fails the first time) each block, which is useful if we've
-        -- gotten behind due to a network outage. This works, but could be improved.
-        log Debug "queueing block event on lag" (blockNumber, finalizationLag)
-        (newBlockQueue, nextEventMaybe) <-
-          updateBlockQueue finalizationLag blockQueue event
-        log Debug "queued block event on lag" (blockNumber, finalizationLag)
-        case nextEventMaybe of
+            (const $ materializeBlockEvent httpClient (fromIntegral blockNumber))
+        let BlockEvent {number = provisionalNumber} = provisionalEvent
+        log Debug "queueing provisional block event" provisionalNumber
+        (newEventQueue, finalEventMaybe) <-
+          updateEventQueue finalizationLag eventQueue provisionalEvent
+        log Debug "queued provisional block event" provisionalNumber
+        case finalEventMaybe of
           Nothing -> return ()
-          Just nextEvent -> do
-            let BlockEvent {number} = nextEvent
-            log Debug "producing block event on lag" (number, finalizationLag)
-            writeStream writer nextEvent
-            log Debug "produced block event on lag" (number, finalizationLag)
-        streamQueuedFrom newBlockQueue (blockNumber + 1) writer
-  LevelInfo {level = headBlockNumber} <-
-    Http.request httpClient $
-    Http.buildRequest (Proxy :: Proxy GetBlockLevel) mainChain headBlockHash
-  (writer, stream) <- newStream
-  let startBlockNumber =
-        max (headBlockNumber - finalizationLag) firstReadableBlockNumber
-  async $ streamQueuedFrom [] startBlockNumber writer
-  return stream
+          Just finalEvent -> do
+            let BlockEvent {number = finalNumber} = finalEvent
+            log Debug "producing block event" finalNumber
+            writeStream finalWriter finalEvent
+            log Debug "produced block event" finalNumber
+        streamQueuedFrom newEventQueue (blockNumber + 1)
+  async $ streamQueuedFrom [] startBlockNumber
+  return finalStream
 
 toCycleEventStream ::
      Stream QueueBuffer BlockEvent

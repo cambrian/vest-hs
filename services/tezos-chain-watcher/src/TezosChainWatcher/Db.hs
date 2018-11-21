@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+
 module TezosChainWatcher.Db
   ( module TezosChainWatcher.Db
   ) where
@@ -9,12 +11,16 @@ import Vest hiding (from, hash, to)
 
 data BlockT f = Block
   { blockNumber :: C f Word64
+  , blockProvisionalId :: C f Word64
   , blockHash :: C f Tezos.BlockHash
   , blockPredecessor :: C f Tezos.BlockHash
   , blockCycleNumber :: C f Word64
   , blockFee :: C f (FixedQty XTZ)
+  , blockIsProvisional :: C f Bool
   , blockTime :: C f Time
   , blockCreatedAt :: C f Time
+  , blockUpdatedAt :: C f (Maybe Time)
+  , blockDeletedAt :: C f (Maybe Time)
   } deriving (Generic, Beamable)
 
 type Block = BlockT Identity
@@ -26,9 +32,9 @@ deriving instance Read Block
 deriving instance Show Block
 
 instance Table BlockT where
-  data PrimaryKey BlockT f = BlockNumber (C f Word64)
+  data PrimaryKey BlockT f = BlockHash (C f Tezos.BlockHash)
                              deriving (Generic, Beamable)
-  primaryKey Block {blockNumber} = BlockNumber blockNumber
+  primaryKey Block {blockHash} = BlockHash blockHash
 
 deriving instance Eq (PrimaryKey BlockT Identity)
 
@@ -38,7 +44,7 @@ deriving instance Show (PrimaryKey BlockT Identity)
 
 data OperationT f = Operation
   { operationHash :: C f Tezos.OperationHash
-  , operationBlockNumber :: PrimaryKey BlockT f
+  , operationBlockHash :: PrimaryKey BlockT f
   , operationCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -141,32 +147,58 @@ checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 schema :: DatabaseSettings Postgres Schema
 schema = unCheckDatabase checkedSchema
 
-selectNextBlockNumber :: Pg Word64
-selectNextBlockNumber = do
+data BlockState
+  = Provisional
+  | Final
+  deriving (Eq)
+
+-- This type signature is gnarly.
+filterBlocksByState state =
+  if state == Provisional
+    then filter_ (\Block {blockDeletedAt} -> blockDeletedAt ==. val_ Nothing)
+    else filter_
+           (\Block {blockIsProvisional, blockDeletedAt} ->
+              (blockIsProvisional ==. val_ False) &&.
+              (blockDeletedAt ==. val_ Nothing))
+
+selectNextBlockNumber :: BlockState -> Pg Word64
+selectNextBlockNumber state = do
   m <-
     runSelectReturningOne $
-    select $ aggregate_ max_ $ blockNumber <$> all_ (blocks schema)
+    select $
+    aggregate_ max_ $
+    blockNumber <$> filterBlocksByState state (all_ (blocks schema))
   return $
     case m of
       Just (Just num) -> num + 1
       _ -> fromIntegral Tezos.firstReadableBlockNumber
 
+selectNextBlockProvisionalId :: Pg Word64
+selectNextBlockProvisionalId = do
+  m <-
+    runSelectReturningOne $
+    select $ aggregate_ max_ $ blockProvisionalId <$> all_ (blocks schema)
+  return $
+    case m of
+      Just (Just num) -> num + 1
+      _ -> 0
+
 selectBlockInfoForOpHash ::
-     Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
-selectBlockInfoForOpHash hash =
+     BlockState -> Tezos.OperationHash -> Pg (Maybe (Word64, Tezos.BlockHash))
+selectBlockInfoForOpHash state hash =
   runSelectReturningOne $
   select $ do
     op <-
       filter_ (\Operation {operationHash} -> operationHash ==. val_ hash) $
       all_ (operations schema)
-    block <- all_ (blocks schema)
-    guard_ (operationBlockNumber op ==. BlockNumber (blockNumber block))
+    block <- filterBlocksByState state $ all_ (blocks schema)
+    guard_ (operationBlockHash op ==. BlockHash (blockHash block))
     let Block {blockNumber, blockHash} = block
     pure (blockNumber, blockHash)
 
 selectOriginatedForImplicit ::
-     Tezos.ImplicitAddress -> Pg [Tezos.OriginatedAddress]
-selectOriginatedForImplicit implicitAddress =
+     BlockState -> Tezos.ImplicitAddress -> Pg [Tezos.OriginatedAddress]
+selectOriginatedForImplicit state implicitAddress =
   runSelectReturningList $
   select $ do
     origination <-
@@ -174,6 +206,10 @@ selectOriginatedForImplicit implicitAddress =
         (\Origination {originationOriginator} ->
            originationOriginator ==. val_ implicitAddress) $
       all_ (originations schema)
+    block <- filterBlocksByState state $ all_ (blocks schema)
+    op <- all_ (operations schema)
+    guard_ (operationBlockHash op ==. BlockHash (blockHash block))
+    guard_ (originationHash origination ==. OperationHash (operationHash op))
     pure $ originationOriginated origination
 
 toTezosOrigination :: Origination -> Tezos.Origination
@@ -192,12 +228,12 @@ toTezosTransaction Transaction { transactionHash = OperationHash opHash
                                } =
   Tezos.Transaction {hash = opHash, from, to, fee, size}
 
-selectTezosOperationsByBlockNumber :: Word64 -> Pg [Tezos.OperationHash]
-selectTezosOperationsByBlockNumber number =
+selectTezosOperationsByBlockHash :: Tezos.BlockHash -> Pg [Tezos.OperationHash]
+selectTezosOperationsByBlockHash hash =
   fmap operationHash <$>
   runSelectReturningList
     (select $
-     filter_ (\op -> operationBlockNumber op ==. val_ (BlockNumber number)) $
+     filter_ (\op -> operationBlockHash op ==. val_ (BlockHash hash)) $
      all_ (operations schema))
 
 selectTezosOriginationsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Origination]
@@ -216,41 +252,55 @@ selectTezosTransactionsByOpHash hash =
      filter_ (\og -> transactionHash og ==. val_ (OperationHash hash)) $
      all_ (transactions schema))
 
-selectBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
-selectBlockEventByNumber queryNumber = do
+toBlockEvent :: Block -> Pg Tezos.BlockEvent
+toBlockEvent (Block number _ hash predecessor cycleNumber fee _ time _ _ _) = do
+  operations <- selectTezosOperationsByBlockHash hash
+  originations <- concatMapM selectTezosOriginationsByOpHash operations
+  transactions <- concatMapM selectTezosTransactionsByOpHash operations
+  return $
+    Tezos.BlockEvent
+      { number
+      , hash
+      , predecessor
+      , cycleNumber
+      , fee
+      , time
+      , operations
+      , originations
+      , transactions
+      }
+
+-- Non-provisional blocks only.
+selectFinalBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
+selectFinalBlockEventByNumber queryNumber = do
   blockMaybe <-
     runSelectReturningOne $
     select $
     filter_ (\block -> blockNumber block ==. val_ queryNumber) $
+    filterBlocksByState Final (all_ (blocks schema))
+  case blockMaybe of
+    Nothing -> return Nothing
+    Just block -> Just <$> toBlockEvent block
+
+selectBlockEventByProvisionalId :: Word64 -> Pg (Maybe Tezos.BlockEvent)
+selectBlockEventByProvisionalId provisionalId = do
+  blockMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
     all_ (blocks schema)
   case blockMaybe of
     Nothing -> return Nothing
-    Just (Block number hash predecessor cycleNumber fee time _) -> do
-      operations <- selectTezosOperationsByBlockNumber number
-      originations <- concatMapM selectTezosOriginationsByOpHash operations
-      transactions <- concatMapM selectTezosTransactionsByOpHash operations
-      return $
-        Just $
-        Tezos.BlockEvent
-          { number
-          , hash
-          , predecessor
-          , cycleNumber
-          , fee
-          , time
-          , operations
-          , originations
-          , transactions
-          }
+    Just block -> Just <$> toBlockEvent block
 
-insertTezosOpHashes :: Word64 -> Time -> [Tezos.OperationHash] -> Pg ()
-insertTezosOpHashes blockNumber createdAt tezosOpHashes =
+insertTezosOpHashes :: Tezos.BlockHash -> Time -> [Tezos.OperationHash] -> Pg ()
+insertTezosOpHashes blockHash createdAt tezosOpHashes =
   runInsert $
   insert
     (operations schema)
     (insertValues $
      fmap
-       (\hash -> Operation hash (BlockNumber blockNumber) createdAt)
+       (\hash -> Operation hash (BlockHash blockHash) createdAt)
        tezosOpHashes)
     onConflictDefault
 
@@ -278,8 +328,8 @@ insertTezosTransactions createdAt tezosTransactions =
        tezosTransactions)
     onConflictDefault
 
-insertBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
-insertBlockEvent createdAt blockEvent = do
+insertProvisionalBlockEvent :: Time -> Word64 -> Tezos.BlockEvent -> Pg ()
+insertProvisionalBlockEvent createdAt provisionalId blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
                        , predecessor
@@ -294,8 +344,50 @@ insertBlockEvent createdAt blockEvent = do
     insert
       (blocks schema)
       (insertValues
-         [Block number hash predecessor cycleNumber fee time createdAt])
+         [ Block
+             number
+             provisionalId
+             hash
+             predecessor
+             cycleNumber
+             fee
+             True
+             time
+             createdAt
+             Nothing
+             Nothing
+         ])
       onConflictDefault
-  insertTezosOpHashes number createdAt operations
+  insertTezosOpHashes hash createdAt operations
   insertTezosOriginations createdAt originations
   insertTezosTransactions createdAt transactions
+
+finalizeProvisionalBlockEvent :: Time -> Word64 -> Pg Bool
+finalizeProvisionalBlockEvent updatedAt provisionalId = do
+  blockMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
+    filterBlocksByState Provisional $ all_ (blocks schema)
+  case blockMaybe of
+    Nothing -> return False
+    Just block -> do
+      runUpdate $
+        save
+          (blocks schema)
+          (block {blockIsProvisional = False, blockUpdatedAt = Just updatedAt})
+      return True
+
+-- | Soft delete.
+deleteProvisionalBlockEvent :: Time -> Word64 -> Pg Bool
+deleteProvisionalBlockEvent deletedAt provisionalId = do
+  blockMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
+    filterBlocksByState Provisional $ all_ (blocks schema)
+  case blockMaybe of
+    Nothing -> return False
+    Just block -> do
+      runUpdate $ save (blocks schema) (block {blockDeletedAt = Just deletedAt})
+      return True

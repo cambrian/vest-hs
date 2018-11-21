@@ -13,15 +13,20 @@ newtype TezosFinalizationLag =
   TezosFinalizationLag Int
   deriving newtype (FromJSON)
 
+type ProvisionalEvent = (Word64, Tezos.BlockEvent)
+
 data T = T
   { dbPool :: Pool Postgres.Connection
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
-  , lastConsumedBlockNumber :: TMVar Word64
+  , lastConsumedFinalBlockNumber :: TMVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
   , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
+  , lastConsumedBlockProvisionalId :: TMVar Word64
+  , provisionalEventConsumerWriter :: StreamWriter ProvisionalEvent
+  , provisionalEventConsumerStream :: Stream QueueBuffer ProvisionalEvent
   , finalizationLag :: TezosFinalizationLag
   }
 

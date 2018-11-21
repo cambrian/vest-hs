@@ -7,13 +7,6 @@ import TezosChainWatcher.Internal
 import qualified Transport.Amqp as Amqp
 import Vest
 
--- Writing this explicitly causes an auto-format shitshow.
-type OpBlockInfoResponse = Maybe (Word64, Tezos.BlockHash)
-
--- Eventually: Some kind of built-in endpoint batching?
-type OpBlockInfoEndpoint
-   = Endpoint_ 60 'Haskell 'NoAuth T Amqp.T "opBlockInfo" Tezos.OperationHash ('Direct OpBlockInfoResponse)
-
 data RewardInfoRequest = RewardInfoRequest
   { cycleNumber :: Word64
   , delegates :: [Tezos.ImplicitAddress]
@@ -31,4 +24,8 @@ type LatestBlockEventValue
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
 
 type ProvisionalBlockEvents
-   = Event T Amqp.T "provisionalBlocks" Tezos.BlockEvent
+   = Event T Amqp.T "provisionalBlocks" ProvisionalEvent
+
+instance Indexable ProvisionalEvent where
+  type IndexOf ProvisionalEvent = Word64
+  index = fst
