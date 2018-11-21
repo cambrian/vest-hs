@@ -11,7 +11,7 @@ import Vest hiding (from, hash, to)
 
 data BlockT f = Block
   { blockNumber :: C f Word64
-  , blockProvisionalId :: C f Word64
+  , blockProvisionalId :: C f Int
   , blockHash :: C f Tezos.BlockHash
   , blockPredecessor :: C f Tezos.BlockHash
   , blockCycleNumber :: C f Word64
@@ -173,7 +173,7 @@ selectNextBlockNumber state = do
       Just (Just num) -> num + 1
       _ -> fromIntegral Tezos.firstReadableBlockNumber
 
-selectNextBlockProvisionalId :: Pg Word64
+selectNextBlockProvisionalId :: Pg Int
 selectNextBlockProvisionalId = do
   m <-
     runSelectReturningOne $
@@ -282,7 +282,7 @@ selectFinalBlockEventByNumber queryNumber = do
     Nothing -> return Nothing
     Just block -> Just <$> toBlockEvent block
 
-selectBlockEventByProvisionalId :: Word64 -> Pg (Maybe Tezos.BlockEvent)
+selectBlockEventByProvisionalId :: Int -> Pg (Maybe Tezos.BlockEvent)
 selectBlockEventByProvisionalId provisionalId = do
   blockMaybe <-
     runSelectReturningOne $
@@ -328,7 +328,7 @@ insertTezosTransactions createdAt tezosTransactions =
        tezosTransactions)
     onConflictDefault
 
-insertProvisionalBlockEvent :: Time -> Word64 -> Tezos.BlockEvent -> Pg ()
+insertProvisionalBlockEvent :: Time -> Int -> Tezos.BlockEvent -> Pg ()
 insertProvisionalBlockEvent createdAt provisionalId blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
@@ -362,7 +362,7 @@ insertProvisionalBlockEvent createdAt provisionalId blockEvent = do
   insertTezosOriginations createdAt originations
   insertTezosTransactions createdAt transactions
 
-finalizeProvisionalBlockEvent :: Time -> Word64 -> Pg Bool
+finalizeProvisionalBlockEvent :: Time -> Int -> Pg Bool
 finalizeProvisionalBlockEvent updatedAt provisionalId = do
   blockMaybe <-
     runSelectReturningOne $
@@ -379,7 +379,7 @@ finalizeProvisionalBlockEvent updatedAt provisionalId = do
       return True
 
 -- | Soft delete.
-deleteProvisionalBlockEvent :: Time -> Word64 -> Pg Bool
+deleteProvisionalBlockEvent :: Time -> Int -> Pg Bool
 deleteProvisionalBlockEvent deletedAt provisionalId = do
   blockMaybe <-
     runSelectReturningOne $

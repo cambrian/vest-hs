@@ -15,6 +15,8 @@ rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 
+-- | Both materializers wait on consumption of the desired event to occur, since that is the only
+-- guarantee that a given event has been persisted in the DB (and can be accessed).
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
   atomically $
@@ -74,6 +76,9 @@ streamProvisionalEvent t = do
 -- | This service consumes block events for any threads that would normally listen on the raw event
 -- stream. Storing the raw event stream is only possible on the master service replica (the one that
 -- produces the stream).
+--
+-- Note that this consumer stores the last consumed block event number (for any materializers or
+-- RPCs that need to block until their data is ready).
 blockEventConsumer :: T -> Consumers BlockEvents
 blockEventConsumer t =
   let getInitialBlockNumber = Pg.runLogged t $ selectNextBlockNumber Final
@@ -83,16 +88,27 @@ blockEventConsumer t =
       consumeBlockEvent x = updateBlockNumber x >> writeStream writer x
    in (getInitialBlockNumber, consumeBlockEvent)
 
+-- | This consumer similarly stores the last consumed provisional block id. More importantly, it
+-- tracks the maximum block level seen in provisional blocks, which we use to make sure that we
+-- don't persist finalized events until they are in a provisional state.
 provisionalEventConsumer :: T -> Consumers ProvisionalBlockEvents
 provisionalEventConsumer t =
   let getInitialProvisionalId = Pg.runLogged t selectNextBlockProvisionalId
       T { provisionalEventConsumerWriter = writer
         , lastConsumedBlockProvisionalId
+        , maxConsumedProvisionalBlockNumber
         } = t
       updateBlockProvisionalId (provisionalId, _) =
-        atomically . writeTMVar lastConsumedBlockProvisionalId $ provisionalId
-      consumeProvisionalEvent x =
-        updateBlockProvisionalId x >> writeStream writer x
+        atomically $ writeTMVar lastConsumedBlockProvisionalId provisionalId
+      updateProvisionalBlockNumber (_, Tezos.BlockEvent {number}) = do
+        provisionalBlockNumber <-
+          atomically $ readTMVar maxConsumedProvisionalBlockNumber
+        when (number > provisionalBlockNumber) $
+          atomically $ writeTMVar maxConsumedProvisionalBlockNumber number
+      consumeProvisionalEvent x = do
+        updateBlockProvisionalId x
+        updateProvisionalBlockNumber x
+        writeStream writer x
    in (getInitialProvisionalId, consumeProvisionalEvent)
 
 instance Service T where
@@ -109,6 +125,7 @@ instance Service T where
     lastConsumedFinalBlockNumber <- newEmptyTMVarIO
     (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
     lastConsumedBlockProvisionalId <- newEmptyTMVarIO
+    maxConsumedProvisionalBlockNumber <- newEmptyTMVarIO
     (provisionalEventConsumerWriter, provisionalEventConsumerStream) <-
       newStream
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
@@ -126,6 +143,7 @@ instance Service T where
           , blockEventConsumerWriter
           , blockEventConsumerStream
           , lastConsumedBlockProvisionalId
+          , maxConsumedProvisionalBlockNumber
           , provisionalEventConsumerWriter
           , provisionalEventConsumerStream
           , finalizationLag

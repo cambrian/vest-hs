@@ -27,5 +27,5 @@ type ProvisionalBlockEvents
    = Event T Amqp.T "provisionalBlocks" ProvisionalEvent
 
 instance Indexable ProvisionalEvent where
-  type IndexOf ProvisionalEvent = Word64
+  type IndexOf ProvisionalEvent = Int
   index = fst

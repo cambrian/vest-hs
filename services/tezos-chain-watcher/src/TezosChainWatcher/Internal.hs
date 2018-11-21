@@ -13,7 +13,7 @@ newtype TezosFinalizationLag =
   TezosFinalizationLag Int
   deriving newtype (FromJSON)
 
-type ProvisionalEvent = (Word64, Tezos.BlockEvent)
+type ProvisionalEvent = (Int, Tezos.BlockEvent)
 
 data T = T
   { dbPool :: Pool Postgres.Connection
@@ -24,7 +24,8 @@ data T = T
   , lastConsumedFinalBlockNumber :: TMVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
   , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
-  , lastConsumedBlockProvisionalId :: TMVar Word64
+  , lastConsumedBlockProvisionalId :: TMVar Int
+  , maxConsumedProvisionalBlockNumber :: TMVar Word64
   , provisionalEventConsumerWriter :: StreamWriter ProvisionalEvent
   , provisionalEventConsumerStream :: Stream QueueBuffer ProvisionalEvent
   , finalizationLag :: TezosFinalizationLag
