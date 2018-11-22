@@ -1,4 +1,4 @@
-scheme: Https
-host: rpc.tezrpc.me
-port: 443
+scheme: Http
+host: tezospublicnode-ba7b21b170dc0594.elb.us-west-1.amazonaws.com
+port: 8732
 path: /

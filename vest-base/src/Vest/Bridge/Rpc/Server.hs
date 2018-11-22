@@ -87,7 +87,7 @@ serve_ sender t handler =
   where
     rawRoute = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy route)
     asyncHandle headers reqText respond =
-      async $
+      asyncThrows $
       catches
         (do claims <-
               atomically (verifyRequest (authVerifier @auth t) headers reqText) >>=

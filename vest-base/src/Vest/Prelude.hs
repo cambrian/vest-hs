@@ -37,5 +37,5 @@ gapFilledStream materializer startIndex stream = do
             void $ writeStream writer a
             return $ succ $ index a
           GT -> return idx
-  void . async $ foldMStream f startIndex stream >> closeStream writer
+  void . asyncThrows $ foldMStream f startIndex stream >> closeStream writer
   return masterStream

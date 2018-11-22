@@ -119,7 +119,7 @@ callStreaming t req f = do
   mainThread <- myThreadId
   (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
   let handleResponse resOrExcText = do
-        _ <- tryPutMVar gotFirstResponse ()
+        void $ tryPutMVar gotFirstResponse ()
         renewHeartbeatTimer twoHeartbeats
         deserializeUnsafe' @fmt resOrExcText >>= \case
           RpcResponseClientException eText ->

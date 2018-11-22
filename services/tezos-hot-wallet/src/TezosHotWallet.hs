@@ -70,7 +70,7 @@ instance Service T where
       _pendingPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "Pending"
       -- TODO: watch pending payouts
       -- Payout handler thread
-      void . async . forever $ do
+      void . asyncThrows . forever $ do
         atomically $ takeTMVar newPaymentVar
         newPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "NotIssued"
         forM_ newPayouts $ \Payout {to, size} -> do

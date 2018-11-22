@@ -21,11 +21,11 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
-  , lastConsumedFinalBlockNumber :: TMVar Word64
+  , lastConsumedFinalBlockNumber :: TVar Word64
   , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
   , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
-  , lastConsumedBlockProvisionalId :: TMVar Int
-  , maxConsumedProvisionalBlockNumber :: TMVar Word64
+  , lastConsumedBlockProvisionalId :: TVar Int
+  , maxConsumedProvisionalBlockNumber :: TVar Word64
   , provisionalEventConsumerWriter :: StreamWriter ProvisionalEvent
   , provisionalEventConsumerStream :: Stream QueueBuffer ProvisionalEvent
   , finalizationLag :: TezosFinalizationLag

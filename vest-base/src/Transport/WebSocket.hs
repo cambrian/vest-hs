@@ -79,7 +79,7 @@ instance Resource T where
     clientResponseHandlers <- HashTable.new
     -- Warp.run blocks forever, so we put it in its own thread.
     serverThread <-
-      async' $
+      asyncThrows' $
       Warp.run (fromIntegral $ untag servePort) $
       WS.websocketsOr
         WS.defaultConnectionOptions
@@ -89,9 +89,10 @@ instance Resource T where
       forM servers $ \(namespace, ServerInfo {uri, port, path}) -> do
         requestMVar <- newEmptyMVar
         HashTable.insert clientRequestHandlers namespace (putMVar requestMVar)
+        -- Swallowing client exceptions is fine (usually just ConnectionClosed).
         async' $ do
           when (isLocalHost uri) (threadDelay (sec 0.05))
-             -- ^ If this client is connecting to the local machine, wait for the server to start.
+          -- ^ If this client is connecting to the local machine, wait for the server to start.
           WS.runClient
             (unpack $ untag uri)
             (fromIntegral $ untag port)
@@ -153,16 +154,15 @@ wsClientApp ::
      HashTable (UUID' "Request") (Text' "Response" -> IO ())
   -> MVar RequestMessage
   -> WS.ClientApp ()
-wsClientApp clientResponseHandlers requestMVar conn =
-  withAsync
-    (async . forever . runMaybeT $ do
-       ResponseMessage {requestId, resText} <-
-         MaybeT $ WS.receiveData conn >>- deserialize @'JSON
-       handler <- MaybeT $ HashTable.lookup clientResponseHandlers requestId
-       liftIO $ handler resText)
-    (const . forever $ do
-       request <- takeMVar requestMVar
-       WS.sendTextData conn (serialize @'JSON request))
+wsClientApp clientResponseHandlers requestMVar conn = do
+  void . asyncThrows . forever . runMaybeT $ do
+    ResponseMessage {requestId, resText} <-
+      MaybeT $ WS.receiveData conn >>- deserialize @'JSON
+    handler <- MaybeT $ HashTable.lookup clientResponseHandlers requestId
+    liftIO $ handler resText
+  forever $ do
+    request <- takeMVar requestMVar
+    WS.sendTextData conn (serialize @'JSON request)
 
 instance RpcTransport T where
   serveRaw ::
@@ -176,7 +176,7 @@ instance RpcTransport T where
       Nothing -> HashTable.insert serverRequestHandlers route handleMsg
     where
       handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
-        async . void . runMaybeT $ do
+        asyncThrows . void . runMaybeT $ do
           handler <- MaybeT $ HashTable.lookup serverResponseHandlers clientId
           lift $
             asyncHandler

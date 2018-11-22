@@ -225,7 +225,9 @@ makeStreamReader buf = do
       propagate = do
         a <- MaybeT $ atomically read
         lift $ Lock.with propagateLock $
-          -- Uncaught exceptions in impure streaming actions should cause the process to crash.
+          -- Uncaught exceptions in impure streaming actions should cause the process to crash. Note
+          -- that parallelFilterValuesM runs threads internally, so we cannot simply wrap propagate
+          -- in an asyncThrows block.
           TMap.parallelFilterValuesM (`writeStream'` a) downstreams `catchAny`
           throwTo thisThread
         propagate
@@ -340,7 +342,7 @@ class Bufferable buf a =>
   -- ^ Returns the stream immediately. A child thread fills it with the list contents.
   streamFromList as = do
     (writer, reader) <- newStream
-    void . async $ do
+    void . asyncThrows $ do
       mapM_ (writeStream' writer) as
       closeStream writer
     return reader

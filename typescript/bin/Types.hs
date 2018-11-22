@@ -62,7 +62,7 @@ argsConfig =
 
 main :: IO ()
 main = do
-  _ <- cmdArgs argsConfig
+  void $ cmdArgs argsConfig
   versionText <- version
   putText . pack . replaceWithList replaceRules $
     unpack

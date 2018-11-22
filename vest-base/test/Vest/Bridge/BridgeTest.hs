@@ -118,7 +118,7 @@ makeIncrementValue = do
           writeStream writer n
           threadDelay (sec 0.01)
           loop stop (n + 1)
-  async $ loop 5 0
+  asyncThrows $ loop 5 0
   return stream
 
 type IncrementValueTopic transport = ValueTopic T transport "incrementValue" Int

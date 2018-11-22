@@ -45,7 +45,7 @@ instance (Permission.Is p) => RequestVerifier (Verifier p) where
       AccessControl.Token {publicKey, name, permissions, time} <-
         verify' (AccessControl.unwrap accessControlPublicKey) signedToken >>=
         read' @AccessControl.Token
-      _ <- verify' publicKey (clientSig, reqText)
+      void $ verify' publicKey (clientSig, reqText)
       if HashSet.member (Permission.runtimeRep @p) permissions &&
          time >= minTokenTime
         then Just $ Claims {publicKey, name}

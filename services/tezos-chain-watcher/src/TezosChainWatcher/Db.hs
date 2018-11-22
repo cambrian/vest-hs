@@ -162,8 +162,8 @@ filterBlocksByState state =
               (blockIsProvisional ==. val_ False) &&.
               (blockDeletedAt ==. val_ Nothing))
 
-selectNextBlockNumber :: BlockState -> Pg Word64
-selectNextBlockNumber state = do
+selectMaxBlockNumber :: BlockState -> Pg Word64
+selectMaxBlockNumber state = do
   m <-
     runSelectReturningOne $
     select $
@@ -171,18 +171,18 @@ selectNextBlockNumber state = do
     blockNumber <$> filterBlocksByState state (all_ (blocks schema))
   return $
     case m of
-      Just (Just num) -> num + 1
-      _ -> fromIntegral Tezos.firstReadableBlockNumber
+      Just (Just num) -> num
+      _ -> fromIntegral Tezos.firstReadableBlockNumber - 1
 
-selectNextBlockProvisionalId :: Pg Int
-selectNextBlockProvisionalId = do
+selectMaxBlockProvisionalId :: Pg Int
+selectMaxBlockProvisionalId = do
   m <-
     runSelectReturningOne $
     select $ aggregate_ max_ $ blockProvisionalId <$> all_ (blocks schema)
   return $
     case m of
-      Just (Just num) -> num + 1
-      _ -> 0
+      Just (Just num) -> num
+      _ -> -1
 
 toTezosOrigination :: Origination -> Tezos.Origination
 toTezosOrigination Origination { originationHash = OperationHash opHash
@@ -273,8 +273,8 @@ insertTezosOpHashes blockHash createdAt tezosOpHashes =
     (insertValues $
      fmap
        (\hash -> Operation hash (BlockHash blockHash) createdAt)
-       tezosOpHashes)
-    onConflictDefault
+       tezosOpHashes) $
+  onConflict anyConflict onConflictDoNothing
 
 insertTezosOriginations :: Time -> [Tezos.Origination] -> Pg ()
 insertTezosOriginations createdAt tezosOriginations =
@@ -285,8 +285,8 @@ insertTezosOriginations createdAt tezosOriginations =
      fmap
        (\Tezos.Origination {hash, originator, originated} ->
           Origination (OperationHash hash) originator originated createdAt)
-       tezosOriginations)
-    onConflictDefault
+       tezosOriginations) $
+  onConflict anyConflict onConflictDoNothing
 
 insertTezosTransactions :: Time -> [Tezos.Transaction] -> Pg ()
 insertTezosTransactions createdAt tezosTransactions =
@@ -297,8 +297,8 @@ insertTezosTransactions createdAt tezosTransactions =
      fmap
        (\Tezos.Transaction {hash, from, to, fee, size} ->
           Transaction (OperationHash hash) from to fee size createdAt)
-       tezosTransactions)
-    onConflictDefault
+       tezosTransactions) $
+  onConflict anyConflict onConflictDoNothing
 
 insertProvisionalBlockEvent :: Time -> Int -> Tezos.BlockEvent -> Pg ()
 insertProvisionalBlockEvent createdAt provisionalId blockEvent = do
@@ -328,8 +328,8 @@ insertProvisionalBlockEvent createdAt provisionalId blockEvent = do
              createdAt
              Nothing
              Nothing
-         ])
-      onConflictDefault
+         ]) $
+    onConflict anyConflict onConflictDoNothing
   insertTezosOpHashes hash createdAt operations
   insertTezosOriginations createdAt originations
   insertTezosTransactions createdAt transactions

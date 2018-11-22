@@ -11,6 +11,14 @@ import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
 import Vest hiding (hash)
 
+getNextBlockNumber :: T -> IO Word64
+getNextBlockNumber T {lastConsumedFinalBlockNumber} =
+  (1 +) <$> readTVarIO lastConsumedFinalBlockNumber
+
+getNextBlockProvisionalId :: T -> IO Int
+getNextBlockProvisionalId T {lastConsumedBlockProvisionalId} =
+  (1 +) <$> readTVarIO lastConsumedBlockProvisionalId
+
 rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
@@ -20,7 +28,7 @@ rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t blockNumber = do
   atomically $
-    readTMVar (lastConsumedFinalBlockNumber t) >>= check . (blockNumber <=)
+    readTVar (lastConsumedFinalBlockNumber t) >>= check . (blockNumber <=)
   Pg.runLogged t (selectFinalBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
 
@@ -28,7 +36,7 @@ materializeProvisionalEvent ::
      T -> IndexOf ProvisionalEvent -> IO ProvisionalEvent
 materializeProvisionalEvent t provisionalId = do
   atomically $
-    readTMVar (lastConsumedBlockProvisionalId t) >>= check . (provisionalId <=)
+    readTVar (lastConsumedBlockProvisionalId t) >>= check . (provisionalId <=)
   event <-
     Pg.runLogged t (selectBlockEventByProvisionalId provisionalId) >>=
     fromJustUnsafe BugException
@@ -37,7 +45,7 @@ materializeProvisionalEvent t provisionalId = do
 streamBlockEvent :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
 streamBlockEvent t = do
   let T {finalizationLag = TezosFinalizationLag finalizationLag} = t
-  nextBlockNumber <- Pg.runLogged t $ selectNextBlockNumber Final
+  nextBlockNumber <- getNextBlockNumber t
   (finalEventStream, invalidationStream) <-
     Tezos.streamBlockEventsDurable (tezos t) finalizationLag nextBlockNumber
   -- Asynchronously invalidate provisional events when necessary.
@@ -57,8 +65,8 @@ streamBlockEvent t = do
        let deletedAt = updatedAt
            Tezos.BlockEvent {hash, number} = event
        atomically $
-         readTMVar (maxConsumedProvisionalBlockNumber t) >>= check . (number >=)
-        -- ^ Ensure that we have seen provisional events at this block level.
+         readTVar (maxConsumedProvisionalBlockNumber t) >>= check . (number <=)
+        -- ^ Ensure that we have seen provisional events at at least this block level.
        log Debug "cleaning old provisional block events" number
        Pg.runLoggedTransaction
          t
@@ -72,15 +80,19 @@ streamBlockEvent t = do
        unless finalized $ throw BugException
         -- ^ Finalized events must start as provisional events. We might reconsider this in the
         -- future, but this solution minimizes data duplication and mutable state in the DB.
+        -- TODO: Verify that finalized events will never be missed as provisional events, even
+        -- though the streams for each are run separately.
        log Debug "persisted block event" number
        return event)
     finalEventStream
 
 streamProvisionalEvent :: T -> IO (Stream QueueBuffer ProvisionalEvent)
 streamProvisionalEvent t = do
-  nextBlockNumber <- Pg.runLogged t $ selectNextBlockNumber Provisional
-  nextBlockProvisionalId <- Pg.runLogged t selectNextBlockProvisionalId
+  nextBlockNumber <- getNextBlockNumber t
+  nextBlockProvisionalId <- getNextBlockProvisionalId t
   nextProvisionalIdVar <- newTVarIO nextBlockProvisionalId
+  -- ^ Stores an incrementable provisionalId for producing events. Note that the provisionalId
+  -- stored on the service type is only incremented when provisional events are consumed.
   (provisionalEventStream, _) <-
     Tezos.streamBlockEventsDurable (tezos t) 0 nextBlockNumber
   -- Synchronously persist provisional events in the outgoing stream.
@@ -89,7 +101,7 @@ streamProvisionalEvent t = do
        createdAt <- now
        let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
        log Debug "persisting provisional block event" newBlockNumber
-      -- Atomically read and increment the global provisionalId.
+       -- Atomically read and increment the local provisionalId.
        provisionalId <-
          atomically $ do
            oldValue <- readTVar nextProvisionalIdVar
@@ -110,35 +122,31 @@ streamProvisionalEvent t = do
 -- RPCs that need to block until their data is ready).
 blockEventConsumer :: T -> Consumers BlockEvents
 blockEventConsumer t =
-  let getInitialBlockNumber = Pg.runLogged t $ selectNextBlockNumber Final
-      T {blockEventConsumerWriter = writer, lastConsumedFinalBlockNumber} = t
+  let T {blockEventConsumerWriter = writer, lastConsumedFinalBlockNumber} = t
       updateBlockNumber Tezos.BlockEvent {number} =
-        atomically . writeTMVar lastConsumedFinalBlockNumber $ number
+        atomically . writeTVar lastConsumedFinalBlockNumber $ number
       consumeBlockEvent x = updateBlockNumber x >> writeStream writer x
-   in (getInitialBlockNumber, consumeBlockEvent)
+   in (getNextBlockNumber t, consumeBlockEvent)
 
--- | This consumer tracks and store the last consumed provisional block ID. More importantly, it
--- tracks the maximum block level seen in provisional blocks, which we use to make sure that we
--- don't persist finalized events until they are first seen in a provisional state.
+-- | This consumer tracks and stores the last consumed block provisional ID. More importantly, it
+-- tracks the maximum block level seen in provisional blocks so far, since we don't want to persist
+-- finalized events until they are first seen in a provisional state.
 provisionalEventConsumer :: T -> Consumers ProvisionalBlockEvents
 provisionalEventConsumer t =
-  let getInitialProvisionalId = Pg.runLogged t selectNextBlockProvisionalId
-      T { provisionalEventConsumerWriter = writer
+  let T { provisionalEventConsumerWriter = writer
         , lastConsumedBlockProvisionalId
         , maxConsumedProvisionalBlockNumber
         } = t
       updateBlockProvisionalId (provisionalId, _) =
-        atomically $ writeTMVar lastConsumedBlockProvisionalId provisionalId
+        atomically $ writeTVar lastConsumedBlockProvisionalId provisionalId
       updateProvisionalBlockNumber (_, Tezos.BlockEvent {number}) = do
-        provisionalBlockNumber <-
-          atomically $ readTMVar maxConsumedProvisionalBlockNumber
+        provisionalBlockNumber <- readTVarIO maxConsumedProvisionalBlockNumber
         when (number > provisionalBlockNumber) $
-          atomically $ writeTMVar maxConsumedProvisionalBlockNumber number
-      consumeProvisionalEvent x = do
-        updateBlockProvisionalId x
-        updateProvisionalBlockNumber x
+          atomically $ writeTVar maxConsumedProvisionalBlockNumber number
+      consumeProvisionalEvent x =
+        updateBlockProvisionalId x >> updateProvisionalBlockNumber x >>
         writeStream writer x
-   in (getInitialProvisionalId, consumeProvisionalEvent)
+   in (getNextBlockProvisionalId t, consumeProvisionalEvent)
 
 instance Service T where
   type ValueSpec T = ()
@@ -151,16 +159,19 @@ instance Service T where
   description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> finalizationLag) <- load configPaths
-    lastConsumedFinalBlockNumber <- newEmptyTMVarIO
     (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
-    lastConsumedBlockProvisionalId <- newEmptyTMVarIO
-    maxConsumedProvisionalBlockNumber <- newEmptyTMVarIO
     (provisionalEventConsumerWriter, provisionalEventConsumerStream) <-
       newStream
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
+      lastConsumedFinalBlockNumber <-
+        Pg.runLogged dbPool (selectMaxBlockNumber Final) >>= newTVarIO
+      lastConsumedBlockProvisionalId <-
+        Pg.runLogged dbPool selectMaxBlockProvisionalId >>= newTVarIO
+      maxConsumedProvisionalBlockNumber <-
+        Pg.runLogged dbPool (selectMaxBlockNumber Provisional) >>= newTVarIO
       f $
         T
           { dbPool

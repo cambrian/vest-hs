@@ -55,7 +55,7 @@ instance ( HasNamespace t
          ) =>
          Publisher t (ValueTopic_ fmt t transport name a) where
   publish t _ stream =
-    void . async $ do
+    void . asyncThrows $ do
       let valueName = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy name)
           lockId = retag $ valueName <> "/publisher"
       withDistributedLock t lockId $ do

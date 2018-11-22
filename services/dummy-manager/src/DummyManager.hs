@@ -27,7 +27,7 @@ addInts AddIntsRequest {a, b} = do
 echoThrice :: Int -> IO (Stream ValueBuffer Int)
 echoThrice x = do
   (writer, stream) <- newStream
-  async $
+  asyncThrows $
     mapM_ (\n -> threadDelay (ms 30) >> writeStream writer n) [x .. x + 2] >>
     closeStream writer
   return stream

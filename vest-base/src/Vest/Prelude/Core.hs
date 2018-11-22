@@ -111,9 +111,6 @@ type STM' t a = Tagged t (STM a)
 
 type Async' t a = Tagged t (Async a)
 
-async' :: IO a -> IO (Async' t a)
-async' x = Tagged <$> async x
-
 instance Hashable a => Hashable (Tagged s a)
 
 type HashTable k v = HashTable.BasicHashTable k v
@@ -154,6 +151,19 @@ instance (KnownSymbol s) => TypeScript s where
 
 $(deriveTypeScript defaultOptions ''Tagged)
 
+async' :: IO a -> IO (Async' t a)
+async' x = Tagged <$> async x
+
+-- | Runs an async that rethrows its exceptions in the parent thread.
+asyncThrows :: IO a -> IO (Async a)
+asyncThrows action = do
+  result <- async action
+  link result
+  return result
+
+asyncThrows' :: IO a -> IO (Async' t a)
+asyncThrows' x = Tagged <$> asyncThrows x
+
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
 -- ^ DO NOT USE unless you really really know what you're doing.
 evilThrowTo = Evil.throwTo
@@ -189,9 +199,9 @@ infixl 1 >>-
 
 blockForever :: IO Void
 blockForever = do
-  _ <- myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
-                                             -- is blocked forever by creating a stable reference
-                                             -- to this thread that could conceivably be thrown to.
+  void $ myThreadId >>= StablePtr.newStablePtr -- Stop the runtime from complaining that this thread
+                                               -- is blocked forever by creating a stable reference
+                                               -- to this thread that could still be thrown to.
   atomically retry -- Block forever.
 
 last :: [a] -> Maybe a

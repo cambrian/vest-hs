@@ -27,29 +27,18 @@ testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =
   goldenVsStringDiff name diffCmd path . fmap convertString
 
-data TestService a = TestService
+newtype TestService a = TestService
   { serviceThread :: Async Void
-  , watcherThread :: Async ()
   }
 
 instance Service a => Resource (TestService a) where
   type ResourceConfig (TestService a) = [FilePath]
   resourceName = "TestService " <> namespace @a
   make configDirs = do
-    mainThread <- myThreadId
     paths <- mapM resolveDir' configDirs
-    serviceThread <- async $ run @a paths return
-    -- Wait on the service thread so exceptions don't get dropped.
-    watcherThread <-
-      async $ do
-        threadResult <- waitCatch serviceThread
-        case threadResult of
-          Left exc -> evilThrowTo mainThread exc
-          Right r -> absurd r
-    return $ TestService {serviceThread, watcherThread}
-  cleanup TestService {serviceThread, watcherThread} = do
-    cancel watcherThread
-    cancel serviceThread
+    serviceThread <- asyncThrows $ run @a paths return
+    return $ TestService {serviceThread}
+  cleanup TestService {serviceThread} = cancel serviceThread
 
 testWithResource ::
      forall a. Resource a

@@ -106,7 +106,7 @@ instance Resource T where
     AMQP.cancelConsumer responseConsumerChan responseConsumerTag
     HashTable.mapM_ (uncurry AMQP.cancelConsumer . snd) consumedRoutes
     HashTable.mapM_ (uncurry unsubscribe) subscribers
-    _ <- AMQP.deleteQueue responseConsumerChan (untag responseQueue)
+    void $ AMQP.deleteQueue responseConsumerChan (untag responseQueue)
     -- AMQP.closeConnection is not thread safe, so we choose to leak the connection instead.
     -- AMQP.closeConnection conn -- Also closes chans.
     -- We have to manually close the AMQP channels now
@@ -127,7 +127,7 @@ instance RpcTransport T where
       Just _ -> throw $ AlreadyServingException route
     let Tagged queueName = route
     consumerChan <- AMQP.openChannel conn
-    _ <- AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
+    void $ AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
     consumerTag <-
       AMQP.consumeMsgs
         consumerChan

@@ -243,6 +243,7 @@ materializeBlockEvent httpClient blockNumber = do
   -- ^ Sometimes the genesis block 0 randomly pops out of a query...
   toBlockEvent block
 
+-- TODO: Clean up magic trim numbers.
 recoveryCases :: [RetryStatus -> Handler IO Bool]
 recoveryCases =
   [ logRetries
@@ -253,8 +254,15 @@ recoveryCases =
       (\b e r -> log Debug "unexpected result" $ take 38 $ defaultLogMsg b e r)
   ]
 
-blockRetryPolicy :: RetryPolicy
-blockRetryPolicy = constantDelay $ 60 * 1000000
+milliMicros :: Int
+milliMicros = 1000
+
+secMicros :: Int
+secMicros = 1000 * milliMicros
+
+requestRetryPolicy :: RetryPolicy
+requestRetryPolicy =
+  capDelay (30 * secMicros) $ exponentialBackoff (50 * milliMicros)
 
 -- | Returns the updated event queue and a list of EITHER invalidated block hashes OR dequeued
 -- block events.
@@ -279,9 +287,10 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
                     span (\BlockEvent {hash} -> predecessor /= hash) queue
               if null remainingQueue
                 then do
+                  log Debug "chain fork detected" number
                   forkPredecessor <-
                     recovering
-                      blockRetryPolicy
+                      requestRetryPolicy
                       recoveryCases
                       (const $ getBlock httpClient $ untag predecessor) >>=
                     toBlockEvent

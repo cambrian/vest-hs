@@ -63,7 +63,7 @@ instance ( Server t (EventMaterializeEndpoint (Event_ fmt t transport name a))
       t
       (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt t transport name a)))
       materializer
-    void . async $ do
+    void . asyncThrows $ do
       let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
           lockId = retag $ eventName <> "/producer"
       withDistributedLock t lockId $ do

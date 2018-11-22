@@ -78,7 +78,7 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
   let streamQueuedFrom eventQueue blockNumber = do
         provisionalEvent <-
           recovering
-            blockRetryPolicy
+            requestRetryPolicy -- TODO: Modify retry between materializing/streaming states.
             recoveryCases
             (const $ materializeBlockEvent httpClient (fromIntegral blockNumber))
         let BlockEvent {number = provisionalNumber} = provisionalEvent
@@ -88,9 +88,10 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
         when (finalizationLag > 0) $
           log Debug "queued provisional block event" provisionalNumber
         case invalidationsOrEvents of
-          Left invalidations -> do
-            writeStream invalidationWriter invalidations
-            log Debug "pushed block invalidations" invalidations
+          Left invalidations ->
+            unless (null invalidations) $ do
+              writeStream invalidationWriter invalidations
+              log Debug "pushed block invalidations" invalidations
           Right finalEvents ->
             mapM_
               (\finalEvent -> do
@@ -100,7 +101,8 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
                  log Debug "produced block event on lag" numberAndLag)
               finalEvents
         streamQueuedFrom newEventQueue (blockNumber + 1)
-  async $ streamQueuedFrom [] startBlockNumber
+  log Debug "streaming on lag" finalizationLag
+  asyncThrows $ streamQueuedFrom [] startBlockNumber
   return (finalStream, invalidationStream)
 
 toCycleEventStream ::

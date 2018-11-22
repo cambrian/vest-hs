@@ -84,10 +84,10 @@ timeoutRenewable ::
 timeoutRenewable t f = do
   delay <- newDelay $ durationMicros t
   resultMVar <- newEmptyMVar
-  void . async $ do
+  void . asyncThrows $ do
     atomically $ waitDelay delay
     putMVar resultMVar Nothing
-  void . async $ do
+  void . asyncThrows $ do
     result <- f
     cancelDelay delay
     putMVar resultMVar (Just result)
@@ -122,12 +122,12 @@ intervalRenewable interval action = do
         atomically $ writeTVar nextBeat $ time .+^ interval
   renew
   intervalThread <-
-    async . forever $ do
+    asyncThrows . forever $ do
       time <- now
       nextBeatTime <- readTVarIO nextBeat
       if time > nextBeatTime
         then do
-          void $ async action
+          void $ asyncThrows action
           atomically $ writeTVar nextBeat $ nextBeatTime .+^ interval
           threadDelay interval
         else threadDelay $ nextBeatTime .-. time
