@@ -82,11 +82,11 @@ instance (Resource a, Resource b) =>
                                   :<|> ResourceConfig b)
   resourceName = resourceName @a <> " :<|> " <> resourceName @b
   makeLogged (aConfig :<|> bConfig) = do
-    aThread <- async $ makeLogged aConfig
-    bThread <- async $ makeLogged bConfig
+    aThread <- asyncDetach $ makeLogged aConfig
+    bThread <- asyncDetach $ makeLogged bConfig
     (a, b) <- waitBoth aThread bThread
     return $ a :<|> b
   cleanupLogged (a :<|> b) = do
-    aThread <- async $ cleanupLogged a
-    bThread <- async $ cleanupLogged b
+    aThread <- asyncDetach $ cleanupLogged a
+    bThread <- asyncDetach $ cleanupLogged b
     void $ waitBoth aThread bThread

@@ -141,8 +141,8 @@ instance Data.Semigroup.Semigroup (StreamWriter a) where
   i1 <> i2 =
     StreamWriter
       (\a -> do
-         t1 <- async $ writeStream' i1 a
-         t2 <- async $ writeStream' i2 a
+         t1 <- asyncDetach $ writeStream' i1 a
+         t2 <- asyncDetach $ writeStream' i2 a
          (r1, r2) <- waitBoth t1 t2
          return $ r1 || r2)
       (closeStream i1 >> closeStream i2)
@@ -164,8 +164,8 @@ instance Divisible StreamWriter where
     StreamWriter
       (\a -> do
          let (b, c) = f a
-         t1 <- async $ writeStream' i1 b
-         t2 <- async $ writeStream' i2 c
+         t1 <- asyncDetach $ writeStream' i1 b
+         t2 <- asyncDetach $ writeStream' i2 c
          (r1, r2) <- waitBoth t1 t2
          return $ r1 || r2)
       (closeStream i1 >> closeStream i2)
@@ -227,12 +227,12 @@ makeStreamReader buf = do
         lift $ Lock.with propagateLock $
           -- Uncaught exceptions in impure streaming actions should cause the process to crash. Note
           -- that parallelFilterValuesM runs threads internally, so we cannot simply wrap propagate
-          -- in an asyncThrows block.
+          -- in an async block.
           TMap.parallelFilterValuesM (`writeStream'` a) downstreams `catchAny`
           throwTo thisThread
         propagate
   propagator <-
-    async $ do
+    asyncDetach $ do
       void $ runMaybeT propagate
       atomically (TMap.values downstreams) >>= mapM_ closeStream
       atomically $ TMap.reset downstreams -- Just for good measure
@@ -342,7 +342,7 @@ class Bufferable buf a =>
   -- ^ Returns the stream immediately. A child thread fills it with the list contents.
   streamFromList as = do
     (writer, reader) <- newStream
-    void . asyncThrows $ do
+    void . async $ do
       mapM_ (writeStream' writer) as
       closeStream writer
     return reader

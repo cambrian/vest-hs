@@ -44,7 +44,7 @@ instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name 
   consume t _ (getStartIndex, f) = do
     let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
         lockId = Tagged $ untag eventName <> "/consumer/" <> namespace @t
-    void . asyncThrows $
+    void . async $
       withDistributedLock t lockId $ do
         let materialize =
               makeClient

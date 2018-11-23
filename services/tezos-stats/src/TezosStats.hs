@@ -47,7 +47,7 @@ operation T {rawStubData, streamDelayMillis} opHash = do
     Nothing -> throw $ InvalidCallException "no such operation hash"
     Just streamOpList -> do
       (writer, stream) <- newStream
-      asyncThrows $
+      async $
         mapM_
           (\x ->
              threadDelay (ms $ toRational streamDelayMillis) >>

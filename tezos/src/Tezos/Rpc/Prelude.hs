@@ -141,7 +141,7 @@ data Origination = Origination
   , counter :: Text
   , gas_limit :: Text
   , storage_limit :: Text
-  , managerPubkey :: Text
+  , manager_pubkey :: Text
   , balance :: Text
   , spendable :: Maybe Bool
   , delegatable :: Maybe Bool

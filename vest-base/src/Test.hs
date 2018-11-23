@@ -36,7 +36,7 @@ instance Service a => Resource (TestService a) where
   resourceName = "TestService " <> namespace @a
   make configDirs = do
     paths <- mapM resolveDir' configDirs
-    serviceThread <- asyncThrows $ run @a paths return
+    serviceThread <- async $ run @a paths return
     return $ TestService {serviceThread}
   cleanup TestService {serviceThread} = cancel serviceThread
 

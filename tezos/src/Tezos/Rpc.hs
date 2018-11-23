@@ -102,7 +102,7 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
               finalEvents
         streamQueuedFrom newEventQueue (blockNumber + 1)
   log Debug "streaming on lag" finalizationLag
-  asyncThrows $ streamQueuedFrom [] startBlockNumber
+  async $ streamQueuedFrom [] startBlockNumber
   return (finalStream, invalidationStream)
 
 toCycleEventStream ::

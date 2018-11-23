@@ -35,7 +35,7 @@ waitThenPoll :: PubSubController -> ByteString -> Duration -> IO ()
 waitThenPoll pubSub redisKey pollInterval = do
   done <- newEmptyTMVarIO
   let channel = "__keyspace@0__:" <> redisKey
-  void . asyncThrows $ threadDelay pollInterval >> atomically (putTMVar done ())
+  void . async $ threadDelay pollInterval >> atomically (putTMVar done ())
   -- ^ Auto-unblock the waiter after pollInterval is over.
   removeKeySubscription <-
     addChannels pubSub [(channel, const $ atomically $ putTMVar done ())] []
@@ -66,7 +66,7 @@ instance Resource DistributedLock where
     let redisKey = encodeUtf8 $ untag lockId
         ttlSeconds = round $ toRational $ 2 *^ renewInterval
     pubSub <- newPubSubController [] []
-    asyncThrows $ forever $ pubSubForever redis pubSub (return ())
+    async $ forever $ pubSubForever redis pubSub (return ())
     -- ^ Setup a manager thread for pubSub (see hedis docs).
     runRedis redis (acquire pubSub redisKey ttlSeconds pollInterval)
     (_, cancelRenewer) <-

@@ -144,7 +144,7 @@ callStreaming t req f = do
       doCleanup
       throw exn
     Right () ->
-      void . async $ do
+      void . asyncDetach $ do
         heartbeatLostOrDone_ <- heartbeatLostOrDone
         doCleanup
         case heartbeatLostOrDone_ of

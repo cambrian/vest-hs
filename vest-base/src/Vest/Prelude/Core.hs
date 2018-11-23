@@ -3,7 +3,8 @@ module Vest.Prelude.Core
   ( module Vest.Prelude.Core
   ) where
 
-import Control.Concurrent.Async as Vest.Prelude.Core
+import Control.Concurrent.Async as Vest.Prelude.Core hiding (async)
+import qualified Control.Concurrent.Async as Async (async)
 import Control.Concurrent.STM.Delay as Vest.Prelude.Core
 import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
 import Control.Concurrent.STM.TSem as Vest.Prelude.Core
@@ -25,6 +26,7 @@ import qualified Protolude
 import Protolude as Vest.Prelude.Core hiding
   ( Sum
   , (<.>)
+  , async
   , bracket
   , bracketOnError
   , bracket_
@@ -151,18 +153,21 @@ instance (KnownSymbol s) => TypeScript s where
 
 $(deriveTypeScript defaultOptions ''Tagged)
 
-async' :: IO a -> IO (Async' t a)
-async' x = Tagged <$> async x
-
 -- | Runs an async that rethrows its exceptions in the parent thread.
-asyncThrows :: IO a -> IO (Async a)
-asyncThrows action = do
-  result <- async action
+async :: IO a -> IO (Async a)
+async action = do
+  result <- Async.async action
   link result
   return result
 
-asyncThrows' :: IO a -> IO (Async' t a)
-asyncThrows' x = Tagged <$> asyncThrows x
+async' :: IO a -> IO (Async' t a)
+async' x = Tagged <$> async x
+
+asyncDetach :: IO a -> IO (Async a)
+asyncDetach = Async.async
+
+asyncDetach' :: IO a -> IO (Async' t a)
+asyncDetach' x = Tagged <$> asyncDetach x
 
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
 -- ^ DO NOT USE unless you really really know what you're doing.

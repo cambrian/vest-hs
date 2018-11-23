@@ -243,15 +243,14 @@ materializeBlockEvent httpClient blockNumber = do
   -- ^ Sometimes the genesis block 0 randomly pops out of a query...
   toBlockEvent block
 
--- TODO: Clean up magic trim numbers.
 recoveryCases :: [RetryStatus -> Handler IO Bool]
 recoveryCases =
   [ logRetries
       (\(_ :: Http.ServantError) -> return True)
-      (\b e r -> log Debug "Servant error" $ take 35 $ defaultLogMsg b e r)
+      (\b e r -> log Debug "Servant error" $ defaultLogMsg b e r)
   , logRetries
       (\(_ :: UnexpectedResultException) -> return True)
-      (\b e r -> log Debug "unexpected result" $ take 38 $ defaultLogMsg b e r)
+      (\b e r -> log Debug "unexpected result" $ defaultLogMsg b e r)
   ]
 
 milliMicros :: Int

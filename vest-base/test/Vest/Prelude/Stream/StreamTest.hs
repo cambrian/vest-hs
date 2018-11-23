@@ -16,7 +16,7 @@ simpleValue =
     writeStream writer 2
     writeStream writer 3
     threadDelay (sec 0.01)
-    t <- async $ readFinalValue stream
+    t <- asyncDetach $ readFinalValue stream
     threadDelay (sec 0.01)
     writeStream writer 4
     writeStream writer 5
@@ -33,10 +33,10 @@ multiValue =
     writeStream writer 2
     writeStream writer 3
     threadDelay (sec 0.01)
-    t1 <- async $ readFinalValue stream
+    t1 <- asyncDetach $ readFinalValue stream
     stream2 <- mapMStream (return . (* 2)) stream
     stream3 <- mapMStream (return . (* 3)) stream
-    t2 <- async $ readFinalValue stream2
+    t2 <- asyncDetach $ readFinalValue stream2
     threadDelay (sec 0.01)
     writeStream writer 4
     writeStream writer 5
@@ -58,13 +58,13 @@ simpleQueue =
     writeStream writer 1
     writeStream writer 1
     threadDelay (sec 0.01)
-    t1 <- async $ foldStream (+) 0 stream
+    t1 <- asyncDetach $ foldStream (+) 0 stream
     threadDelay (sec 0.01)
     writeStream writer 1
     writeStream writer 1
     writeStream writer 1
     threadDelay (sec 0.01)
-    t2 <- async $ foldStream (+) 0 stream
+    t2 <- asyncDetach $ foldStream (+) 0 stream
     threadDelay (sec 0.01)
     replicateM_ 10 (writeStream writer 1)
     closeStream writer
@@ -82,13 +82,13 @@ multiQueue =
     writeStream writer 1
     writeStream writer 1
     threadDelay (sec 0.01)
-    t1 <- async $ foldStream (+) 0 stream
+    t1 <- asyncDetach $ foldStream (+) 0 stream
     threadDelay (sec 0.01)
     stream2 <- mapMStream (return . (* 2)) stream
     stream3 <- mapMStream (return . (* 3)) stream
-    t2 <- async $ foldStream (+) 0 stream2
+    t2 <- asyncDetach $ foldStream (+) 0 stream2
     threadDelay (sec 0.01)
-    t3 <- async $ foldStream (+) 0 stream3
+    t3 <- asyncDetach $ foldStream (+) 0 stream3
     threadDelay (sec 0.01)
     writeStream writer 1
     writeStream writer 1
@@ -120,7 +120,7 @@ uncaughtExceptionTest =
     "test/Vest/Prelude/Stream/uncaught-exception.gold" $
   catchAsync
     (do badThread <-
-          async $ do
+          asyncDetach $ do
             s <- streamFromList @QueueBuffer @Int [1, 2, 3]
             consumeStream (\_ -> throw BugException) s
         wait badThread

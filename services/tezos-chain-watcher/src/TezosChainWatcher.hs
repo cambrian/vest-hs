@@ -67,22 +67,18 @@ streamBlockEvent t = do
        atomically $
          readTVar (maxConsumedProvisionalBlockNumber t) >>= check . (number <=)
         -- ^ Ensure that we have seen provisional events at at least this block level.
-       log Debug "cleaning old provisional block events" number
+       log Debug "persisting block event" number
        Pg.runLoggedTransaction
          t
-         (deleteOldProvisionalBlockEvents deletedAt number)
-       log Debug "cleaned old provisional block events" number
-       log Debug "persisting block event" number
-       finalized <-
-         Pg.runLoggedTransaction
-           t
-           (finalizeProvisionalBlockEvent updatedAt hash)
-       unless finalized $ throw BugException
+         (do finalized <- finalizeProvisionalBlockEvent updatedAt hash
+             unless finalized $ liftIO $ throw BugException
+             deleteOldProvisionalBlockEvents deletedAt number)
         -- ^ Finalized events must start as provisional events. We might reconsider this in the
         -- future, but this solution minimizes data duplication and mutable state in the DB.
         -- TODO: Verify that finalized events will never be missed as provisional events, even
         -- though the streams for each are run separately.
        log Debug "persisted block event" number
+       log Debug "cleaned old provisional block events" number
        return event)
     finalEventStream
 
@@ -171,7 +167,7 @@ instance Service T where
       lastConsumedBlockProvisionalId <-
         Pg.runLogged dbPool selectMaxBlockProvisionalId >>= newTVarIO
       maxConsumedProvisionalBlockNumber <-
-        Pg.runLogged dbPool (selectMaxBlockNumber Provisional) >>= newTVarIO
+        Pg.runLogged dbPool (selectMaxBlockNumber NotDeleted) >>= newTVarIO
       f $
         T
           { dbPool

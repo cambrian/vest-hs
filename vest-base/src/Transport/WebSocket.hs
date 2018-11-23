@@ -79,7 +79,7 @@ instance Resource T where
     clientResponseHandlers <- HashTable.new
     -- Warp.run blocks forever, so we put it in its own thread.
     serverThread <-
-      asyncThrows' $
+      async' $
       Warp.run (fromIntegral $ untag servePort) $
       WS.websocketsOr
         WS.defaultConnectionOptions
@@ -90,7 +90,7 @@ instance Resource T where
         requestMVar <- newEmptyMVar
         HashTable.insert clientRequestHandlers namespace (putMVar requestMVar)
         -- Swallowing client exceptions is fine (usually just ConnectionClosed).
-        async' $ do
+        asyncDetach' $ do
           when (isLocalHost uri) (threadDelay (sec 0.05))
           -- ^ If this client is connecting to the local machine, wait for the server to start.
           WS.runClient
@@ -155,7 +155,7 @@ wsClientApp ::
   -> MVar RequestMessage
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn = do
-  void . asyncThrows . forever . runMaybeT $ do
+  void . async . forever . runMaybeT $ do
     ResponseMessage {requestId, resText} <-
       MaybeT $ WS.receiveData conn >>- deserialize @'JSON
     handler <- MaybeT $ HashTable.lookup clientResponseHandlers requestId
@@ -176,7 +176,7 @@ instance RpcTransport T where
       Nothing -> HashTable.insert serverRequestHandlers route handleMsg
     where
       handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
-        asyncThrows . void . runMaybeT $ do
+        async . void . runMaybeT $ do
           handler <- MaybeT $ HashTable.lookup serverResponseHandlers clientId
           lift $
             asyncHandler
