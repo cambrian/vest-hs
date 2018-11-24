@@ -183,6 +183,7 @@ data Operation
   | ActivateAddressOp Undefined
   | DoubleBakingEvidenceOp Undefined
   | DoubleEndorsementEvidenceOp Undefined
+  | UnexpectedOp Undefined
   deriving (Eq, Show, Read, Generic, Hashable, ToJSON)
 
 -- This manual dispatch is absolute shit but (after much effort and a question on GitHub) remains
@@ -205,7 +206,7 @@ instance FromJSON Operation where
             DoubleBakingEvidenceOp <$> parseJSON operation
           Just (String "double_endorsement_evidence") ->
             DoubleEndorsementEvidenceOp <$> parseJSON operation
-          _ -> fail "unexpected operation kind"
+          _ -> UnexpectedOp <$> parseJSON operation
       _ -> fail "unexpected JSON shape"
 
 $(deriveTypeScript defaultOptions ''Operation)

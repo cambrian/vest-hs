@@ -22,12 +22,8 @@ data T = T
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
   , lastConsumedFinalBlockNumber :: TVar Word64
-  , blockEventConsumerWriter :: StreamWriter Tezos.BlockEvent
-  , blockEventConsumerStream :: Stream QueueBuffer Tezos.BlockEvent
   , lastConsumedBlockProvisionalId :: TVar Int
   , maxConsumedProvisionalBlockNumber :: TVar Word64
-  , provisionalEventConsumerWriter :: StreamWriter ProvisionalEvent
-  , provisionalEventConsumerStream :: Stream QueueBuffer ProvisionalEvent
   , finalizationLag :: TezosFinalizationLag
   }
 

@@ -1,3 +1,4 @@
+-- TODO: Add even more logging, so problems can be efficiently pinpointed in prod.
 module TezosChainWatcher
   ( module TezosChainWatcher
   ) where
@@ -64,6 +65,8 @@ streamBlockEvent t = do
        updatedAt <- now
        let deletedAt = updatedAt
            Tezos.BlockEvent {hash, number} = event
+       maxCons <- readTVarIO (maxConsumedProvisionalBlockNumber t)
+       log Debug "waiting to persist block event" (number, maxCons)
        atomically $
          readTVar (maxConsumedProvisionalBlockNumber t) >>= check . (number <=)
         -- ^ Ensure that we have seen provisional events at at least this block level.
@@ -92,47 +95,44 @@ streamProvisionalEvent t = do
   (provisionalEventStream, _) <-
     Tezos.streamBlockEventsDurable (tezos t) 0 nextBlockNumber
   -- Synchronously persist provisional events in the outgoing stream.
-  mapMStream
+  filterMapMStream
     (\blockEvent -> do
        createdAt <- now
-       let Tezos.BlockEvent {number = newBlockNumber} = blockEvent
+       let Tezos.BlockEvent {hash, number = newBlockNumber} = blockEvent
        log Debug "persisting provisional block event" newBlockNumber
-       -- Atomically read and increment the local provisionalId.
-       provisionalId <-
-         atomically $ do
-           oldValue <- readTVar nextProvisionalIdVar
-           writeTVar nextProvisionalIdVar (oldValue + 1)
-           return oldValue
-       Pg.runLoggedTransaction
-         t
-         (insertProvisionalBlockEvent createdAt provisionalId blockEvent)
-       log Debug "persisted provisional block event" newBlockNumber
-       return (provisionalId, blockEvent))
+       provisionalId <- readTVarIO nextProvisionalIdVar
+       -- TODO: Figure out how to detect that a block event already exists without catching the
+       -- SqlError, since throwing in a transaction wastefully releases the connection resource.
+       catch
+         (do Pg.runLoggedTransaction
+               t
+               (insertProvisionalBlockEvent createdAt provisionalId blockEvent)
+             atomically $ writeTVar nextProvisionalIdVar (provisionalId + 1)
+             log
+               Debug
+               "persisted provisional block event"
+               (newBlockNumber, provisionalId)
+             return $ Just (provisionalId, blockEvent))
+         (\(_ :: Pg.SqlError) -> do
+            log Debug "provisional block event already exists" hash
+            return Nothing))
     provisionalEventStream
 
--- | This service consumes block events for any threads that would normally listen on the raw event
--- stream. Storing the raw event stream is only possible on the master service replica (the one that
--- produces the stream).
---
--- Note that this consumer stores the last consumed block event number (for any materializers or
--- RPCs that need to block until their data is ready).
+-- | This consumer tracks the last consumed block event number (the block event materializer needs
+-- to wait until a particular block event is persisted).
 blockEventConsumer :: T -> Consumers BlockEvents
 blockEventConsumer t =
-  let T {blockEventConsumerWriter = writer, lastConsumedFinalBlockNumber} = t
+  let T {lastConsumedFinalBlockNumber} = t
       updateBlockNumber Tezos.BlockEvent {number} =
         atomically . writeTVar lastConsumedFinalBlockNumber $ number
-      consumeBlockEvent x = updateBlockNumber x >> writeStream writer x
-   in (getNextBlockNumber t, consumeBlockEvent)
+   in (getNextBlockNumber t, updateBlockNumber)
 
--- | This consumer tracks and stores the last consumed block provisional ID. More importantly, it
+-- | This consumer tracks the last consumed block provisional ID (for a similar reason). It also
 -- tracks the maximum block level seen in provisional blocks so far, since we don't want to persist
 -- finalized events until they are first seen in a provisional state.
 provisionalEventConsumer :: T -> Consumers ProvisionalBlockEvents
 provisionalEventConsumer t =
-  let T { provisionalEventConsumerWriter = writer
-        , lastConsumedBlockProvisionalId
-        , maxConsumedProvisionalBlockNumber
-        } = t
+  let T {lastConsumedBlockProvisionalId, maxConsumedProvisionalBlockNumber} = t
       updateBlockProvisionalId (provisionalId, _) =
         atomically $ writeTVar lastConsumedBlockProvisionalId provisionalId
       updateProvisionalBlockNumber (_, Tezos.BlockEvent {number}) = do
@@ -140,8 +140,7 @@ provisionalEventConsumer t =
         when (number > provisionalBlockNumber) $
           atomically $ writeTVar maxConsumedProvisionalBlockNumber number
       consumeProvisionalEvent x =
-        updateBlockProvisionalId x >> updateProvisionalBlockNumber x >>
-        writeStream writer x
+        updateBlockProvisionalId x >> updateProvisionalBlockNumber x
    in (getNextBlockProvisionalId t, consumeProvisionalEvent)
 
 instance Service T where
@@ -155,9 +154,6 @@ instance Service T where
   description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> finalizationLag) <- load configPaths
-    (blockEventConsumerWriter, blockEventConsumerStream) <- newStream
-    (provisionalEventConsumerWriter, provisionalEventConsumerStream) <-
-      newStream
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
@@ -176,12 +172,8 @@ instance Service T where
           , tezos
           , accessControlClient
           , lastConsumedFinalBlockNumber
-          , blockEventConsumerWriter
-          , blockEventConsumerStream
           , lastConsumedBlockProvisionalId
           , maxConsumedProvisionalBlockNumber
-          , provisionalEventConsumerWriter
-          , provisionalEventConsumerStream
           , finalizationLag
           }
   rpcHandlers = rewardInfo
