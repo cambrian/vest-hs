@@ -304,7 +304,7 @@ insertTezosTransactions createdAt tezosTransactions =
        tezosTransactions)
     onConflictDefault
 
-insertProvisionalBlockEvent :: Time -> Int -> Tezos.BlockEvent -> Pg ()
+insertProvisionalBlockEvent :: Time -> Int -> Tezos.BlockEvent -> Pg Bool
 insertProvisionalBlockEvent createdAt_ provisionalId blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
@@ -318,27 +318,35 @@ insertProvisionalBlockEvent createdAt_ provisionalId blockEvent = do
                        } = blockEvent
   let createdAt = show createdAt_
       time = show time_
-  runInsert $
-    insert
-      (blocks schema)
-      (insertValues
-         [ Block
-             number
-             provisionalId
-             hash
-             predecessor
-             cycleNumber
-             fee
-             True
-             time
-             createdAt
-             Nothing
-             Nothing
-         ])
-      onConflictDefault
-  insertTezosOpHashes hash createdAt operations
-  insertTezosOriginations createdAt originations
-  insertTezosTransactions createdAt transactions
+  eventExists <-
+    isJust <$> runSelectReturningOne (lookup_ (blocks schema) (BlockHash hash))
+  -- ^ The alternative is catching a thrown exception (if the event already exists), which is not
+  -- preferable since it kills the DB connection.
+  if eventExists
+    then return False
+    else do
+      runInsert $
+        insert
+          (blocks schema)
+          (insertValues
+             [ Block
+                 number
+                 provisionalId
+                 hash
+                 predecessor
+                 cycleNumber
+                 fee
+                 True
+                 time
+                 createdAt
+                 Nothing
+                 Nothing
+             ])
+          onConflictDefault
+      insertTezosOpHashes hash createdAt operations
+      insertTezosOriginations createdAt originations
+      insertTezosTransactions createdAt transactions
+      return True
 
 finalizeProvisionalBlockEvent :: Time -> Tezos.BlockHash -> Pg Bool
 finalizeProvisionalBlockEvent updatedAt_ hash = do

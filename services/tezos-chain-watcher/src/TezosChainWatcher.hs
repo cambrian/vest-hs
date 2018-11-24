@@ -81,7 +81,6 @@ streamBlockEvent t = do
         -- TODO: Verify that finalized events will never be missed as provisional events, even
         -- though the streams for each are run separately.
        log Debug "persisted block event" number
-       log Debug "cleaned old provisional block events" number
        return event)
     finalEventStream
 
@@ -101,21 +100,21 @@ streamProvisionalEvent t = do
        let Tezos.BlockEvent {hash, number = newBlockNumber} = blockEvent
        log Debug "persisting provisional block event" newBlockNumber
        provisionalId <- readTVarIO nextProvisionalIdVar
-       -- TODO: Figure out how to detect that a block event already exists without catching the
-       -- SqlError, since throwing in a transaction wastefully releases the connection resource.
-       catch
-         (do Pg.runLoggedTransaction
-               t
-               (insertProvisionalBlockEvent createdAt provisionalId blockEvent)
-             atomically $ writeTVar nextProvisionalIdVar (provisionalId + 1)
-             log
-               Debug
-               "persisted provisional block event"
-               (newBlockNumber, provisionalId)
-             return $ Just (provisionalId, blockEvent))
-         (\(_ :: Pg.SqlError) -> do
-            log Debug "provisional block event already exists" hash
-            return Nothing))
+       inserted <-
+         Pg.runLoggedTransaction
+           t
+           (insertProvisionalBlockEvent createdAt provisionalId blockEvent)
+       if inserted
+         then do
+           atomically $ writeTVar nextProvisionalIdVar (provisionalId + 1)
+           log
+             Debug
+             "persisted provisional block event"
+             (newBlockNumber, provisionalId)
+           return $ Just (provisionalId, blockEvent)
+         else do
+           log Debug "provisional block event already exists" hash
+           return Nothing)
     provisionalEventStream
 
 -- | This consumer tracks the last consumed block event number (the block event materializer needs
