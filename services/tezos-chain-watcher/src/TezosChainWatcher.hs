@@ -1,4 +1,4 @@
--- TODO: Add even more logging, so problems can be efficiently pinpointed in prod.
+-- TODO: Add more logging.
 module TezosChainWatcher
   ( module TezosChainWatcher
   ) where
@@ -64,22 +64,24 @@ streamBlockEvent t = do
     (\event -> do
        updatedAt <- now
        let deletedAt = updatedAt
+           createdAt = updatedAt
            Tezos.BlockEvent {hash, number} = event
        maxCons <- readTVarIO (maxConsumedProvisionalBlockNumber t)
        log Debug "waiting to persist block event" (number, maxCons)
        atomically $
          readTVar (maxConsumedProvisionalBlockNumber t) >>= check . (number <=)
-        -- ^ Ensure that we have seen provisional events at at least this block level.
+        -- ^ Ensure that we have seen provisional events at at least this block level (we want
+        -- final block events to strictly lag their provisional counterparts).
        log Debug "persisting block event" number
        Pg.runLoggedTransaction
          t
-         (do finalized <- finalizeProvisionalBlockEvent updatedAt hash
-             unless finalized $ liftIO $ throw BugException
+         (do inserted <- insertBlockEvent createdAt Nothing event
+             unless inserted $ do
+               finalized <- finalizeProvisionalBlockEvent updatedAt hash
+               unless finalized $ liftIO $ throw BugException
              deleteOldProvisionalBlockEvents deletedAt number)
-        -- ^ Finalized events must start as provisional events. We might reconsider this in the
-        -- future, but this solution minimizes data duplication and mutable state in the DB.
-        -- TODO: Verify that finalized events will never be missed as provisional events, even
-        -- though the streams for each are run separately.
+       -- ^ Try creating a new block event unless a provisional one already exists. In the latter
+       -- case, we simply promote the provisional event to a final state.
        log Debug "persisted block event" number
        return event)
     finalEventStream
@@ -103,7 +105,9 @@ streamProvisionalEvent t = do
        inserted <-
          Pg.runLoggedTransaction
            t
-           (insertProvisionalBlockEvent createdAt provisionalId blockEvent)
+           (insertBlockEvent createdAt (Just provisionalId) blockEvent)
+       -- ^ Only increment the local provisionalId if the event was inserted (and does not already
+       -- exist as another provisional event OR a final event).
        if inserted
          then do
            atomically $ writeTVar nextProvisionalIdVar (provisionalId + 1)
@@ -126,9 +130,9 @@ blockEventConsumer t =
         atomically . writeTVar lastConsumedFinalBlockNumber $ number
    in (getNextBlockNumber t, updateBlockNumber)
 
--- | This consumer tracks the last consumed block provisional ID (for a similar reason). It also
--- tracks the maximum block level seen in provisional blocks so far, since we don't want to persist
--- finalized events until they are first seen in a provisional state.
+-- | This consumer tracks the last consumed block provisional ID for the corresponding provisional
+-- materializer. It also tracks the maximum block level seen in provisional blocks so far, since we
+-- want the final event stream to strictly lag the provisional stream in terms of block level.
 provisionalEventConsumer :: T -> Consumers ProvisionalBlockEvents
 provisionalEventConsumer t =
   let T {lastConsumedBlockProvisionalId, maxConsumedProvisionalBlockNumber} = t

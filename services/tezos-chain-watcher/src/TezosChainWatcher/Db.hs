@@ -12,7 +12,7 @@ import Vest hiding (from, hash, state, to)
 
 data BlockT f = Block
   { blockNumber :: C f Word64
-  , blockProvisionalId :: C f Int
+  , blockProvisionalId :: C f (Maybe Int)
   , blockHash :: C f Tezos.BlockHash
   , blockPredecessor :: C f Tezos.BlockHash
   , blockCycleNumber :: C f Word64
@@ -185,7 +185,7 @@ selectMaxBlockProvisionalId = do
     select $ aggregate_ max_ $ blockProvisionalId <$> all_ (blocks schema)
   return $
     case m of
-      Just (Just num) -> num
+      Just (Just (Just num)) -> num
       _ -> -1
 
 toTezosOrigination :: Origination -> Tezos.Origination
@@ -252,7 +252,7 @@ selectBlockEventByProvisionalId provisionalId = do
   blockMaybe <-
     runSelectReturningOne $
     select $
-    filter_ (\block -> blockProvisionalId block ==. val_ provisionalId) $
+    filter_ (\block -> blockProvisionalId block ==. val_ (Just provisionalId)) $
     all_ (blocks schema)
   case blockMaybe of
     Nothing -> return Nothing
@@ -304,8 +304,8 @@ insertTezosTransactions createdAt tezosTransactions =
        tezosTransactions)
     onConflictDefault
 
-insertProvisionalBlockEvent :: Time -> Int -> Tezos.BlockEvent -> Pg Bool
-insertProvisionalBlockEvent createdAt_ provisionalId blockEvent = do
+insertBlockEvent :: Time -> Maybe Int -> Tezos.BlockEvent -> Pg Bool
+insertBlockEvent createdAt_ provisionalId blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
                        , predecessor
@@ -336,7 +336,7 @@ insertProvisionalBlockEvent createdAt_ provisionalId blockEvent = do
                  predecessor
                  cycleNumber
                  fee
-                 True
+                 (isJust provisionalId)
                  time
                  createdAt
                  Nothing
