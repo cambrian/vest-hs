@@ -8,7 +8,6 @@ module Postgres
   , IndexableTable(..)
   ) where
 
-import Data.Time (LocalTime)
 import Database.Beam as Reexports hiding (insert)
 import Database.Beam.Backend.SQL as Reexports
 import Database.Beam.Migrate as Reexports hiding (time)
@@ -53,9 +52,10 @@ instance HasDefaultSqlDataType syntax a =>
          HasDefaultSqlDataType syntax (Tagged t a) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy a)
 
-instance (IsSql92DataTypeSyntax syntax, HasDefaultSqlDataType syntax LocalTime) =>
-         HasDefaultSqlDataType syntax Time where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy :: Proxy LocalTime)
+instance HasDefaultSqlDataType PgDataTypeSyntax Time where
+  defaultSqlDataType _ _ = timestampType Nothing True
+
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax Time
 
 instance HasDefaultSqlDataTypeConstraints syntax Int64 =>
          HasDefaultSqlDataTypeConstraints syntax (Money.Discrete' a scale) where
@@ -66,15 +66,6 @@ instance HasDefaultSqlDataTypeConstraints syntax a =>
          HasDefaultSqlDataTypeConstraints syntax (Tagged t a) where
   defaultSqlDataTypeConstraints _ _ =
     defaultSqlDataTypeConstraints (Proxy :: Proxy a) (Proxy :: Proxy syntax)
-
-instance ( IsSql92ColumnSchemaSyntax syntax
-         , HasDefaultSqlDataTypeConstraints syntax LocalTime
-         ) =>
-         HasDefaultSqlDataTypeConstraints syntax Time where
-  defaultSqlDataTypeConstraints _ _ =
-    defaultSqlDataTypeConstraints
-      (Proxy :: Proxy LocalTime)
-      (Proxy :: Proxy syntax)
 
 -- -- | This would be for Enums... but we probably want to think of an alternate solution
 -- instance {-# OVERLAPPABLE #-} ( IsSql92DataTypeSyntax syntax
@@ -158,6 +149,7 @@ class (Table a) =>
     => DatabaseEntity Postgres db (TableEntity a)
     -> Word64
     -> Pg Bool
+  -- ^ This assumes that the table follows the convention of rows representing handled events.
   wasHandled table idx =
     not . null <$>
     runSelectReturningList
