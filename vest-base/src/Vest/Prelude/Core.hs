@@ -163,11 +163,11 @@ async action = do
 async' :: IO a -> IO (Async' t a)
 async' x = Tagged <$> async x
 
-asyncDetach :: IO a -> IO (Async a)
-asyncDetach = Async.async
+asyncDetached :: IO a -> IO (Async a)
+asyncDetached = Async.async
 
-asyncDetach' :: IO a -> IO (Async' t a)
-asyncDetach' x = Tagged <$> asyncDetach x
+asyncDetached' :: IO a -> IO (Async' t a)
+asyncDetached' x = Tagged <$> asyncDetached x
 
 evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
 -- ^ DO NOT USE unless you really really know what you're doing.
