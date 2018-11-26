@@ -141,8 +141,8 @@ instance Data.Semigroup.Semigroup (StreamWriter a) where
   i1 <> i2 =
     StreamWriter
       (\a -> do
-         t1 <- asyncDetach $ writeStream' i1 a
-         t2 <- asyncDetach $ writeStream' i2 a
+         t1 <- asyncDetached $ writeStream' i1 a
+         t2 <- asyncDetached $ writeStream' i2 a
          (r1, r2) <- waitBoth t1 t2
          return $ r1 || r2)
       (closeStream i1 >> closeStream i2)
@@ -164,8 +164,8 @@ instance Divisible StreamWriter where
     StreamWriter
       (\a -> do
          let (b, c) = f a
-         t1 <- asyncDetach $ writeStream' i1 b
-         t2 <- asyncDetach $ writeStream' i2 c
+         t1 <- asyncDetached $ writeStream' i1 b
+         t2 <- asyncDetached $ writeStream' i2 c
          (r1, r2) <- waitBoth t1 t2
          return $ r1 || r2)
       (closeStream i1 >> closeStream i2)
@@ -232,7 +232,7 @@ makeStreamReader buf = do
           throwTo thisThread
         propagate
   propagator <-
-    asyncDetach $ do
+    asyncDetached $ do
       void $ runMaybeT propagate
       atomically (TMap.values downstreams) >>= mapM_ closeStream
       atomically $ TMap.reset downstreams -- Just for good measure

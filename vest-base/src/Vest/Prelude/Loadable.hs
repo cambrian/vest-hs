@@ -49,8 +49,8 @@ instance {-# OVERLAPPING #-} (LoadableData a, LoadableData b) =>
                              LoadableData (a
                                            :<|> b) where
   load paths = do
-    aThread <- asyncDetach $ load @a paths
-    bThread <- asyncDetach $ load @b paths
+    aThread <- asyncDetached $ load @a paths
+    bThread <- asyncDetached $ load @b paths
     (a, b) <- waitBoth aThread bThread
     return $ a :<|> b
 
@@ -93,7 +93,7 @@ instance (LoadableResource a, LoadableResource b) =>
          LoadableResource (a
                            :<|> b) where
   makeLoadable paths = do
-    aThread <- asyncDetach $ makeLoadable @a paths
-    bThread <- asyncDetach $ makeLoadable @b paths
+    aThread <- asyncDetached $ makeLoadable @a paths
+    bThread <- asyncDetached $ makeLoadable @b paths
     (a, b) <- waitBoth aThread bThread
     return $ a :<|> b

@@ -90,7 +90,7 @@ instance Resource T where
         requestMVar <- newEmptyMVar
         HashTable.insert clientRequestHandlers namespace (putMVar requestMVar)
         -- Swallowing client exceptions is fine (usually just ConnectionClosed).
-        asyncDetach' $ do
+        asyncDetached' $ do
           when (isLocalHost uri) (threadDelay (sec 0.05))
           -- ^ If this client is connecting to the local machine, wait for the server to start.
           WS.runClient
