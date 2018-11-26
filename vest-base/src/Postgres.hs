@@ -1,3 +1,21 @@
+-- |
+-- In general you want to use service-specific connection types. The functions @runLogged and
+-- @runLoggedTransaction only accept specific connection pools to encourage this pattern.
+--
+-- e.g.
+-- data T = T
+-- { dbPool :: Pool (Specific T Postgres.Connection)
+-- ...
+-- }
+--
+-- You load the dbPool normally; the only thing to be aware of is that Specific loadables prepend
+-- a namespace to the configFile. So your config dir should look like this:
+--
+-- config/
+--   <env>/
+--     <service>/
+--       postgres.yaml
+--       postgres.pool.yaml
 module Postgres
   ( module Reexports
   , Config(..)

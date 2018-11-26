@@ -261,6 +261,8 @@ readYamlFile = Yaml.decodeFileThrow . toFilePath
 writeYamlFile :: ToJSON a => Path b File -> a -> IO ()
 writeYamlFile path = Yaml.encodeFile (toFilePath path)
 
+-- Poor man's subclassing. It's normally better to write functions on @a instead of a @t where
+-- (Has a t), but sometimes it's more convenient to do the latter (e.g. bridge).
 class Has a t where
   get :: t -> a
 
