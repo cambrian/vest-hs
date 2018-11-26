@@ -24,7 +24,7 @@ echo "Installing Intero."
 stack build intero > ~/.vest-hs/intero-build.log 2>&1
 echo "Installing IDE-related modules."
 stack build hlint > ~/.vest-hs/hlint-build.log 2>&1
-stack build phoityne-vscode > ~/.vest-hs/phoityne-build.log 2>&1
+stack install phoityne-vscode haskell-dap > ~/.vest-hs/phoityne-install.log 2>&1
 stack install hindent > ~/.vest-hs/hindent-install.log 2>&1
 echo "Installing testing dependencies."
 stack install tasty-discover > ~/.vest-hs/tasty-install.log 2>&1
