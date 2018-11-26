@@ -16,7 +16,7 @@ newtype TezosFinalizationLag =
 type ProvisionalEvent = (Int, Tezos.BlockEvent)
 
 data T = T
-  { dbPool :: Pool Postgres.Connection
+  { dbPool :: Pool (Specific T Postgres.Connection)
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
@@ -33,17 +33,14 @@ instance Loadable TezosFinalizationLag where
 instance HasNamespace T where
   type Namespace T = "tezos-chain-watcher"
 
-instance Postgres.HasConnection T where
-  withConnection t = withResource $ dbPool t
+instance Has (Pool (Specific T Postgres.Connection)) T where
+  get = dbPool
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+instance Has Amqp.T T where
+  get = amqp
 
-instance HasEventTransport Amqp.T T where
-  eventTransport = amqp
+instance Has RedisConnection T where
+  get = redis
 
-instance HasRedisConnection T where
-  redisConnection = redis
-
-instance AccessControl.Client.Has T where
-  accessControlClient = accessControlClient
+instance Has AccessControl.Client.T T where
+  get = accessControlClient

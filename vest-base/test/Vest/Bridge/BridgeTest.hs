@@ -19,20 +19,14 @@ data T = T
 instance HasNamespace T where
   type Namespace T = "bridge-test"
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+instance Has Amqp.T T where
+  get = amqp
 
-instance HasRpcTransport WebSocket.T T where
-  rpcTransport = webSocket
+instance Has WebSocket.T T where
+  get = webSocket
 
-instance HasValueTransport Amqp.T T where
-  valueTransport = amqp
-
-instance HasEventTransport Amqp.T T where
-  eventTransport = amqp
-
-instance HasRedisConnection T where
-  redisConnection = redis
+instance Has RedisConnection T where
+  get = redis
 
 type EchoIntsDirectEndpoint transport
    = Endpoint 'NoAuth T transport "echoIntsDirect" [Int] ('Direct [Int])
@@ -101,7 +95,8 @@ handlers =
   const (threadDelay (sec 0.01))
 
 withRpcClient ::
-     forall transport spec a. (HasRpcTransport transport T, Client T spec)
+     forall transport spec a.
+     (RpcTransport transport, Has transport T, Client T spec)
   => Proxy spec
   -> (ClientBindings spec -> IO a)
   -> IO a
@@ -131,7 +126,8 @@ makeValues :: IO (Values (TestValueApi Amqp.T))
 makeValues = makeIncrementValue
 
 withSubscribed ::
-     forall transport spec a. (HasValueTransport transport T, Subscriber T spec)
+     forall transport spec a.
+     (ValueTransport transport, Has transport T, Subscriber T spec)
   => Proxy spec
   -> (SubscriberBindings spec -> IO a)
   -> IO a
@@ -157,7 +153,7 @@ emptyValueTest =
     return ""
 
 singleDirectTest ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 singleDirectTest =
   testCase "Single" "test/Vest/Bridge/direct-rpc-single.gold" $
@@ -166,7 +162,7 @@ singleDirectTest =
     return $ show result
 
 multipleDirectTest ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 multipleDirectTest =
   testCase "Multiple" "test/Vest/Bridge/direct-rpc-multiple.gold" $
@@ -179,7 +175,7 @@ multipleDirectTest =
     return $ show (resultInts, resultTexts)
 
 timeoutTest ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 timeoutTest =
   expectFail $ testCase "Timeout" "test/Vest/Bridge/timeout.gold" $
@@ -188,7 +184,7 @@ timeoutTest =
     return ""
 
 singleStreamingTest ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 singleStreamingTest =
   testCase "Single" "test/Vest/Bridge/streaming-rpc-single.gold" $
@@ -202,7 +198,7 @@ singleStreamingTest =
     readTVarIO result
 
 multipleStreamingTest ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 multipleStreamingTest =
   testCase "Multiple" "test/Vest/Bridge/streaming-rpc-multiple.gold" $
@@ -230,7 +226,7 @@ multipleStreamingTest =
 --     value <- atomically getValue
 --     return $ show value
 valueTest ::
-     forall transport. HasValueTransport transport T
+     forall transport. (ValueTransport transport, Has transport T)
   => TestTree
 valueTest =
   testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
@@ -240,7 +236,7 @@ valueTest =
     return $ show value
 
 directTests ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 directTests =
   testGroup
@@ -251,7 +247,7 @@ directTests =
     ]
 
 streamingTests ::
-     forall transport. HasRpcTransport transport T
+     forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 streamingTests =
   testGroup
@@ -259,7 +255,7 @@ streamingTests =
     [singleStreamingTest @transport, multipleStreamingTest @transport]
 
 valueTests ::
-     forall transport. HasValueTransport transport T
+     forall transport. (ValueTransport transport, Has transport T)
   => TestTree
 valueTests = testGroup "Value" [valueTest @transport]
 

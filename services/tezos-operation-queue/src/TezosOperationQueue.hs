@@ -18,8 +18,8 @@ inject :: T -> Tezos.SignedOperationContents -> IO ()
 inject _ _ = return ()
 
 blockEventConsumer :: T -> Consumers BlockEvents
-blockEventConsumer t =
-  let getInitialBlockNumber = Pg.runLogged t selectNextBlockNumber
+blockEventConsumer T {dbPool} =
+  let getInitialBlockNumber = Pg.runLogged dbPool selectNextBlockNumber
    in (getInitialBlockNumber, panic "unimplemented")
 
 instance Service T where

@@ -202,8 +202,5 @@ instance RpcTransport T where
     makeRequest $ RequestMessage {id, headers, route, reqText}
     return $ Tagged $ HashTable.delete clientResponseHandlers id
 
-instance HasRpcTransport T T where
-  rpcTransport = identity
-
 instance Loadable T where
   configFile = [relfile|websocket.yaml|]

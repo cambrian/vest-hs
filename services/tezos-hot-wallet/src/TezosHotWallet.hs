@@ -16,15 +16,15 @@ vestAddress :: Tezos.Address
 vestAddress = panic "change this"
 
 blockConsumer :: T -> Consumers BlockEvents
-blockConsumer t@T {paymentWriter} =
-  let nextUnseen = Pg.runLogged t $ Pg.nextUnseenIndex $ blocks schema
+blockConsumer T {dbPool, paymentWriter} =
+  let nextUnseen = Pg.runLogged dbPool $ Pg.nextUnseenIndex $ blocks schema
       f Tezos.BlockEvent {number = blockNum, transactions} = do
-        Pg.runLogged t (Pg.wasHandled (blocks schema) blockNum) >>=
+        Pg.runLogged dbPool (Pg.wasHandled (blocks schema) blockNum) >>=
           (`when` return ())
         time <- now
         forM_ transactions $ \Tezos.Transaction {hash, from, to, size} -> do
           unless (to == vestAddress) $ return ()
-          Pg.runLoggedTransaction t $ do
+          Pg.runLoggedTransaction dbPool $ do
             idx <- Pg.nextUnseenIndex $ payments schema
             Pg.runInsert $
               Pg.insert
@@ -33,7 +33,7 @@ blockConsumer t@T {paymentWriter} =
                 Pg.onConflictDefault
             liftIO $
               writeStream paymentWriter $ PaymentEvent idx hash from size time
-        Pg.runLogged t $
+        Pg.runLogged dbPool $
           Pg.runInsert $
           Pg.insert
             (blocks schema)
@@ -42,9 +42,9 @@ blockConsumer t@T {paymentWriter} =
    in (nextUnseen, f)
 
 payoutHandler :: T -> PayoutRequest -> IO ()
-payoutHandler t PayoutRequest {id, to, size} = do
+payoutHandler t@T {dbPool} PayoutRequest {id, to, size} = do
   time <- now
-  Pg.runLogged t $
+  Pg.runLogged dbPool $
     Pg.runInsert $
     Pg.insert
       (payouts schema)

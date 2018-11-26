@@ -27,25 +27,26 @@ rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
 -- | Both materializers wait on consumption of the desired event to occur, since that is the only
 -- guarantee that a given event has been persisted in the DB (and can be accessed).
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
-materializeBlockEvent t blockNumber = do
+materializeBlockEvent t@T {dbPool} blockNumber = do
   atomically $
     readTVar (lastConsumedFinalBlockNumber t) >>= check . (blockNumber <=)
-  Pg.runLogged t (selectFinalBlockEventByNumber blockNumber) >>=
+  Pg.runLogged dbPool (selectFinalBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
 
 materializeProvisionalEvent ::
      T -> IndexOf ProvisionalEvent -> IO ProvisionalEvent
-materializeProvisionalEvent t provisionalId = do
+materializeProvisionalEvent t@T {dbPool} provisionalId = do
   atomically $
     readTVar (lastConsumedBlockProvisionalId t) >>= check . (provisionalId <=)
   event <-
-    Pg.runLogged t (selectBlockEventByProvisionalId provisionalId) >>=
+    Pg.runLogged dbPool (selectBlockEventByProvisionalId provisionalId) >>=
     fromJustUnsafe BugException
   return (provisionalId, event)
 
 streamBlockEvent :: T -> IO (Stream QueueBuffer Tezos.BlockEvent)
-streamBlockEvent t = do
-  let T {finalizationLag = TezosFinalizationLag finalizationLag} = t
+streamBlockEvent t@T { dbPool
+                     , finalizationLag = TezosFinalizationLag finalizationLag
+                     } = do
   nextBlockNumber <- getNextBlockNumber t
   (finalEventStream, invalidationStream) <-
     Tezos.streamBlockEventsDurable (tezos t) finalizationLag nextBlockNumber
@@ -55,7 +56,7 @@ streamBlockEvent t = do
        deletedAt <- now
        log Debug "invalidating provisional block events" invalidations
        Pg.runLoggedTransaction
-         t
+         dbPool
          (deleteProvisionalBlockEventsByHash deletedAt invalidations)
        log Debug "invalidated provisional block events" invalidations)
     invalidationStream
@@ -74,7 +75,7 @@ streamBlockEvent t = do
         -- final block events to strictly lag their provisional counterparts).
        log Debug "persisting block event" number
        Pg.runLoggedTransaction
-         t
+         dbPool
          (do inserted <- insertBlockEvent createdAt Nothing event
              unless inserted $ do
                finalized <- finalizeProvisionalBlockEvent updatedAt hash
@@ -87,7 +88,7 @@ streamBlockEvent t = do
     finalEventStream
 
 streamProvisionalEvent :: T -> IO (Stream QueueBuffer ProvisionalEvent)
-streamProvisionalEvent t = do
+streamProvisionalEvent t@T {dbPool} = do
   nextBlockNumber <- getNextBlockNumber t
   nextBlockProvisionalId <- getNextBlockProvisionalId t
   nextProvisionalIdVar <- newTVarIO nextBlockProvisionalId
@@ -104,7 +105,7 @@ streamProvisionalEvent t = do
        provisionalId <- readTVarIO nextProvisionalIdVar
        inserted <-
          Pg.runLoggedTransaction
-           t
+           dbPool
            (insertBlockEvent createdAt (Just provisionalId) blockEvent)
        -- ^ Only increment the local provisionalId if the event was inserted (and does not already
        -- exist as another provisional event OR a final event).

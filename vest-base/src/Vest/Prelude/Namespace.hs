@@ -4,6 +4,7 @@ module Vest.Prelude.Namespace
 
 import Data.List (span)
 import Data.Text (breakOn, stripPrefix)
+import System.IO.Unsafe (unsafePerformIO)
 import Vest.Prelude.Core
 import Vest.Prelude.Serialize
 import Vest.Prelude.TypeLevel (symbolText)
@@ -37,6 +38,8 @@ getNamespace' (Namespaced (ns, _)) = ns
 unnamespaced :: Namespaced ns a -> a
 unnamespaced (Namespaced (_, a)) = a
 
+-- | TODO: type level check that Namespace t is a valid rel dir. Possibly impossible without
+-- dependent typing?
 class KnownSymbol (Namespace t) =>
       HasNamespace t
   where
@@ -45,6 +48,9 @@ class KnownSymbol (Namespace t) =>
   -- ^ TODO: why doesn't this work?
   namespace :: Text
   namespace = symbolText (Proxy :: Proxy (Namespace t))
+  namespaceDir :: Path Rel Dir
+  namespaceDir =
+    unsafePerformIO $ parseRelDir $ symbolVal (Proxy :: Proxy (Namespace t))
   namespaced :: forall ns a. a -> Namespaced ns a
   namespaced a = Namespaced (Tagged $ namespace @t, a) -- ^ TODO: automatic instances for generic/typeable/whatever happens to work via
 -- deriving (HasDefaultNamespace)

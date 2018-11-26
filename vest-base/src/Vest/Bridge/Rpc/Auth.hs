@@ -36,6 +36,9 @@ class (RequestSigner (AuthSigner a), RequestVerifier (AuthVerifier a)) =>
 
 type AuthClaims a = VerifierClaims (AuthVerifier a)
 
+-- | These classes are tough to generalize to the base Has class because haskell doesn't like
+-- instance Has (AuthSigner ()) t
+-- because of the type family application.
 class (Auth a) =>
       HasAuthSigner a t
   where

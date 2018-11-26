@@ -21,12 +21,12 @@ pubKey = fst $ seedKeyPair seed
 instance HasNamespace T where
   type Namespace T = "TestClient"
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+instance Has Amqp.T T where
+  get = amqp
 
 -- There has to be a way to automatically derive this... right?
-instance AccessControl.Client.Has T where
-  accessControlClient = accessControlClient
+instance Has AccessControl.Client.T T where
+  get = accessControlClient
 
 make :: Amqp.T -> IO T
 make amqp = do

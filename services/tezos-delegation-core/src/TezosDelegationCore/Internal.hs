@@ -8,7 +8,7 @@ import qualified Transport.Amqp as Amqp
 import Vest
 
 data T = T
-  { dbPool :: Pool Postgres.Connection
+  { dbPool :: Pool (Specific T Postgres.Connection)
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , accessControlClient :: AccessControl.Client.T
@@ -17,17 +17,14 @@ data T = T
 instance HasNamespace T where
   type Namespace T = "tezos-delegation-core"
 
-instance Postgres.HasConnection T where
-  withConnection t = withResource $ dbPool t
+instance Has (Pool (Specific T Postgres.Connection)) T where
+  get = dbPool
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+instance Has Amqp.T T where
+  get = amqp
 
-instance HasEventTransport Amqp.T T where
-  eventTransport = amqp
+instance Has RedisConnection T where
+  get = redis
 
-instance HasRedisConnection T where
-  redisConnection = redis
-
-instance AccessControl.Client.Has T where
-  accessControlClient = accessControlClient
+instance Has AccessControl.Client.T T where
+  get = accessControlClient

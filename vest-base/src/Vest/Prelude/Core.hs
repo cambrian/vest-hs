@@ -34,6 +34,7 @@ import Protolude as Vest.Prelude.Core hiding
   , catchJust
   , catches
   , finally
+  , get
   , getSum
   , handle
   , handleJust
@@ -59,7 +60,6 @@ import qualified TMap
 -- import qualified Control.Monad.Fail
 import Control.Monad.Fail as Vest.Prelude.Core
 import Control.Monad.ST as Vest.Prelude.Core
-import Control.Monad.State as Vest.Prelude.Core hiding (fail)
 import Data.AdditiveGroup as Vest.Prelude.Core
 import Data.Aeson as Vest.Prelude.Core
   ( FromJSON(..)
@@ -260,3 +260,9 @@ readYamlFile = Yaml.decodeFileThrow . toFilePath
 
 writeYamlFile :: ToJSON a => Path b File -> a -> IO ()
 writeYamlFile path = Yaml.encodeFile (toFilePath path)
+
+class Has a t where
+  get :: t -> a
+
+instance Has a a where
+  get = identity

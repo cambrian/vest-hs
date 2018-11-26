@@ -37,8 +37,6 @@ make amqp acPublicKey seed = do
       , readMinTokenTime = justSTM $ readLatestValueSTM minTokenTimes
       }
 
--- These instances overlap with the definitions below when t == T.
--- TODO: There's probably a way to remove the overlap?
 instance {-# OVERLAPPING #-} Permission.Is p => HasAuthSigner (Auth.T p) T where
   authSigner T {secretKey, readToken} = Auth.Signer secretKey readToken
 
@@ -59,14 +57,8 @@ instance {-# OVERLAPPING #-} Permission.Is p =>
 --
 -- instance Permission.Is p => HasAuthVerifier (AccessControl.Auth.T p) T where
 --   authVerifier = accessControlClient
-class Has t where
-  accessControlClient :: t -> T
+instance (Permission.Is p, Has T t) => HasAuthSigner (Auth.T p) t where
+  authSigner = authSigner @(Auth.T p) . get @T
 
-instance Has T where
-  accessControlClient = identity
-
-instance (Permission.Is p, Has t) => HasAuthSigner (Auth.T p) t where
-  authSigner = authSigner @(Auth.T p) . accessControlClient
-
-instance (Permission.Is p, Has t) => HasAuthVerifier (Auth.T p) t where
-  authVerifier = authVerifier @(Auth.T p) . accessControlClient
+instance (Permission.Is p, Has T t) => HasAuthVerifier (Auth.T p) t where
+  authVerifier = authVerifier @(Auth.T p) . get @T

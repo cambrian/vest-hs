@@ -30,7 +30,8 @@ instance (Subscriber t a, Subscriber t b) =>
     return $ aStreams :<|> bStreams
 
 instance ( HasNamespace service
-         , HasValueTransport transport t
+         , ValueTransport transport
+         , Has transport t
          , Deserializable fmt a
          , KnownSymbol name
          , Eq a
@@ -39,7 +40,7 @@ instance ( HasNamespace service
   subscribe t _ = do
     (writer, stream) <- newStream @ValueBuffer
     subscribeValue
-      (valueTransport @transport t)
+      (get @transport t)
       (serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name))
       (writeStream writer <=< deserializeUnsafe' @fmt)
     return stream

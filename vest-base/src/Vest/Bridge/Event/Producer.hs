@@ -52,8 +52,9 @@ instance ( HasUniqueEventNames (a
     produce t (Proxy :: Proxy b) bProducers
 
 instance ( Server t (EventMaterializeEndpoint (Event_ fmt t transport name a))
-         , HasEventTransport transport t
-         , HasRedisConnection t
+         , EventTransport transport
+         , Has transport t
+         , Has RedisConnection t
          , Serializable fmt a
          , KnownEventName name
          ) =>
@@ -67,5 +68,5 @@ instance ( Server t (EventMaterializeEndpoint (Event_ fmt t transport name a))
       let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
           lockId = retag $ eventName <> "/producer"
       withDistributedLock t lockId $ do
-        send <- publishEvents (eventTransport @transport t) eventName
+        send <- publishEvents (get @transport t) eventName
         makeEvents >>= consumeStream (send . serialize' @fmt)

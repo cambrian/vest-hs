@@ -12,5 +12,5 @@ data T = T
 instance HasNamespace T where
   type Namespace T = "dummy-manager"
 
-instance HasRpcTransport WebSocket.T T where
-  rpcTransport = webSocket
+instance Has WebSocket.T T where
+  get = webSocket

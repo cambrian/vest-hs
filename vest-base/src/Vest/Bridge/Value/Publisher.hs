@@ -47,8 +47,9 @@ instance ( HasUniqueValueNames (a
     publish t (Proxy :: Proxy b) bValues
 
 instance ( HasNamespace t
-         , HasValueTransport transport t
-         , HasRedisConnection t
+         , ValueTransport transport
+         , Has transport t
+         , Has RedisConnection t
          , Serializable fmt a
          , KnownSymbol name
          , Eq a
@@ -59,5 +60,5 @@ instance ( HasNamespace t
       let valueName = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy name)
           lockId = retag $ valueName <> "/publisher"
       withDistributedLock t lockId $ do
-        send <- publishValue (valueTransport @transport t) valueName
+        send <- publishValue (get @transport t) valueName
         consumeStream (send . serialize' @fmt) stream

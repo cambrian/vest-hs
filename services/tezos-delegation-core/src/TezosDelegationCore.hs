@@ -18,12 +18,12 @@ blockConsumer :: T -> Consumers BlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; dividends are paid out when the delegator pays its bill. This happens
 -- in the payment consumer.
-blockConsumer t =
+blockConsumer t@T {dbPool} =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
       handleCycle blockNum cycleNum cycleTime = do
-        Pg.runLogged t (Pg.wasHandled (cycles schema) cycleNum) >>=
+        Pg.runLogged dbPool (Pg.wasHandled (cycles schema) cycleNum) >>=
           (`when` return ())
-        delegates <- Pg.runLogged t $ delegatesTrackedAtCycle cycleNum
+        delegates <- Pg.runLogged dbPool $ delegatesTrackedAtCycle cycleNum
         rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNum delegates
         time <- now
         forM_ rewardInfos $ \Tezos.RewardInfo { delegate
@@ -32,7 +32,7 @@ blockConsumer t =
                                               , delegatedBalance
                                               , delegations
                                               } -> do
-          Pg.runLogged t (wasRewardAlreadyProcessed cycleNum delegate) >>=
+          Pg.runLogged dbPool (wasRewardAlreadyProcessed cycleNum delegate) >>=
             (`when` return ())
           let delegateReward size =
                 fixedOf Round $
@@ -53,7 +53,7 @@ blockConsumer t =
               paymentOwed = totalDividends + vestCut
           billId <- nextUUID
           -- Insert entries into Pg.
-          Pg.runLoggedTransaction t $ do
+          Pg.runLoggedTransaction dbPool $ do
             Pg.runInsert $
               Pg.insert
                 (bills schema)
@@ -95,7 +95,7 @@ blockConsumer t =
                        time
                    ])
                 Pg.onConflictDefault
-        Pg.runLogged t $
+        Pg.runLogged dbPool $
           Pg.runInsert $
           Pg.insert
             (cycles schema)
@@ -103,26 +103,27 @@ blockConsumer t =
             Pg.onConflictDefault
       handleBlock Tezos.BlockEvent {number = blockNumber, cycleNumber, time} = do
         handleCycle blockNumber cycleNumber time
-        Pg.runLogged t $
+        Pg.runLogged dbPool $
           Pg.runUpdate $
           Pg.update
             (cycles schema)
             (\Cycle {latestBlock} -> [latestBlock Pg.<-. Pg.val_ blockNumber])
             (\Cycle {number} -> number Pg.==. Pg.val_ cycleNumber)
-   in (Pg.runLogged t selectNextBlock, handleBlock)
+   in (Pg.runLogged dbPool selectNextBlock, handleBlock)
 
 paymentConsumer :: T -> Consumers PaymentEvents
 -- TODO: transaction fees
-paymentConsumer t =
-  let nextPayment = Pg.runLogged t $ Pg.nextUnseenIndex $ payments schema
+paymentConsumer t@T {dbPool} =
+  let nextPayment = Pg.runLogged dbPool $ Pg.nextUnseenIndex $ payments schema
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
       f PaymentEvent {idx, from, size, time = paymentTime} = do
-        Pg.runLogged t (Pg.wasHandled (payments schema) idx) >>=
+        Pg.runLogged dbPool (Pg.wasHandled (payments schema) idx) >>=
           (`when` return ())
-        isPlatformDelegate_ <- Pg.runLogged t $ isPlatformDelegate from
+        isPlatformDelegate_ <- Pg.runLogged dbPool $ isPlatformDelegate from
         time <- now
         when isPlatformDelegate_ $ do
-          billsOutstanding_ <- Pg.runLogged t $ billsOutstanding $ Tagged from
+          billsOutstanding_ <-
+            Pg.runLogged dbPool $ billsOutstanding $ Tagged from
           let (billIdsPaid, refund) =
                 foldr
                   (\Bill {id, size} (paid, rem) ->
@@ -133,7 +134,7 @@ paymentConsumer t =
                   billsOutstanding_
           dividendsPaid <-
             foldr (<>) [] <$>
-            mapM (Pg.runLogged t . dividendsForBill) billIdsPaid
+            mapM (Pg.runLogged dbPool . dividendsForBill) billIdsPaid
           -- Issue dividends and record issuance.
           -- TODO: Could group dividends by delegator.
           forM_ dividendsPaid $ \dividend@Dividend {delegator, size, payout} -> do
@@ -141,7 +142,7 @@ paymentConsumer t =
             id <- nextUUID
             -- TODO: Make sure this can't fail.
             issuePayout $ PayoutRequest id (untag delegator) size
-            Pg.runLoggedTransaction t $ do
+            Pg.runLoggedTransaction dbPool $ do
               Pg.runInsert $
                 Pg.insert
                   (payouts schema)
@@ -152,7 +153,7 @@ paymentConsumer t =
                   (dividends schema)
                   (dividend {payout = PayoutId $ Just id} :: Dividend)
           -- Mark bills paidm
-          Pg.runLogged t $
+          Pg.runLogged dbPool $
             Pg.runUpdate $
             Pg.update
               (bills schema)
@@ -163,7 +164,7 @@ paymentConsumer t =
             refundId <- nextUUID
             issuePayout $ PayoutRequest refundId from refund
             -- ^ TODO: Make sure this can't fail.
-            Pg.runLoggedTransaction t $ do
+            Pg.runLoggedTransaction dbPool $ do
               Pg.runInsert $
                 Pg.insert
                   (payouts schema)
@@ -175,7 +176,7 @@ paymentConsumer t =
                   (Pg.insertValues
                      [Refund (PaymentIndex idx) refund (PayoutId refundId) time])
                   Pg.onConflictDefault
-        Pg.runLogged t $
+        Pg.runLogged dbPool $
           Pg.runInsert $
           Pg.insert
             (payments schema)

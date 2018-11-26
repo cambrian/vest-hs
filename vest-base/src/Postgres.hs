@@ -1,7 +1,6 @@
 module Postgres
   ( module Reexports
   , Config(..)
-  , HasConnection(..)
   , runLogged
   , runLoggedTransaction
   , ensureSchema
@@ -100,29 +99,21 @@ instance Resource Connection where
 instance Loadable Connection where
   configFile = [relfile|postgres.yaml|]
 
--- | Slightly different pattern from the normal HasX classes to encourage connection pooling.
-class HasConnection t where
-  withConnection :: t -> (Connection -> IO a) -> IO a
+runLogged :: Pool (Specific s Connection) -> Pg a -> IO a
+-- ^ Requires the connection to be service-specific.
+runLogged pool f =
+  withResource pool $ \c ->
+    runBeamPostgresDebug (log Debug "SQL query") (base c) f
 
-instance HasConnection Connection where
-  withConnection conn f = f conn
-
-instance HasConnection (Pool Connection) where
-  withConnection = withResource
-
-runLogged :: HasConnection t => t -> Pg a -> IO a
-runLogged t f =
-  withConnection t $ \c -> runBeamPostgresDebug (log Debug "SQL query") c f
-
-runLoggedTransaction :: HasConnection t => t -> Pg a -> IO a
+runLoggedTransaction :: Pool (Specific s Connection) -> Pg a -> IO a
 -- ^ If parsing interleaved transaction logs is annoying, get a uuid and include it in the log
 -- context.
-runLoggedTransaction t f =
-  withConnection t $ \c -> do
+runLoggedTransaction pool f =
+  withResource pool $ \c -> do
     log_ Debug "begin SQL transaction"
     a <-
-      withTransactionSerializable c $
-      runBeamPostgresDebug (log Debug "SQL transaction") c f
+      withTransactionSerializable (base c) $
+      runBeamPostgresDebug (log Debug "SQL transaction") (base c) f
     log_ Debug "end SQL transaction"
     return a
 

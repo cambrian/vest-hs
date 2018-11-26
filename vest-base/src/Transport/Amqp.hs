@@ -222,14 +222,5 @@ instance EventTransport T where
     declareEventExchange (publishChan t) eventName
     subscribe_ t eventName f
 
-instance HasRpcTransport T T where
-  rpcTransport = identity
-
-instance HasValueTransport T T where
-  valueTransport = identity
-
-instance HasEventTransport T T where
-  eventTransport = identity
-
 instance Loadable T where
   configFile = [relfile|amqp.yaml|]

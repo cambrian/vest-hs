@@ -9,7 +9,7 @@ import qualified Transport.WebSocket as WebSocket
 import Vest
 
 data T = T
-  { dbPool :: Pool Postgres.Connection
+  { dbPool :: Pool (Specific T Postgres.Connection)
   , amqp :: Amqp.T
   , webSocket :: WebSocket.T
   , redis :: RedisConnection
@@ -19,20 +19,17 @@ data T = T
 instance HasNamespace T where
   type Namespace T = "tezos-operation-queue"
 
-instance Postgres.HasConnection T where
-  withConnection t = withResource $ dbPool t
+instance Has (Pool (Specific T Postgres.Connection)) T where
+  get = dbPool
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+instance Has Amqp.T T where
+  get = amqp
 
-instance HasEventTransport Amqp.T T where
-  eventTransport = amqp
+instance Has WebSocket.T T where
+  get = webSocket
 
-instance HasRpcTransport WebSocket.T T where
-  rpcTransport = webSocket
+instance Has RedisConnection T where
+  get = redis
 
-instance HasRedisConnection T where
-  redisConnection = redis
-
-instance AccessControl.Client.Has T where
-  accessControlClient = accessControlClient
+instance Has AccessControl.Client.T T where
+  get = accessControlClient

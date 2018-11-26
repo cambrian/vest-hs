@@ -45,11 +45,8 @@ data T = T
 instance HasNamespace T where
   type Namespace T = "access-control"
 
-instance HasRpcTransport Amqp.T T where
-  rpcTransport = amqp
+instance Has Amqp.T T where
+  get = amqp
 
-instance HasValueTransport Amqp.T T where
-  valueTransport = amqp
-
-instance HasRedisConnection T where
-  redisConnection = redis
+instance Has RedisConnection T where
+  get = redis

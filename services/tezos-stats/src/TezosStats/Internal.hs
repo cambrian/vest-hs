@@ -25,7 +25,7 @@ instance HasNamespace T where
 --   redisConnection = redis
 -- instance HasRpcTransport Amqp.T T where
 --   rpcTransport = amqp
-instance HasRpcTransport WebSocket.T T where
-  rpcTransport = webSocket
+instance Has WebSocket.T T where
+  get = webSocket
 -- instance AccessControlClient.Has T where
 --   accessControlClient = accessControlClient

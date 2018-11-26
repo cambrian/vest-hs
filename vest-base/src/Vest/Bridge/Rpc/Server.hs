@@ -72,7 +72,8 @@ serve_ ::
      ( Deserializable fmt req
      , Serializable fmt (RpcResponse res)
      , HasAuthVerifier auth t
-     , HasRpcTransport transport t
+     , RpcTransport transport
+     , Has transport t
      , HasNamespace t
      , KnownSymbol route
      )
@@ -82,8 +83,7 @@ serve_ ::
   -> t
   -> (AuthClaims auth -> req -> IO x)
   -> IO ()
-serve_ sender t handler =
-  serveRaw (rpcTransport @transport t) rawRoute asyncHandle
+serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
   where
     rawRoute = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy route)
     asyncHandle headers reqText respond =
@@ -113,7 +113,8 @@ serve_ sender t handler =
         sendToClient = respond . serialize' @fmt @(RpcResponse res)
 
 instance ( HasNamespace t
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , Deserializable fmt req
          , Serializable fmt (RpcResponse res)
          , KnownSymbol route
@@ -123,7 +124,8 @@ instance ( HasNamespace t
     serve_ @fmt @() @transport @route directSender t (const handler)
 
 instance ( HasNamespace t
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , KnownNat timeout
          , Deserializable fmt req
          , Serializable fmt (RpcResponse (StreamingResponse res))
@@ -143,7 +145,8 @@ instance ( HasNamespace t
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , Deserializable fmt req
          , Serializable fmt (RpcResponse res)
          , KnownSymbol route
@@ -153,7 +156,8 @@ instance ( HasNamespace t
 
 instance ( HasNamespace t
          , HasAuthVerifier auth t
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , KnownNat timeout
          , Deserializable fmt req
          , Serializable fmt (RpcResponse (StreamingResponse res))

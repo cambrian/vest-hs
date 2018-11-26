@@ -65,7 +65,8 @@ callDirect ::
      , Deserializable fmt (RpcResponse res)
      , HasNamespace server
      , HasAuthSigner auth t
-     , HasRpcTransport transport t
+     , RpcTransport transport
+     , Has transport t
      , KnownSymbol route
      )
   => t
@@ -84,7 +85,7 @@ callDirect t req = do
           RpcResponse res -> putMVar resultVar res
   Tagged doCleanup <-
     callRaw
-      (rpcTransport @transport t)
+      (get @transport t)
       rawRoute
       headersWithSignature
       reqText
@@ -100,7 +101,8 @@ callStreaming ::
      , Deserializable fmt (RpcResponse (StreamingResponse res))
      , HasNamespace server
      , HasAuthSigner auth t
-     , HasRpcTransport transport t
+     , RpcTransport transport
+     , Has transport t
      , KnownSymbol route
      , Eq res
      )
@@ -133,7 +135,7 @@ callStreaming t req f = do
               EndOfResults -> closeStream resultPusher
   Tagged doCleanup <-
     callRaw
-      (rpcTransport @transport t)
+      (get @transport t)
       rawRoute
       headersWithSignature
       reqText
@@ -157,7 +159,8 @@ instance ( KnownNat timeout
          , Serializable fmt req
          , Deserializable fmt (RpcResponse res)
          , HasNamespace server
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , KnownSymbol route
          ) =>
          Client t (Endpoint_ timeout fmt 'NoAuth server transport route req ('Direct res)) where
@@ -167,7 +170,8 @@ instance ( KnownNat timeout
          , Serializable fmt req
          , Deserializable fmt (RpcResponse (StreamingResponse res))
          , HasNamespace server
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , KnownSymbol route
          , Eq res
          ) =>
@@ -179,7 +183,8 @@ instance ( KnownNat timeout
          , Deserializable fmt (RpcResponse res)
          , HasNamespace server
          , HasAuthSigner auth t
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , KnownSymbol route
          ) =>
          Client t (Endpoint_ timeout fmt ('Auth auth) server transport route req ('Direct res)) where
@@ -190,7 +195,8 @@ instance ( KnownNat timeout
          , Deserializable fmt (RpcResponse (StreamingResponse res))
          , HasNamespace server
          , HasAuthSigner auth t
-         , HasRpcTransport transport t
+         , RpcTransport transport
+         , Has transport t
          , KnownSymbol route
          , Eq res
          ) =>

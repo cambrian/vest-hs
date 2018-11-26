@@ -42,8 +42,7 @@ class ( HasNamespace a
   -- ^ Will throw if configDir is not well formed.
   configPaths configDir = do
     d <- resolveDir' configDir
-    serviceConfigDir <- parseRelDir $ unpack $ namespace @a
-    return [d </> serviceConfigDir, d]
+    return [d </> namespaceDir @a, d]
   run :: [Path Abs Dir] -> (a -> IO b) -> IO Void
   -- ^ This function runs a service with an arbitrary body function.
   run paths f =
@@ -72,3 +71,17 @@ class ( HasNamespace a
     Args {configDir} <- cmdArgs $ args @a
     paths <- configPaths @a configDir
     run @a paths return
+
+-- | TODO: move (and rename?)
+newtype Specific s a = Specific
+  { base :: a
+  }
+
+instance (HasNamespace s, Resource a) => Resource (Specific s a) where
+  type ResourceConfig (Specific s a) = ResourceConfig a
+  makeLogged = makeLogged
+  cleanupLogged = cleanupLogged
+  resourceName = namespace @s <> "-" <> resourceName @a
+
+instance (HasNamespace s, Loadable a) => Loadable (Specific s a) where
+  configFile = namespaceDir @s </> configFile @a

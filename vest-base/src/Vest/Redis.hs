@@ -2,7 +2,6 @@ module Vest.Redis
   ( defaultRedisConfig
   , RedisConfig(..)
   , RedisConnection
-  , HasRedisConnection(..)
   , RedisTransactionException(..)
   ) where
 
@@ -17,12 +16,6 @@ data RedisTransactionException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 type RedisConnection = Connection
-
-class HasRedisConnection t where
-  redisConnection :: t -> Connection
-
-instance HasRedisConnection RedisConnection where
-  redisConnection = identity
 
 data RedisConfig = RedisConfig
   { host :: GHC.Base.String

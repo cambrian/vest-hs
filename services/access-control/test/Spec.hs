@@ -29,12 +29,12 @@ data TestServer = TestServer
 instance HasNamespace TestServer where
   type Namespace TestServer = "test-server"
 
-instance HasRpcTransport Amqp.T TestServer where
-  rpcTransport = amqp
+instance Has Amqp.T TestServer where
+  get = amqp
 
 -- There has to be a way to automatically derive this... right?
-instance AccessControl.Client.Has TestServer where
-  accessControlClient = accessControlClient
+instance Has AccessControl.Client.T TestServer where
+  get = accessControlClient
 
 type PermittedEndpoint
    = Endpoint ('Auth (AccessControl.Auth.T 'Permission.B)) TestServer Amqp.T "permittedEndpoint" () ('Direct ())

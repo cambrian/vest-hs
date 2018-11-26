@@ -35,8 +35,9 @@ instance (Consumer t a, Consumer t b) =>
 instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name a))
          , Deserializable fmt a
          , HasNamespace t
-         , HasEventTransport transport t
-         , HasRedisConnection t
+         , EventTransport transport
+         , Has transport t
+         , Has RedisConnection t
          , KnownEventName name
          , Indexable a
          ) =>
@@ -52,7 +53,7 @@ instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name 
                 (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt server transport name a)))
         (writer, stream) <- newStream
         subscribeEvents
-          (eventTransport @transport t)
+          (get @transport t)
           eventName
           (writeStream writer <=< deserializeUnsafe' @fmt)
         startIndex <- getStartIndex

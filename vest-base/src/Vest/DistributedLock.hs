@@ -7,25 +7,27 @@ module Vest.DistributedLock
 
 import Database.Redis
 import Vest.Prelude hiding (get)
+import qualified Vest.Prelude
 import Vest.Redis
 
 -- | Works via the setnx command, which succeeds only if the desired key doesn't already exist.
 -- Note that this algorithm will not work with several Redis masters (at which point we should
 -- consider implementing the Redlock algorithm).
 data DistributedLock = DistributedLock
-  { redis :: Connection
+  { redis :: RedisConnection
   , lockId :: Text' "LockId"
   , cancelRenewer :: IO' "CancelInterval" ()
   }
 
 data DistributedLockConfig = DistributedLockConfig
-  { redis :: Connection
+  { redis :: RedisConnection
   , lockId :: Text' "LockId"
   , renewInterval :: Duration
   , pollInterval :: Duration
   }
 
-defaultDistributedLock :: Connection -> Text' "LockId" -> DistributedLockConfig
+defaultDistributedLock ::
+     RedisConnection -> Text' "LockId" -> DistributedLockConfig
 defaultDistributedLock redis lockId =
   DistributedLockConfig
     {redis, lockId, renewInterval = sec 5, pollInterval = sec 5}
@@ -81,7 +83,7 @@ instance Resource DistributedLock where
     void . runRedis redis $ del [redisKey]
 
 withDistributedLock ::
-     HasRedisConnection t => t -> Text' "LockId" -> IO a -> IO a
+     Has RedisConnection t => t -> Text' "LockId" -> IO a -> IO a
 withDistributedLock t lockId =
-  with @DistributedLock (defaultDistributedLock (redisConnection t) lockId) .
+  with @DistributedLock (defaultDistributedLock (Vest.Prelude.get t) lockId) .
   const
