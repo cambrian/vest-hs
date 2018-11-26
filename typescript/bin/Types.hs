@@ -14,8 +14,8 @@ typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =
   [ generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
   , generateTsDeclarations (Proxy :: Proxy TezosOperationQueue.Api)
-  , generateTsAuxiliary (Proxy :: Proxy TezosStats.AuxiliaryTypes)
   , generateTsDeclarations (Proxy :: Proxy TezosStats.Api)
+  , generateTsDeclarations (Proxy :: Proxy TezosStats.AuxiliaryTypes)
   -- Put any additional APIs here.
   ]
 

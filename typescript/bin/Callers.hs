@@ -1,11 +1,13 @@
 import Data.Aeson.Types (Object)
 import qualified Data.Text as Text (replace)
 import Data.Text.Lazy (toStrict)
+import Data.Text.Manipulate (toPascal)
 import qualified DummyManager
 import System.Console.CmdArgs
 import System.Directory
 import System.FilePath
 import Text.EDE
+
 import qualified TezosOperationQueue
 import qualified TezosStats
 import Typescript
@@ -20,7 +22,7 @@ callersToGenerate =
       , Proxy :: Proxy TezosOperationQueue.Api)
   , specToNamespaceObject
       (Proxy :: Proxy TezosStats.T, Proxy :: Proxy TezosStats.Api)
-  -- NOTE: Put any additional APIs here.
+  -- Put any additional APIs here.
   ]
 
 specTsTypesToObject ::
@@ -41,6 +43,7 @@ specTsTypesToObject _ SpecTsTypes { hasAuth
     , "timeoutMillis" .= timeoutMillis
     , "route" .= route
     , "namespacedRoute" .= serialize' @'Pretty (namespaced @service route)
+    -- ^ Eventually: Can we make this call into a function somewhere?
     , "req" .= req
     , "res" .= res
     ]
@@ -51,7 +54,8 @@ specToNamespaceObject ::
   -> Object
 specToNamespaceObject (proxyService, proxySpec) =
   fromPairs
-    [ "namespace" .= namespace @service
+    [ "namespace" .= toPascal (namespace @service)
+    -- ^ This is also brittle.
     , "specs" .=
       map (specTsTypesToObject proxyService) (makeSpecTsTypes proxySpec)
     ]

@@ -57,14 +57,14 @@ operation T {rawStubData, streamDelayMillis} opHash = do
       return stream
 
 type AuxiliaryTypes
-   = Raw Baker
-     :<|> Raw DelegateFraction
-     :<|> Raw DelegateInfo
-     :<|> Raw LedgerOperation
-     :<|> Raw LedgerOperationType
-     :<|> Raw OriginatedAddress
-     :<|> Raw TimeRate
-     :<|> Raw TimeSize
+   = Baker
+     :<|> DelegateFraction
+     :<|> DelegateInfo
+     :<|> LedgerOperation
+     :<|> LedgerOperationType
+     :<|> OriginatedAddress
+     :<|> TimeRate
+     :<|> TimeSize
 
 newtype RawStubData =
   RawStubData Text

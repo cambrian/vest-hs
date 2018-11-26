@@ -22,6 +22,7 @@ dependencies:
 - services
 - text              >= 1.2
 - text-replace      >= 0.0
+- text-manipulate   >= 0.2
 - template-haskell  >= 2.13
 - utf8-string       >= 1.0
 - vest-base

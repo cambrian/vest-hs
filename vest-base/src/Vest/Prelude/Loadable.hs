@@ -42,9 +42,6 @@ class Loadable a where
 class LoadableData a where
   load :: [Path Abs Dir] -> IO a
 
-instance {-# OVERLAPPABLE #-} (Loadable a, FromJSON a) => LoadableData a where
-  load paths = configPathUnsafe @a paths >>= readYamlFile
-
 instance {-# OVERLAPPING #-} (LoadableData a, LoadableData b) =>
                              LoadableData (a
                                            :<|> b) where
@@ -53,6 +50,9 @@ instance {-# OVERLAPPING #-} (LoadableData a, LoadableData b) =>
     bThread <- asyncDetached $ load @b paths
     (a, b) <- waitBoth aThread bThread
     return $ a :<|> b
+
+instance {-# OVERLAPPABLE #-} (Loadable a, FromJSON a) => LoadableData a where
+  load paths = configPathUnsafe @a paths >>= readYamlFile
 
 class Resource a =>
       LoadableResource a

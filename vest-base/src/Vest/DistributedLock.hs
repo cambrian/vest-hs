@@ -46,19 +46,19 @@ waitThenPoll pubSub redisKey pollInterval = do
 
 acquire :: PubSubController -> ByteString -> Integer -> Duration -> Redis ()
 acquire pubSub redisKey ttlSeconds pollInterval = do
-  txResult <-
-    multiExec $ do
-      acquired <- setnx redisKey "0"
-      expired <- expire redisKey ttlSeconds
-       -- ^ setnx does not set any TTL on its own.
-      return $ (&&) <$> acquired <*> expired
-  case txResult of
-    TxSuccess True -> return ()
-    TxSuccess _ ->
-      liftIO (waitThenPoll pubSub redisKey pollInterval) >>
-      acquire pubSub redisKey ttlSeconds pollInterval
-      -- ^ Block on key then retry acquire (see waitThenPoll).
-    _ -> liftIO $ throw RedisTransactionException
+  acquireResult <-
+    setOpts
+      redisKey
+      "0"
+      (SetOpts
+         { setSeconds = Just ttlSeconds
+         , setMilliseconds = Nothing
+         , setCondition = Just Nx
+         })
+  unless (acquireResult == Right Ok) $ do
+    liftIO (waitThenPoll pubSub redisKey pollInterval)
+    acquire pubSub redisKey ttlSeconds pollInterval
+    -- ^ Block on key then retry acquire (waitThenPoll).
 
 instance Resource DistributedLock where
   type ResourceConfig DistributedLock = DistributedLockConfig

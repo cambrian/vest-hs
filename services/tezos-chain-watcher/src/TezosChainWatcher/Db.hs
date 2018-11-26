@@ -18,10 +18,10 @@ data BlockT f = Block
   , blockCycleNumber :: C f Word64
   , blockFee :: C f (FixedQty XTZ)
   , blockIsProvisional :: C f Bool
-  , blockTime :: C f Text
-  , blockCreatedAt :: C f Text
-  , blockUpdatedAt :: C f (Maybe Text)
-  , blockDeletedAt :: C f (Maybe Text)
+  , blockTime :: C f Time
+  , blockCreatedAt :: C f Time
+  , blockUpdatedAt :: C f (Maybe Time)
+  , blockDeletedAt :: C f (Maybe Time)
   } deriving (Generic, Beamable)
 
 type Block = BlockT Identity
@@ -46,7 +46,7 @@ deriving instance Show (PrimaryKey BlockT Identity)
 data OperationT f = Operation
   { operationHash :: C f Tezos.OperationHash
   , operationBlockHash :: PrimaryKey BlockT f
-  , operationCreatedAt :: C f Text
+  , operationCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Operation = OperationT Identity
@@ -73,7 +73,7 @@ data OriginationT f = Origination
   { originationHash :: PrimaryKey OperationT f
   , originationOriginator :: C f Tezos.ImplicitAddress
   , originationOriginated :: C f Tezos.OriginatedAddress
-  , originationCreatedAt :: C f Text
+  , originationCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Origination = OriginationT Identity
@@ -109,7 +109,7 @@ data TransactionT f = Transaction
   , transactionTo :: C f Tezos.Address
   , transactionFee :: C f (FixedQty XTZ)
   , transactionSize :: C f (FixedQty XTZ)
-  , transactionCreatedAt :: C f Text
+  , transactionCreatedAt :: C f Time
   } deriving (Generic, Beamable)
 
 type Transaction = TransactionT Identity
@@ -233,7 +233,6 @@ toBlockEvent (Block number _ hash predecessor cycleNumber fee _ time _ _ _) = do
   operations <- selectTezosOperationsByBlockHash hash
   originations <- concatMapM selectTezosOriginationsByOpHash operations
   transactions <- concatMapM selectTezosTransactionsByOpHash operations
-  time <- liftIO $ readUnsafe time
   return $
     Tezos.BlockEvent
       { number
@@ -269,7 +268,7 @@ selectFinalBlockEventByNumber queryNumber = do
     Nothing -> return Nothing
     Just block -> Just <$> toBlockEvent block
 
-insertTezosOpHashes :: Tezos.BlockHash -> Text -> [Tezos.OperationHash] -> Pg ()
+insertTezosOpHashes :: Tezos.BlockHash -> Time -> [Tezos.OperationHash] -> Pg ()
 insertTezosOpHashes blockHash createdAt tezosOpHashes =
   runInsert $
   insert
@@ -280,7 +279,7 @@ insertTezosOpHashes blockHash createdAt tezosOpHashes =
        tezosOpHashes)
     onConflictDefault
 
-insertTezosOriginations :: Text -> [Tezos.Origination] -> Pg ()
+insertTezosOriginations :: Time -> [Tezos.Origination] -> Pg ()
 insertTezosOriginations createdAt tezosOriginations =
   runInsert $
   insert
@@ -292,7 +291,7 @@ insertTezosOriginations createdAt tezosOriginations =
        tezosOriginations)
     onConflictDefault
 
-insertTezosTransactions :: Text -> [Tezos.Transaction] -> Pg ()
+insertTezosTransactions :: Time -> [Tezos.Transaction] -> Pg ()
 insertTezosTransactions createdAt tezosTransactions =
   runInsert $
   insert
@@ -305,19 +304,17 @@ insertTezosTransactions createdAt tezosTransactions =
     onConflictDefault
 
 insertBlockEvent :: Time -> Maybe Int -> Tezos.BlockEvent -> Pg Bool
-insertBlockEvent createdAt_ provisionalId blockEvent = do
+insertBlockEvent createdAt provisionalId blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
                        , predecessor
                        , cycleNumber
                        , fee
-                       , time = time_
+                       , time
                        , operations
                        , originations
                        , transactions
                        } = blockEvent
-  let createdAt = show createdAt_
-      time = show time_
   eventExists <-
     isJust <$> runSelectReturningOne (lookup_ (blocks schema) (BlockHash hash))
   -- ^ The alternative is catching a thrown exception (if the event already exists), which is not
@@ -349,8 +346,7 @@ insertBlockEvent createdAt_ provisionalId blockEvent = do
       return True
 
 finalizeProvisionalBlockEvent :: Time -> Tezos.BlockHash -> Pg Bool
-finalizeProvisionalBlockEvent updatedAt_ hash = do
-  let updatedAt = show updatedAt_
+finalizeProvisionalBlockEvent updatedAt hash = do
   blockMaybe <-
     runSelectReturningOne $
     select $
@@ -367,8 +363,7 @@ finalizeProvisionalBlockEvent updatedAt_ hash = do
 
 -- | Soft delete by setting deletedAt.
 deleteProvisionalBlockEventsByHash :: Time -> [Tezos.BlockHash] -> Pg ()
-deleteProvisionalBlockEventsByHash deletedAt_ hashes = do
-  let deletedAt = show deletedAt_
+deleteProvisionalBlockEventsByHash deletedAt hashes = do
   blocksToDelete <-
     runSelectReturningList $
     select $
@@ -382,8 +377,7 @@ deleteProvisionalBlockEventsByHash deletedAt_ hashes = do
 
 -- | Soft delete by setting deletedAt.
 deleteOldProvisionalBlockEvents :: Time -> Word64 -> Pg ()
-deleteOldProvisionalBlockEvents deletedAt_ maxBlockNumberToDelete = do
-  let deletedAt = show deletedAt_
+deleteOldProvisionalBlockEvents deletedAt maxBlockNumberToDelete = do
   blocksToDelete <-
     runSelectReturningList $
     select $

@@ -123,9 +123,6 @@ data BugException =
   BugException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
--- Used to avoid overlapping instances when complementary constraints cannot be expressed to GHC.
-data Raw a
-
 -- Aeson instances copied from base64-bytestring-type.
 -- ByteStrings are serialized as Latin-1 (ASCII) Texts, after base64 encoding.
 instance ToJSON ByteString where

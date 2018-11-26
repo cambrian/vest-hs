@@ -33,9 +33,9 @@ class Collector spec where
   generateTsDeclarations :: Proxy spec -> [TSDeclaration]
   makeSpecTsTypes :: Proxy spec -> [SpecTsTypes]
 
-instance (Collector a, Collector b) =>
-         Collector (a
-                    :<|> b) where
+instance {-# OVERLAPPING #-} (Collector a, Collector b) =>
+                             Collector (a
+                                        :<|> b) where
   generateTsDeclarations ::
        Proxy (a
               :<|> b)
@@ -139,22 +139,8 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
         }
     ]
 
--- Used to generate TS declarations from a :<|> list of auxiliary types in an API.
-class CollectorRaw spec where
-  generateTsAuxiliary :: Proxy spec -> [TSDeclaration]
-
-instance (CollectorRaw a, CollectorRaw b) =>
-         CollectorRaw (a
-                       :<|> b) where
-  generateTsAuxiliary ::
-       Proxy (a
-              :<|> b)
-    -> [TSDeclaration]
-  generateTsAuxiliary _ =
-    nub
-      (generateTsAuxiliary (Proxy :: Proxy a) ++
-       generateTsAuxiliary (Proxy :: Proxy b))
-
-instance (TypeScript a) => CollectorRaw (Raw a) where
-  generateTsAuxiliary :: Proxy (Raw a) -> [TSDeclaration]
-  generateTsAuxiliary _ = getTypeScriptDeclarations (Proxy :: Proxy a)
+instance {-# OVERLAPPABLE #-} (TypeScript a) => Collector a where
+  generateTsDeclarations :: Proxy a -> [TSDeclaration]
+  generateTsDeclarations _ = getTypeScriptDeclarations (Proxy :: Proxy a)
+  makeSpecTsTypes :: Proxy a -> [SpecTsTypes]
+  makeSpecTsTypes _ = []
