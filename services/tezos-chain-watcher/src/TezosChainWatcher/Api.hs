@@ -29,3 +29,15 @@ type ProvisionalBlockEvents
 instance Indexable ProvisionalEvent where
   type IndexOf ProvisionalEvent = Int
   index = fst
+
+-- | the Word8 field is the number of blocks for which the operation has been in a given state, i.e.
+-- confirmations.
+data OperationStatus
+  = NotIncluded Word8
+  | Included (Tezos.BlockHash, Word8)
+  | Confirmed Tezos.BlockHash
+  | Error -- error msg?
+  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
+
+type MonitorOperationEndpoint
+   = Endpoint 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming OperationStatus)
