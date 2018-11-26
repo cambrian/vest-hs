@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "ghc",
+      "request": "launch",
+      "name": "tezos-chain-watcher",
+      "internalConsoleOptions": "openOnSessionStart",
+      "workspace": "${workspaceRoot}",
+      "startup": "/Users/sanjay/Workspace/Repos/vest-hs/services/tezos-chain-watcher/bin/Main.hs",
+      "startupFunc": "main",
+      "startupArgs": "",
+      "stopOnEntry": false,
+      "mainArgs": "",
+      "ghciPrompt": "Debug>",
+      "ghciInitialPrompt": "Prelude>",
+      "ghciCmd": "stack ghci --main-is services:exe:tezos-chain-watcher",
+      "ghciEnv": {},
+      "logFile": "${workspaceRoot}/.vscode/phoityne.log",
+      "logLevel": "WARNING"
+    },
+    {
+      "type": "ghc",
+      "request": "launch",
+      "name": "access-control",
+      "internalConsoleOptions": "openOnSessionStart",
+      "workspace": "${workspaceRoot}",
+      "startup": "/Users/sanjay/Workspace/Repos/vest-hs/services/access-control/bin/Main.hs",
+      "startupFunc": "main",
+      "startupArgs": "",
+      "stopOnEntry": false,
+      "mainArgs": "",
+      "ghciPrompt": "Debug>",
+      "ghciInitialPrompt": "Prelude>",
+      "ghciCmd": "stack ghci --main-is services:exe:access-control",
+      "ghciEnv": {},
+      "logFile": "${workspaceRoot}/.vscode/phoityne.log",
+      "logLevel": "WARNING"
+    }
+  ]
+}

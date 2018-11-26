@@ -33,3 +33,6 @@ cabal.project.local~
 
 # HSpec test reports.
 TESTREPORT
+
+# Phoityne junk
+.vscode/tasks.json
