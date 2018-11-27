@@ -4,7 +4,6 @@ module Typescript
 
 import Data.Aeson.TypeScript.TH
 import Data.List (nub)
-import qualified DummyManager.Auth as DummyAuth
 import Vest
 
 data SpecTsTypes = SpecTsTypes
@@ -96,7 +95,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
     ]
 
 instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint_ timeout format ('Auth DummyAuth.T) service transport (route :: Symbol) req ('Direct res)) where
+         Collector (Endpoint_ timeout format ('Auth ()) service transport (route :: Symbol) req ('Direct res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Direct res))
     -> [TSDeclaration]
@@ -118,7 +117,7 @@ instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =
     ]
 
 instance (KnownNat timeout, KnownSymbol route, TypeScript req, TypeScript res) =>
-         Collector (Endpoint_ timeout format ('Auth DummyAuth.T) service transport (route :: Symbol) req ('Streaming res)) where
+         Collector (Endpoint_ timeout format ('Auth ()) service transport (route :: Symbol) req ('Streaming res)) where
   generateTsDeclarations ::
        Proxy (Endpoint_ timeout format auth service transport route req ('Streaming res))
     -> [TSDeclaration]

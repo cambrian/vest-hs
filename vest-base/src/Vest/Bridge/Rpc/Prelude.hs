@@ -73,11 +73,6 @@ type EndpointJson = Endpoint_ DefaultTimeoutSeconds 'JSON
 timeoutsPerHeartbeat :: Rational
 timeoutsPerHeartbeat = 2
 
-class (RpcTransport transport) =>
-      HasRpcTransport transport a
-  where
-  rpcTransport :: a -> transport
-
 type Headers = HashMap (Text' "Header") Text
 
 data RpcResponse a

@@ -18,11 +18,6 @@ class ValueTransport t where
     -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
     -> IO () -- ^ Expects the most recent value to be delivered on subscription.
 
-class (ValueTransport transport) =>
-      HasValueTransport transport t
-  where
-  valueTransport :: t -> transport
-
 data ValueTopic_ (fmt :: SerializationFormat) service transport (name :: k) a
 
 type ValueTopic = ValueTopic_ 'Haskell

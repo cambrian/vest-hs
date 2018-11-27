@@ -5,7 +5,6 @@ module DummyManager
   ) where
 
 import DummyManager.Api as DummyManager
-import qualified DummyManager.Auth as DummyAuth
 import DummyManager.Internal as DummyManager
 import Vest
 
@@ -33,14 +32,11 @@ echoThrice x = do
   return stream
 
 concatTextAuth ::
-     VerifierClaims DummyAuth.T
-  -> ConcatTextAuthRequest
-  -> IO ConcatTextAuthResponse
+     AuthClaims () -> ConcatTextAuthRequest -> IO ConcatTextAuthResponse
 concatTextAuth _ ConcatTextAuthRequest {a, b} =
   return $ ConcatTextAuthResponse {result = a <> b}
 
-echoThriceAuth ::
-     VerifierClaims DummyAuth.T -> Text -> IO (Stream ValueBuffer Text)
+echoThriceAuth :: AuthClaims () -> Text -> IO (Stream ValueBuffer Text)
 echoThriceAuth _ = streamFromList . replicate 3
 
 unit :: () -> IO ()

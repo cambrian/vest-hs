@@ -1,8 +1,8 @@
 module AccessControl.Auth
   ( T
   , Claims(..)
-  , Signer(..)
-  , Verifier(..)
+  , makeSigner
+  , makeVerifier
   ) where
 
 import qualified AccessControl.Internal as AccessControl
@@ -24,19 +24,25 @@ data Claims = Claims
   , name :: Text
   }
 
-data Signer = Signer
-  { secretKey :: SecretKey
-  , readSignedToken :: STM AccessControl.SignedToken
-  }
+instance Auth (T p) where
+  type AuthClaims (T p) = Claims
 
-data Verifier permission = Verifier
-  { accessControlPublicKey :: AccessControl.ACPublicKey
-  , readMinTokenTime :: STM Time
-  }
+makeSigner :: SecretKey -> STM AccessControl.SignedToken -> AuthSigner (T p)
+makeSigner secretKey readSignedToken =
+  AuthSigner $ \reqText headers -> do
+    signedToken <- readSignedToken
+    let (sig, _) = sign' secretKey reqText
+    return $
+      HashMap.insert signatureHeader (show sig) $
+      HashMap.insert tokenHeader (show signedToken) headers
 
-instance (Permission.Is p) => RequestVerifier (Verifier p) where
-  type VerifierClaims (Verifier p) = Claims
-  verifyRequest Verifier {accessControlPublicKey, readMinTokenTime} headers reqText = do
+makeVerifier ::
+     forall p. Permission.Is p
+  => AccessControl.ACPublicKey
+  -> STM Time
+  -> AuthVerifier (T p)
+makeVerifier accessControlPublicKey readMinTokenTime =
+  AuthVerifier $ \reqText headers -> do
     minTokenTime <- readMinTokenTime
     return . eitherFromMaybe AuthException $ do
       clientSig <- HashMap.lookup signatureHeader headers >>= read @Signature
@@ -51,20 +57,8 @@ instance (Permission.Is p) => RequestVerifier (Verifier p) where
         then Just $ Claims {publicKey, name}
         else Nothing
 
-instance RequestSigner Signer where
-  signRequest Signer {secretKey, readSignedToken} headers reqText = do
-    signedToken <- readSignedToken
-    let (sig, _) = sign' secretKey reqText
-    return $
-      HashMap.insert signatureHeader (show sig) $
-      HashMap.insert tokenHeader (show signedToken) headers
-
-instance (Permission.Is p) => Auth (T p) where
-  type AuthSigner (T p) = Signer
-  type AuthVerifier (T p) = Verifier p
-
 -- Could also add a signer instance, which would require creating an access token for
 -- AccessControl.T
-instance Permission.Is p => HasAuthVerifier (T p) AccessControl.T where
-  authVerifier AccessControl.T {publicKey, minTokenTime} =
-    Verifier publicKey (justSTM $ readLatestValueSTM minTokenTime)
+instance Permission.Is p => Has (AuthVerifier (T p)) AccessControl.T where
+  get AccessControl.T {publicKey, minTokenTime} =
+    makeVerifier publicKey (justSTM $ readLatestValueSTM minTokenTime)

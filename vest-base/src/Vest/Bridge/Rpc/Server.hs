@@ -21,7 +21,7 @@ type family NubRoutes spec where
   NubRoutes (a
              :<|> b) = Nub (NubRoutes a :++ NubRoutes b)
 
-type HasUniqueRoutes spec = Routes spec ~ NubRoutes spec
+type UniqueRoutes spec = Routes spec ~ NubRoutes spec
 
 type family Handlers spec where
   Handlers () = ()
@@ -39,8 +39,8 @@ class Server t spec where
 instance Server t () where
   serve _ _ _ = return ()
 
-instance ( HasUniqueRoutes (a
-                            :<|> b)
+instance ( UniqueRoutes (a
+                         :<|> b)
          , Server t a
          , Server t b
          ) =>
@@ -71,7 +71,7 @@ serve_ ::
      forall fmt auth transport route t req res x.
      ( Deserializable fmt req
      , Serializable fmt (RpcResponse res)
-     , HasAuthVerifier auth t
+     , Has (AuthVerifier auth) t
      , RpcTransport transport
      , Has transport t
      , HasNamespace t
@@ -90,7 +90,8 @@ serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
       async $
       catches
         (do claims <-
-              atomically (verifyRequest (authVerifier @auth t) headers reqText) >>=
+              atomically
+                (verifyRequest (get @(AuthVerifier auth) t) reqText headers) >>=
               fromRightOrThrowLeft
             req <- deserializeUnsafe' @fmt reqText
             sender (sendToClient . RpcResponse) (handler claims req))
@@ -142,7 +143,7 @@ instance ( HasNamespace t
       (const handler)
 
 instance ( HasNamespace t
-         , HasAuthVerifier auth t
+         , Has (AuthVerifier auth) t
          , RpcTransport transport
          , Has transport t
          , Deserializable fmt req
@@ -153,7 +154,7 @@ instance ( HasNamespace t
   serve t _ = serve_ @fmt @auth @transport @route directSender t
 
 instance ( HasNamespace t
-         , HasAuthVerifier auth t
+         , Has (AuthVerifier auth) t
          , RpcTransport transport
          , Has transport t
          , KnownNat timeout

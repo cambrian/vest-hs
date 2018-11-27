@@ -4,7 +4,6 @@ module DummyManager.Api
 
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
-import DummyManager.Auth as DummyAuth
 import DummyManager.Internal as DummyManager
 import qualified Transport.WebSocket as WebSocket
 import Vest
@@ -42,10 +41,10 @@ data ConcatTextAuthResponse = ConcatTextAuthResponse
 $(deriveTypeScript defaultOptions ''ConcatTextAuthResponse)
 
 type ConcatTextAuthEndpoint
-   = EndpointJson ('Auth DummyAuth.T) DummyManager.T WebSocket.T "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
+   = EndpointJson ('Auth ()) DummyManager.T WebSocket.T "concatTextAuth" ConcatTextAuthRequest ('Direct ConcatTextAuthResponse)
 
 type EchoThriceAuthEndpoint
-   = EndpointJson ('Auth DummyAuth.T) DummyManager.T WebSocket.T "echoThriceAuth" Text ('Streaming Text)
+   = EndpointJson ('Auth ()) DummyManager.T WebSocket.T "echoThriceAuth" Text ('Streaming Text)
 
 type VoidEndpoint
    = EndpointJson 'NoAuth DummyManager.T WebSocket.T "getVoid" () ('Direct ())

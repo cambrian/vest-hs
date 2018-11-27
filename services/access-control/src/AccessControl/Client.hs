@@ -37,28 +37,12 @@ make amqp acPublicKey seed = do
       , readMinTokenTime = justSTM $ readLatestValueSTM minTokenTimes
       }
 
-instance {-# OVERLAPPING #-} Permission.Is p => HasAuthSigner (Auth.T p) T where
-  authSigner T {secretKey, readToken} = Auth.Signer secretKey readToken
+instance Has T t => Has (AuthSigner (Auth.T p)) t where
+  get t =
+    let authclient = get t
+     in Auth.makeSigner (secretKey authclient) (readToken authclient)
 
-instance {-# OVERLAPPING #-} Permission.Is p =>
-                             HasAuthVerifier (Auth.T p) T where
-  authVerifier T {acPublicKey, readMinTokenTime} =
-    Auth.Verifier acPublicKey readMinTokenTime
-
--- This is a shorthand to allow service implementers to write:
---
--- instance AccessControl.Client.Has T where
---   accessControlClient = accessControlClient
---
--- instead of:
---
--- instance Permission.Is p => HasAuthSigner (AccessControl.Auth.T p) T where
---   authSigner = accessControlClient
---
--- instance Permission.Is p => HasAuthVerifier (AccessControl.Auth.T p) T where
---   authVerifier = accessControlClient
-instance (Permission.Is p, Has T t) => HasAuthSigner (Auth.T p) t where
-  authSigner = authSigner @(Auth.T p) . get @T
-
-instance (Permission.Is p, Has T t) => HasAuthVerifier (Auth.T p) t where
-  authVerifier = authVerifier @(Auth.T p) . get @T
+instance (Permission.Is p, Has T t) => Has (AuthVerifier (Auth.T p)) t where
+  get t =
+    let authclient = get t
+     in Auth.makeVerifier (acPublicKey authclient) (readMinTokenTime authclient)

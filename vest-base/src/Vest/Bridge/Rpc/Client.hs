@@ -49,13 +49,13 @@ instance (Client t a, Client t b) =>
     makeClient t (Proxy :: Proxy a) :<|> makeClient t (Proxy :: Proxy b)
 
 packRequest ::
-     forall fmt signer req. (Serializable fmt req, RequestSigner signer)
-  => signer
+     forall fmt auth req. Serializable fmt req
+  => AuthSigner auth
   -> req
   -> IO (Headers, Text' "Request")
 packRequest signer req = do
   let reqText = serialize' @fmt req
-  headers <- atomically $ signRequest signer HashMap.empty reqText
+  headers <- atomically $ signRequest signer reqText HashMap.empty
   return (headers, reqText)
 
 callDirect ::
@@ -64,7 +64,7 @@ callDirect ::
      , Serializable fmt req
      , Deserializable fmt (RpcResponse res)
      , HasNamespace server
-     , HasAuthSigner auth t
+     , Has (AuthSigner auth) t
      , RpcTransport transport
      , Has transport t
      , KnownSymbol route
@@ -75,7 +75,8 @@ callDirect ::
 callDirect t req = do
   resultVar <- newEmptyMVar
   mainThread <- myThreadId
-  (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
+  (headersWithSignature, reqText) <-
+    packRequest @fmt (get @(AuthSigner auth) t) req
   let rawRoute = serialize' @'Pretty $ namespaced @server (Proxy :: Proxy route)
       handleResponse resOrExcText =
         deserializeUnsafe' @fmt resOrExcText >>= \case
@@ -100,7 +101,7 @@ callStreaming ::
      , Serializable fmt req
      , Deserializable fmt (RpcResponse (StreamingResponse res))
      , HasNamespace server
-     , HasAuthSigner auth t
+     , Has (AuthSigner auth) t
      , RpcTransport transport
      , Has transport t
      , KnownSymbol route
@@ -119,7 +120,8 @@ callStreaming t req f = do
     timeoutRenewable twoHeartbeats $ waitStream results
   gotFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
-  (headersWithSignature, reqText) <- packRequest @fmt (authSigner @auth t) req
+  (headersWithSignature, reqText) <-
+    packRequest @fmt (get @(AuthSigner auth) t) req
   let handleResponse resOrExcText = do
         void $ tryPutMVar gotFirstResponse ()
         renewHeartbeatTimer twoHeartbeats
@@ -182,7 +184,7 @@ instance ( KnownNat timeout
          , Serializable fmt req
          , Deserializable fmt (RpcResponse res)
          , HasNamespace server
-         , HasAuthSigner auth t
+         , Has (AuthSigner auth) t
          , RpcTransport transport
          , Has transport t
          , KnownSymbol route
@@ -194,7 +196,7 @@ instance ( KnownNat timeout
          , Serializable fmt req
          , Deserializable fmt (RpcResponse (StreamingResponse res))
          , HasNamespace server
-         , HasAuthSigner auth t
+         , Has (AuthSigner auth) t
          , RpcTransport transport
          , Has transport t
          , KnownSymbol route

@@ -21,11 +21,6 @@ class EventTransport t where
     -> (Text' "a" -> IO ()) -- ^ Called per item received from the transport.
     -> IO () -- ^ Does not expect message history.
 
-class (EventTransport transport) =>
-      HasEventTransport transport t
-  where
-  eventTransport :: t -> transport
-
 type PrefixedEventName (eventName :: Symbol) = AppendSymbol "event/" eventName
 
 type family EventMaterializeEndpoint event where
