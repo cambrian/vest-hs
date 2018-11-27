@@ -20,7 +20,7 @@ type family NubValueNames spec where
   NubValueNames (a
                  :<|> b) = Nub (NubValueNames a :++ NubValueNames b)
 
-type HasUniqueValueNames spec = ValueNames spec ~ NubValueNames spec
+type UniqueValueNames spec = ValueNames spec ~ NubValueNames spec
 
 type family Values spec where
   Values () = ()
@@ -35,8 +35,8 @@ class Publisher t spec where
 instance Publisher t () where
   publish _ _ _ = return ()
 
-instance ( HasUniqueValueNames (a
-                                :<|> b)
+instance ( UniqueValueNames (a
+                             :<|> b)
          , Publisher t a
          , Publisher t b
          ) =>

@@ -21,7 +21,7 @@ type family NubEventNames spec where
   NubEventNames (a
                  :<|> b) = Nub (NubEventNames a :++ NubEventNames b)
 
-type HasUniqueEventNames spec = EventNames spec ~ NubEventNames spec
+type UniqueEventNames spec = EventNames spec ~ NubEventNames spec
 
 -- | Producers is really ProducerConstructors or something like that,
 -- because initializing a producer generally means beginning db writes,
@@ -40,8 +40,8 @@ class Producer t spec where
 instance Producer t () where
   produce _ _ _ = return ()
 
-instance ( HasUniqueEventNames (a
-                                :<|> b)
+instance ( UniqueEventNames (a
+                             :<|> b)
          , Producer t a
          , Producer t b
          ) =>
