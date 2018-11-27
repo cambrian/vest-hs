@@ -12,6 +12,9 @@ echo "Installing build deps for eztz-simple."
 npm install > ~/.vest-hs/eztz-simple-install.log 2>&1
 echo "Building eztz-simple."
 npm run-script build > ~/.vest-hs/eztz-simple-build.log 2>&1
-cp -f lib/eztz-simple ~/.local/bin
-chmod +x ~/.local/bin/eztz-simple
-echo "Copied eztz-simple to Haskell bin."
+cp -f lib/eztz-simple ~/.vest-hs/
+chmod +x ~/.vest-hs/eztz-simple
+echo "Copied eztz-simple to ~/.vest-hs."
+echo "Downloading funnel"
+curl -L https://github.com/agnivade/funnel/releases/download/v0.2.1/funnel_darwin-amd64 > ~/.vest-hs/funnel_darwin-amd64
+chmod +x ~/.vest-hs/funnel_darwin-amd64
