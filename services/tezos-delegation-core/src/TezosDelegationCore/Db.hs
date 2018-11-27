@@ -342,3 +342,10 @@ isPlatformDelegate addr =
   isJust <$>
   runSelectReturningOne
     (lookup_ (delegates schema) $ DelegateAddress $ Tagged addr)
+
+getDelegatePriceTiers :: Tezos.ImplicitAddress -> Pg [(FixedQty XTZ, Rational)]
+getDelegatePriceTiers addr = do
+  m <- runSelectReturningOne $ lookup_ (delegates schema) $ DelegateAddress addr
+  case m of
+    Nothing -> liftIO $ throw BugException
+    Just Delegate {priceTiers = PgJSON tiers} -> return tiers

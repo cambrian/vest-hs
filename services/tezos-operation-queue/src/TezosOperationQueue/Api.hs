@@ -10,6 +10,7 @@ import qualified Transport.Amqp as Amqp
 import qualified Transport.WebSocket as WebSocket
 import Vest
 
+-- | Public endpoint for browsers to hit
 type InjectEndpoint
    = EndpointJson 'NoAuth TezosOperationQueue.T WebSocket.T "inject" Tezos.SignedOperation ('Direct ())
 

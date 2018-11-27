@@ -14,10 +14,32 @@ import Vest
 platformFee :: Rational
 platformFee = 0.5
 
+calculateDividend ::
+     [(FixedQty XTZ, Rational)]
+  -> FixedQty XTZ
+  -> FixedQty XTZ
+  -> FixedQty XTZ
+  -> FixedQty XTZ
+-- ^ TODO: use tagged types for xtz values?
+-- @delegatedSize is for one user
+calculateDividend tiers reward stakingBalance delegatedSize =
+  let (dividend, _) =
+        foldl'
+          (\(div, rem) (tierStart, rate) ->
+             if tierStart > rem
+               then (div, rem)
+               else ( div +
+                      rationalOf reward ^*
+                      (rate * ((rem - tierStart) ^/^ stakingBalance))
+                    , tierStart))
+          (0, delegatedSize)
+          tiers
+   in fixedOf Floor dividend
+
 blockConsumer :: T -> Consumers BlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
--- Does not issue dividends; dividends are paid out when the delegator pays its bill. This happens
--- in the payment consumer.
+-- Does not issue dividends; the relevant dividends are paid out when a delegator pays its bill.
+-- This happens in the payment consumer.
 blockConsumer t@T {dbPool} =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
       handleCycle blockNum cycleNum cycleTime = do
@@ -34,13 +56,12 @@ blockConsumer t@T {dbPool} =
                                               } -> do
           Pg.runLogged dbPool (wasRewardAlreadyProcessed cycleNum delegate) >>=
             (`when` return ())
-          let delegateReward size =
-                fixedOf Round $
-                rationalOf reward ^* 0.1 ^* size ^/^ stakingBalance
-              dividends_ =
+          priceTiers <- Pg.runLogged dbPool $ getDelegatePriceTiers delegate
+          let dividends_ =
                 map
                   (\Tezos.DelegationInfo {delegator, size} ->
-                     (delegator, delegateReward size))
+                     ( delegator
+                     , calculateDividend priceTiers reward stakingBalance size))
                   delegations
               totalDividends =
                 foldr
@@ -161,7 +182,7 @@ paymentConsumer t@T {dbPool, operationFee} =
               (bills schema)
               (\Bill {paidAt} -> [paidAt Pg.<-. Pg.val_ (Just paymentTime)])
               (\Bill {id} -> id `Pg.in_` (Pg.val_ <$> billIdsPaid))
-          -- Issue refund if necessarym
+          -- Issue refund if necessary
           when (refund > fixedQty @Mutez 0) $ do
             refundId <- nextUUID
             issuePayout $ PayoutRequest refundId from refund fee
