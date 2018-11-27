@@ -38,7 +38,7 @@ data PayoutT f = Payout
   , to :: C f Tezos.Address
   , size :: C f (FixedQty XTZ)
   , hash :: C (Nullable f) Tezos.OperationHash
-  , status :: C f Text -- TODO: use OperationStatus for this. Hard bc enums are not supported by beam
+  , status :: C f Text -- TODO: use an enum for this. Hard bc enums are not supported by beam
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 

@@ -106,8 +106,6 @@ serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
         , Handler $ \(x :: SomeException) -> do
             sendToClient RpcResponseServerException
             log Error "Handler server exception" x
-            -- ^ TODO: Send a generic 503 type message instead of `show x` and add logging.
-            -- throw x
         ]
       where
         sendToClient = respond . serialize' @fmt @(RpcResponse res)

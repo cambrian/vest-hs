@@ -9,6 +9,7 @@ import qualified Tezos.Cli
 import qualified Transport.Amqp as Amqp
 import Vest
 
+-- TODO: consider deduplicating PaymentEvent and Db.Payment
 data PaymentEvent = PaymentEvent
   { idx :: Word64
   , hash :: Tezos.OperationHash

@@ -52,6 +52,14 @@ payoutHandler t@T {dbPool} PayoutRequest {id, to, size} = do
       Pg.onConflictDefault
   void . atomically $ tryPutTMVar (newPaymentVar t) ()
 
+paymentMaterializer :: T -> Word64 -> IO PaymentEvent
+paymentMaterializer T {dbPool} idx_ = do
+  m <-
+    Pg.runLogged dbPool $
+    Pg.runSelectReturningOne $ Pg.lookup_ (payments schema) $ PaymentIdx idx_
+  Payment {idx, hash, from, size, time} <- fromJustUnsafe BugException m
+  return $ PaymentEvent {idx, hash, from, size, time}
+
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = PaymentEvents
@@ -62,27 +70,52 @@ instance Service T where
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
     (paymentWriter, paymentStream) <- newStream
-    newPaymentVar <- newEmptyTMVarIO
+    newPaymentVar <- newTMVarIO ()
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      _pendingPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "Pending"
-      -- TODO: watch pending payouts
+      let monitorOp =
+            makeClient
+              amqp
+              (Proxy :: Proxy TezosChainWatcher.MonitorOperationEndpoint)
       -- Payout handler thread
       void . async . forever $ do
         atomically $ takeTMVar newPaymentVar
         newPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "NotIssued"
-        forM_ newPayouts $ \Payout {to, size} -> do
+        forM_ newPayouts $ \Payout {id = payoutId, to, size} -> do
           let fee = 0 -- TODO:
-          let tryPayoutUntilSuccess = do
-                m <- Tezos.Cli.makePayout tezosCli to size fee
-                case m of
-                  Nothing -> tryPayoutUntilSuccess
-                  Just hash -> return hash
-          _hash <- tryPayoutUntilSuccess
-          -- TODO: set state and watch
-          return ()
+          hash_ <- Tezos.Cli.makePayout tezosCli to size fee
+          -- Update transaction as pending, set tx hash
+          Pg.runLogged dbPool $
+            Pg.runUpdate $
+            Pg.update
+              (payouts schema)
+              (\Payout {hash, status} ->
+                 [hash Pg.<-. Pg.val_ hash_, status Pg.<-. Pg.val_ "Pending"])
+              (\Payout {id} -> id Pg.==. Pg.val_ payoutId)
+          -- watch pending transactions
+          pendingPayouts <-
+            Pg.runLogged dbPool $ selectPayoutsByStatus "Pending"
+          forM_ pendingPayouts $ \Payout {id = payoutId, hash} ->
+            case hash of
+              Nothing -> throw BugException -- Log error and set to pending?
+              Just h ->
+                monitorOp h $
+                tapStream_
+                  (\case
+                     Left exn -> throw exn
+                     Right (Tezos.NotIncluded _) -> do
+                       return ()
+                     Right (Tezos.Included _) -> return ()
+                     Right (Tezos.Confirmed _) ->
+                       Pg.runLogged dbPool $
+                       Pg.runUpdate $
+                       Pg.update
+                         (payouts schema)
+                         (\Payout {status} ->
+                            [status Pg.<-. Pg.val_ "Confirmed"])
+                         (\Payout {id} -> id Pg.==. Pg.val_ payoutId))
       f $
         T
           { dbPool
@@ -96,5 +129,5 @@ instance Service T where
           }
   rpcHandlers _ = panic "unimplemented"
   valuesPublished _ = ()
-  eventProducers _ = panic "unimplemented"
-  eventConsumers _ = panic "unimplemented"
+  eventProducers t = (return $ paymentStream t, paymentMaterializer t)
+  eventConsumers = blockConsumer
