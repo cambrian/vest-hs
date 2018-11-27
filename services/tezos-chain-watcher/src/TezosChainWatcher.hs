@@ -77,11 +77,12 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
            (insertProvisionalBlockEvent createdAt event)
          highestSeen <- readTVarIO highestSeenProvisionalBlockNumberVar
          when (number > highestSeen) $
-           atomically $
-           writeTVar highestSeenProvisionalBlockNumberVar highestSeen
+           atomically $ writeTVar highestSeenProvisionalBlockNumberVar number
          log Debug "persisted provisional block event" (number, hash)
          return event)
       provisionalEventStream_
+  -- Add no-op consumers to make sure final/provisional event writes do not block.
+  mapM_ (tapStream_ $ void . return) [finalEventStream, provisionalEventStream]
   -- Invalidate provisional events as necessary.
   tapStream_
     (\hashes -> do
