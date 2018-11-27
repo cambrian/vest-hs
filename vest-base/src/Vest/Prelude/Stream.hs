@@ -224,7 +224,8 @@ makeStreamReader buf = do
             else atomically $ TMap.insert writer c downstreams
       propagate = do
         a <- MaybeT $ atomically read
-        lift $ Lock.with propagateLock $
+        lift $
+          Lock.with propagateLock $
           -- Uncaught exceptions in impure streaming actions should cause the process to crash. Note
           -- that parallelFilterValuesM runs threads internally, so we cannot simply wrap propagate
           -- in an async block.
@@ -334,10 +335,9 @@ class Bufferable buf a =>
                return False)
         writer
     return reader
-  streamNext :: Stream buf a -> IO a
+  streamNext :: Stream buf a -> IO (Maybe a)
   -- ^ TODO: performant specialization?
-  streamNext stream =
-    takeStream 1 stream >>= listFromStream >>- fromMaybe (panic "bug") . last
+  streamNext stream = takeStream 1 stream >>= listFromStream >>- last
   streamFromList :: [a] -> IO (Stream buf a)
   -- ^ Returns the stream immediately. A child thread fills it with the list contents.
   streamFromList as = do

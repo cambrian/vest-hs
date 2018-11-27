@@ -246,6 +246,19 @@ selectFinalBlockEventByNumber queryNumber = do
     Nothing -> return Nothing
     Just block -> Just <$> toBlockEvent block
 
+selectBlockInfoForOpHash ::
+     Tezos.OperationHash -> Pg (Maybe (Tezos.BlockHash, Word64))
+selectBlockInfoForOpHash hash =
+  runSelectReturningOne $
+  select $ do
+    op <-
+      filter_ (\Operation {operationHash} -> operationHash ==. val_ hash) $
+      all_ (operations schema)
+    block <- filterBlocksByState NotDeleted $ all_ (blocks schema)
+    guard_ (operationBlockHash op ==. BlockHash (blockHash block))
+    let Block {blockHash, blockNumber} = block
+    pure (blockHash, blockNumber)
+
 insertTezosOpHashes :: Tezos.BlockHash -> Time -> [Tezos.OperationHash] -> Pg ()
 insertTezosOpHashes blockHash createdAt tezosOpHashes =
   runInsert $

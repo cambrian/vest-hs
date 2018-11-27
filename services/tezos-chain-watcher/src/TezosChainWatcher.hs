@@ -17,6 +17,71 @@ rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 
+-- | Eventually: Draw a nice state machine for ease of understanding.
+monitorOperation ::
+     T
+  -> (Tezos.OperationHash, Word8)
+  -> IO (Stream ValueBuffer Tezos.OperationStatus)
+monitorOperation T {dbPool, provisionalEventStream} (opHash, threshold) = do
+  (statusWriter, statusStream) <- newStream
+  lastBlockHashVar <- newEmptyTMVarIO
+  opStatusVar <- newEmptyTMVarIO
+  -- | Save a new op status.
+  let saveOpStatus newOpStatus = do
+        void $ atomically $ swapTMVar opStatusVar newOpStatus
+        writeStream statusWriter newOpStatus
+  -- | See if a block event contains the op hash being monitored.
+  let opContainedIn Tezos.BlockEvent {operations} = opHash `elem` operations
+  -- | Query the DB for an op status.
+  let materializeOpStatus currentBlockNumber = do
+        blockInfoMaybe <- Pg.runLogged dbPool $ selectBlockInfoForOpHash opHash
+        case blockInfoMaybe of
+          Nothing -> return $ Tezos.NotIncluded 0
+          Just (blockHash, blockNumber) -> do
+            let confirmations = fromIntegral $ currentBlockNumber - blockNumber
+            if confirmations < threshold
+              then return $ Tezos.Included (blockHash, confirmations)
+              else return $ Tezos.Confirmed blockHash
+  void . async $
+    takeWhileMStream -- Continue until op confirmed or rejected.
+      (\event@Tezos.BlockEvent {hash, number, predecessor} -> do
+         lastBlockHashMaybe <- atomically $ tryReadTMVar lastBlockHashVar
+         atomically $ writeTMVar lastBlockHashVar hash
+         -- ^ Update last block hash for next iteration.
+         case lastBlockHashMaybe of
+           Nothing -> return True
+           -- ^ Wait for one block to go by so we can ensure the validity of the DB query within
+           -- block events we have seen. If the chain subsequently forks, we simply re-run the DB
+           -- query to restore validity.
+           Just lastBlockHash -> do
+             opStatusMaybe <- atomically (tryReadTMVar opStatusVar)
+             opStatus <-
+               case opStatusMaybe of
+                 Nothing -> materializeOpStatus number
+                 Just _
+                   | predecessor /= lastBlockHash -> materializeOpStatus number
+                 -- ^ Cases for the start of monitoring and chain forking.
+                 Just (Tezos.NotIncluded c) ->
+                   if c < threshold
+                     then return $
+                          if opContainedIn event
+                            then Tezos.Included (hash, 0)
+                            else Tezos.NotIncluded (c + 1)
+                     else return Tezos.Rejected
+                 Just (Tezos.Included (b, c)) ->
+                   if c < threshold
+                     then return $ Tezos.Included (b, c + 1)
+                     else return $ Tezos.Confirmed b
+                 _ -> throw BugException
+             -- ^ Generate a new op status.
+             void $ saveOpStatus opStatus
+             case opStatus of
+               Tezos.Confirmed _ -> return False
+               Tezos.Rejected -> return False
+               _ -> return True)
+      provisionalEventStream
+  return statusStream
+
 -- | This DB materializer waits on persistence of the desired event to occur.
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t@T {dbPool} blockNumber = do
@@ -97,8 +162,8 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
 
 instance Service T where
   type RpcSpec T = RewardInfoEndpoint
-  type ValueSpec T = (HighestSeenBlockNumberValue
-                      :<|> OperationFeeValue)
+                   :<|> MonitorOperationEndpoint
+  type ValueSpec T = HighestSeenBlockNumberValue
   type EventsProduced T = BlockEvents
   type EventsConsumed T = ()
   summary = "Tezos Chain Watcher v0.1.0"
@@ -122,7 +187,7 @@ instance Service T where
           , provisionalEventStream
           , highestSeenStream
           }
-  rpcHandlers = rewardInfo
-  valuesPublished t = highestSeenStream t :<|> panic "TODO"
+  rpcHandlers t = rewardInfo t :<|> monitorOperation t
+  valuesPublished = highestSeenStream
   eventProducers t = (return $ finalEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()
