@@ -265,3 +265,6 @@ class Has a t where
 
 instance Has a a where
   get = identity
+
+instance Has () a where
+  get = ()

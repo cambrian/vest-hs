@@ -14,7 +14,7 @@ import Vest
 type Api = InjectEndpoint
 
 -- TODO: Un-stub.
-inject :: T -> Tezos.SignedOperationContents -> IO ()
+inject :: T -> Tezos.SignedOperation -> IO ()
 inject _ _ = return ()
 
 blockEventConsumer :: T -> Consumers BlockEvents

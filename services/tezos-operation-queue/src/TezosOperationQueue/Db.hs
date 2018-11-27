@@ -32,8 +32,10 @@ deriving instance Read (PrimaryKey BlockT (Nullable Identity))
 
 deriving instance Show (PrimaryKey BlockT (Nullable Identity))
 
+-- removing the "Contents" suffix made these names really gross... I want to un-prefix the record
+-- fields but will wait on an ok.. lmk via comment if it is
 data OperationT f = Operation
-  { operationContents :: C f Tezos.SignedOperationContents
+  { operationOperation :: C f Tezos.SignedOperation
   , operationBlockNumber :: PrimaryKey BlockT (Nullable f)
   , operationCreatedAt :: C f Time
   } deriving (Generic, Beamable)
@@ -47,10 +49,11 @@ deriving instance Read Operation
 deriving instance Show Operation
 
 instance Table OperationT where
-  data PrimaryKey OperationT f = OperationContents (C f
-                                                    Tezos.SignedOperationContents)
+  data PrimaryKey OperationT f = OperationOperation (C f
+                                                     Tezos.SignedOperation)
                                  deriving (Generic, Beamable)
-  primaryKey Operation {operationContents} = OperationContents operationContents
+  primaryKey Operation {operationOperation} =
+    OperationOperation operationOperation
 
 deriving instance Eq (PrimaryKey OperationT Identity)
 
