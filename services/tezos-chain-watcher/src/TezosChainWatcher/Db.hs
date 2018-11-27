@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 
--- TODO: Remove redundancy in this module.
+-- Eventually: Remove redundancy in this module.
 module TezosChainWatcher.Db
   ( module TezosChainWatcher.Db
   ) where
@@ -12,16 +12,15 @@ import Vest hiding (from, hash, state, to)
 
 data BlockT f = Block
   { blockNumber :: C f Word64
-  , blockProvisionalId :: C f (Maybe Int)
   , blockHash :: C f Tezos.BlockHash
   , blockPredecessor :: C f Tezos.BlockHash
   , blockCycleNumber :: C f Word64
   , blockFee :: C f (FixedQty XTZ)
-  , blockIsProvisional :: C f Bool
   , blockTime :: C f Time
+  , blockIsProvisional :: C f Bool
+  , blockIsDeleted :: C f Bool
   , blockCreatedAt :: C f Time
   , blockUpdatedAt :: C f (Maybe Time)
-  , blockDeletedAt :: C f (Maybe Time)
   } deriving (Generic, Beamable)
 
 type Block = BlockT Identity
@@ -156,15 +155,15 @@ data BlockState
 
 -- This type signature is gnarly.
 filterBlocksByState NotDeleted =
-  filter_ (\Block {blockDeletedAt} -> blockDeletedAt ==. val_ Nothing)
+  filter_ (\Block {blockIsDeleted} -> blockIsDeleted ==. val_ False)
 filterBlocksByState Provisional =
   filter_
-    (\Block {blockIsProvisional, blockDeletedAt} ->
-       (blockIsProvisional ==. val_ True) &&. (blockDeletedAt ==. val_ Nothing))
+    (\Block {blockIsProvisional, blockIsDeleted} ->
+       (blockIsProvisional ==. val_ True) &&. (blockIsDeleted ==. val_ False))
 filterBlocksByState Final =
   filter_
-    (\Block {blockIsProvisional, blockDeletedAt} ->
-       (blockIsProvisional ==. val_ False) &&. (blockDeletedAt ==. val_ Nothing))
+    (\Block {blockIsProvisional, blockIsDeleted} ->
+       (blockIsProvisional ==. val_ False) &&. (blockIsDeleted ==. val_ False))
 
 selectMaxBlockNumber :: BlockState -> Pg Word64
 selectMaxBlockNumber state = do
@@ -177,16 +176,6 @@ selectMaxBlockNumber state = do
     case m of
       Just (Just num) -> num
       _ -> fromIntegral Tezos.firstReadableBlockNumber - 1
-
-selectMaxBlockProvisionalId :: Pg Int
-selectMaxBlockProvisionalId = do
-  m <-
-    runSelectReturningOne $
-    select $ aggregate_ max_ $ blockProvisionalId <$> all_ (blocks schema)
-  return $
-    case m of
-      Just (Just (Just num)) -> num
-      _ -> -1
 
 toTezosOrigination :: Origination -> Tezos.Origination
 toTezosOrigination Origination { originationHash = OperationHash opHash
@@ -229,7 +218,7 @@ selectTezosTransactionsByOpHash hash =
      all_ (transactions schema))
 
 toBlockEvent :: Block -> Pg Tezos.BlockEvent
-toBlockEvent (Block number _ hash predecessor cycleNumber fee _ time _ _ _) = do
+toBlockEvent (Block number hash predecessor cycleNumber fee time _ _ _ _) = do
   operations <- selectTezosOperationsByBlockHash hash
   originations <- concatMapM selectTezosOriginationsByOpHash operations
   transactions <- concatMapM selectTezosTransactionsByOpHash operations
@@ -245,17 +234,6 @@ toBlockEvent (Block number _ hash predecessor cycleNumber fee _ time _ _ _) = do
       , originations
       , transactions
       }
-
-selectBlockEventByProvisionalId :: Int -> Pg (Maybe Tezos.BlockEvent)
-selectBlockEventByProvisionalId provisionalId = do
-  blockMaybe <-
-    runSelectReturningOne $
-    select $
-    filter_ (\block -> blockProvisionalId block ==. val_ (Just provisionalId)) $
-    all_ (blocks schema)
-  case blockMaybe of
-    Nothing -> return Nothing
-    Just block -> Just <$> toBlockEvent block
 
 selectFinalBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
 selectFinalBlockEventByNumber queryNumber = do
@@ -303,8 +281,8 @@ insertTezosTransactions createdAt tezosTransactions =
        tezosTransactions)
     onConflictDefault
 
-insertBlockEvent :: Time -> Maybe Int -> Tezos.BlockEvent -> Pg Bool
-insertBlockEvent createdAt provisionalId blockEvent = do
+insertProvisionalBlockEvent :: Time -> Tezos.BlockEvent -> Pg ()
+insertProvisionalBlockEvent createdAt blockEvent = do
   let Tezos.BlockEvent { number
                        , hash
                        , predecessor
@@ -315,35 +293,37 @@ insertBlockEvent createdAt provisionalId blockEvent = do
                        , originations
                        , transactions
                        } = blockEvent
-  eventExists <-
-    isJust <$> runSelectReturningOne (lookup_ (blocks schema) (BlockHash hash))
-  -- ^ The alternative is catching a thrown exception (if the event already exists), which is not
-  -- preferable since it kills the DB connection.
-  if eventExists
-    then return False
-    else do
+  block <- runSelectReturningOne (lookup_ (blocks schema) (BlockHash hash))
+  case block of
+    Just block -> do
+      let updatedAt = createdAt
+      runUpdate $
+        save
+          (blocks schema)
+          (block {blockIsDeleted = False, blockUpdatedAt = Just updatedAt})
+    -- ^ If the provisional block already exists, we have switched back from another chain fork and
+    -- need to un-delete this particular block.
+    Nothing -> do
       runInsert $
         insert
           (blocks schema)
           (insertValues
              [ Block
                  number
-                 provisionalId
                  hash
                  predecessor
                  cycleNumber
                  fee
-                 (isJust provisionalId)
                  time
+                 True
+                 False
                  createdAt
-                 Nothing
                  Nothing
              ])
           onConflictDefault
       insertTezosOpHashes hash createdAt operations
       insertTezosOriginations createdAt originations
       insertTezosTransactions createdAt transactions
-      return True
 
 finalizeProvisionalBlockEvent :: Time -> Tezos.BlockHash -> Pg Bool
 finalizeProvisionalBlockEvent updatedAt hash = do
@@ -361,7 +341,7 @@ finalizeProvisionalBlockEvent updatedAt hash = do
           (block {blockIsProvisional = False, blockUpdatedAt = Just updatedAt})
       return True
 
--- | Soft delete by setting deletedAt.
+-- | Soft delete by setting a boolean.
 deleteProvisionalBlockEventsByHash :: Time -> [Tezos.BlockHash] -> Pg ()
 deleteProvisionalBlockEventsByHash deletedAt hashes = do
   blocksToDelete <-
@@ -372,7 +352,9 @@ deleteProvisionalBlockEventsByHash deletedAt hashes = do
   mapM_
     (\block ->
        runUpdate $
-       save (blocks schema) (block {blockDeletedAt = Just deletedAt}))
+       save
+         (blocks schema)
+         (block {blockIsDeleted = True, blockUpdatedAt = Just deletedAt}))
     blocksToDelete
 
 -- | Soft delete by setting deletedAt.
@@ -386,5 +368,7 @@ deleteOldProvisionalBlockEvents deletedAt maxBlockNumberToDelete = do
   mapM_
     (\block ->
        runUpdate $
-       save (blocks schema) (block {blockDeletedAt = Just deletedAt}))
+       save
+         (blocks schema)
+         (block {blockIsDeleted = True, blockUpdatedAt = Just deletedAt}))
     blocksToDelete

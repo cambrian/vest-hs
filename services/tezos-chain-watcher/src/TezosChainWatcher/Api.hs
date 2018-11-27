@@ -15,20 +15,20 @@ data RewardInfoRequest = RewardInfoRequest
 type RewardInfoEndpoint
    = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct [Tezos.RewardInfo])
 
-type ImplicitOriginationsEndpoint
-   = Endpoint 'NoAuth T Amqp.T "implicitOriginations" Tezos.ImplicitAddress ('Direct [Tezos.OriginatedAddress])
+type HighestSeenBlockNumberValue
+   = ValueTopic T Amqp.T "highestSeenBlockNumber" Word64
 
-type LatestBlockEventValue
-   = ValueTopic T Amqp.T "latestBlockEvent" Tezos.BlockEvent
-
+-- | This refers specifically to final block events (confirmed 60 times).
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
 
-type ProvisionalBlockEvents
-   = Event T Amqp.T "provisionalBlocks" ProvisionalEvent
-
-instance Indexable ProvisionalEvent where
-  type IndexOf ProvisionalEvent = Int
-  index = fst
+-- | The Word8 field is the number of blocks for which the operation has been in a given state
+-- (i.e. confirmations of that state).
+data OperationStatus
+  = NotIncluded Word8
+  | Included (Tezos.BlockHash, Word8)
+  | Confirmed Tezos.BlockHash
+  | Error -- Add a Text for error message?
+  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
 type MonitorOperationEndpoint
    = Endpoint 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming (Either Tezos.OperationException Tezos.OperationStatus))

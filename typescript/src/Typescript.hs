@@ -12,8 +12,8 @@ data SpecTsTypes = SpecTsTypes
   , isStreaming :: Bool
   , timeoutMillis :: Int
   , route :: Route
-  , req :: Text' "tsReqType"
-  , res :: Text' "tsResType"
+  , req :: Text' "TsReqType"
+  , res :: Text' "TsResType"
   } deriving (Show)
 
 toTsTypeText' :: (TypeScript a) => Proxy a -> Text' t
