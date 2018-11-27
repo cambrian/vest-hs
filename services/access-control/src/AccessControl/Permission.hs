@@ -20,6 +20,9 @@ instance Is 'InvalidateAuthTokens where
 instance Is 'IssuePayout where
   runtimeRep = IssuePayout
 
+instance Is 'InjectOperation where
+  runtimeRep = InjectOperation
+
 instance Is 'B where
   runtimeRep = B
 
