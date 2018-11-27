@@ -30,6 +30,7 @@ data T = T
   , accessControlClient :: AccessControl.Client.T
   , paymentWriter :: StreamWriter PaymentEvent
   , paymentStream :: Stream QueueBuffer PaymentEvent
+  , vestAddress :: Tezos.Address
   }
 
 instance HasNamespace T where

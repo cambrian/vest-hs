@@ -14,11 +14,8 @@ import TezosHotWallet.Internal as TezosHotWallet
 import TezosOperationQueue.Api as TezosOperationQueue
 import Vest
 
-vestAddress :: Tezos.Address
-vestAddress = panic "change this"
-
 blockConsumer :: T -> Consumers BlockEvents
-blockConsumer T {dbPool, paymentWriter} =
+blockConsumer T {dbPool, paymentWriter, vestAddress} =
   let nextUnseen = Pg.runLogged dbPool $ Pg.nextUnseenIndex $ blocks schema
       f Tezos.BlockEvent {number = blockNum, transactions} = do
         Pg.runLogged dbPool (Pg.wasHandled (blocks schema) blockNum) >>=
@@ -85,6 +82,7 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
+      vestAddress <- Tezos.Cli.extractAddress tezosCli
       f $
         T
           { dbPool
@@ -94,6 +92,7 @@ instance Service T where
           , accessControlClient
           , paymentWriter
           , paymentStream
+          , vestAddress
           }
   rpcHandlers = payoutHandler
   valuesPublished _ = ()

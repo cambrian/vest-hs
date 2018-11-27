@@ -13,6 +13,7 @@ data T = T
   , redis :: RedisConnection
   , accessControlClient :: AccessControl.Client.T
   , operationFee :: Stream ValueBuffer (FixedQty XTZ)
+  , platformFee :: Rational
   }
 
 instance HasNamespace T where

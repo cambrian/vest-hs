@@ -11,14 +11,18 @@ import TezosDelegationCore.Internal as TezosDelegationCore
 import TezosHotWallet.Api
 import Vest
 
-platformFee :: Rational
-platformFee = 0.5
+newtype PlatformFee =
+  PlatformFee Rational
+  deriving newtype (Show, FromJSON)
+
+instance Loadable PlatformFee where
+  configFile = [relfile|platform-fee.yaml|]
 
 blockConsumer :: T -> Consumers BlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; the relevant dividends are paid out when a delegator pays its bill.
 -- This happens in the payment consumer.
-blockConsumer t@T {dbPool} =
+blockConsumer t@T {dbPool, platformFee} =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
       handleCycle blockNum cycleNum cycleTime = do
         Pg.runLogged dbPool (Pg.wasHandled (cycles schema) cycleNum) >>=
@@ -208,13 +212,15 @@ instance Service T where
   description =
     "Tracks how much delegates owe their delegators for each reward event, and issues payouts on behalf of delegates."
   init configPaths f = do
-    (accessControlPublicKey :<|> seed) <- load configPaths
+    (accessControlPublicKey :<|> seed :<|> PlatformFee platformFee) <-
+      load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       operationFee <- subscribe amqp (Proxy :: Proxy OperationFeeValue)
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      f $ T {dbPool, amqp, redis, accessControlClient, operationFee}
+      f $
+        T {dbPool, amqp, redis, accessControlClient, operationFee, platformFee}
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()

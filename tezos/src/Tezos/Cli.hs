@@ -18,19 +18,19 @@ data T = T
 instance Loadable T where
   configFile = [relfile|tezos-cli.yaml|]
 
--- TODO: Functions still untested.
-extractAddress :: T -> IO (Maybe Address)
+extractAddress :: T -> IO Address
+-- ^ Should throw if addressSecret is incorrect
 extractAddress T {eztzExe, tezosNodeUri, addressSecret = Tagged addressSecret} = do
   let node = "--node " <> unpack tezosNodeUri
       secret = "--secret " <> unpack addressSecret
   (exitCode, output, _) <- readProcess (proc eztzExe ["extract", node, secret])
   case exitCode of
-    ExitFailure _ -> return Nothing
+    ExitFailure _ -> throw BugException -- TODO: more descriptive exception
     ExitSuccess -> do
       lastLine <-
         toStrict . decodeUtf8 <$>
         (fromJustUnsafe BugException . last $ lines output)
-      return . Just $ Tagged lastLine
+      return $ Tagged lastLine
 
 forgeTransaction ::
      T -> Address -> FixedQty XTZ -> FixedQty XTZ -> IO SignedOperation
