@@ -9,6 +9,7 @@ import Vest
 data T
   = InvalidateAuthTokens
   | IssuePayout
+  | InjectOperation
   | B
   deriving (Eq, Ord, Enum, Read, Show, Generic, Hashable, ToJSON, FromJSON)
 

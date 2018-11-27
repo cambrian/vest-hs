@@ -35,10 +35,9 @@ instance IndexableTable BlockT where
 
 data PayoutT f = Payout
   { id :: C f UUID
+  , hash :: C f Tezos.OperationHash
   , to :: C f Tezos.Address
   , size :: C f (FixedQty XTZ)
-  , hash :: C (Nullable f) Tezos.OperationHash
-  , status :: C f Text -- TODO: use an enum for this. Hard bc enums are not supported by beam
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -105,9 +104,3 @@ checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 
 schema :: DatabaseSettings Postgres Schema
 schema = unCheckDatabase checkedSchema
-
-selectPayoutsByStatus :: Text -> Pg [Payout]
-selectPayoutsByStatus status_ =
-  runSelectReturningList $
-  select $
-  filter_ (\Payout {status} -> status ==. val_ status_) $ all_ $ payouts schema

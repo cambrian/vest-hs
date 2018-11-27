@@ -84,7 +84,7 @@ type family NubSymbols symbols where
   NubSymbols (a
               :<|> b) = Nub (NubSymbols a :++ NubSymbols b)
 
-type HasUniqueSymbols symbols = Symbols symbols ~ NubSymbols symbols
+type UniqueSymbols symbols = Symbols symbols ~ NubSymbols symbols
 
 type family TypeName a :: Symbol where
   TypeName (M1 D ('MetaData name _ _ _) f ()) = name

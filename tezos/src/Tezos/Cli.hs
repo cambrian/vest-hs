@@ -40,16 +40,6 @@ forgeTransaction T { eztzExe = _
                    , timeoutSeconds = _
                    } (Tagged _recipient) _size _fee = panic "TODO"
 
-inject :: T -> SignedOperation -> IO ()
--- ^ IMPORTANT: the miners that the operation gets broadcasted to may decline to include it in the
--- next block for any reason. You (probably) care about your operation going through, so you should
--- monitor the blocks following an inject and retry if it was not included.
-inject T { eztzExe = _
-         , tezosNodeUri = _
-         , addressSecret = Tagged _addressSecret
-         , timeoutSeconds = _
-         } _op = panic "TODO"
-
 -- | TODO: remove once forge/inject are implemented
 makePayout :: T -> Address -> FixedQty XTZ -> FixedQty XTZ -> IO OperationHash
 makePayout T { eztzExe

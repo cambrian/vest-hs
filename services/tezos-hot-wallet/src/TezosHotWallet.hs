@@ -2,6 +2,7 @@ module TezosHotWallet
   ( module TezosHotWallet
   ) where
 
+import qualified AccessControl.Auth
 import qualified AccessControl.Client
 import qualified Postgres as Pg
 import qualified Tezos
@@ -10,6 +11,7 @@ import TezosChainWatcher.Api as TezosChainWatcher
 import TezosHotWallet.Api as TezosHotWallet
 import TezosHotWallet.Db
 import TezosHotWallet.Internal as TezosHotWallet
+import TezosOperationQueue.Api as TezosOperationQueue
 import Vest
 
 vestAddress :: Tezos.Address
@@ -41,16 +43,24 @@ blockConsumer T {dbPool, paymentWriter} =
             Pg.onConflictDefault
    in (nextUnseen, f)
 
-payoutHandler :: T -> PayoutRequest -> IO ()
-payoutHandler t@T {dbPool} PayoutRequest {id, to, size} = do
+payoutHandler :: T -> AccessControl.Auth.Claims -> PayoutRequest -> IO ()
+payoutHandler t@T {dbPool, tezosCli} AccessControl.Auth.Claims {name} req@PayoutRequest { id
+                                                                                        , to
+                                                                                        , size
+                                                                                        } = do
+  log Debug "payout requested" (name, req)
+  let fee = 0 -- TODO:
+  signedTransaction <- Tezos.Cli.forgeTransaction tezosCli to size fee
+  let inject =
+        makeClient t (Proxy :: Proxy TezosOperationQueue.InjectVestEndpoint)
+  hash <- inject signedTransaction
   time <- now
   Pg.runLogged dbPool $
     Pg.runInsert $
     Pg.insert
       (payouts schema)
-      (Pg.insertValues [Payout id to size Nothing "NotIssued" time])
+      (Pg.insertValues [Payout id hash to size time])
       Pg.onConflictDefault
-  void . atomically $ tryPutTMVar (newPayoutVar t) ()
 
 paymentMaterializer :: T -> Word64 -> IO PaymentEvent
 paymentMaterializer T {dbPool} idx_ = do
@@ -70,56 +80,10 @@ instance Service T where
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
     (paymentWriter, paymentStream) <- newStream
-    newPayoutVar <- newTMVarIO () -- init this mvar as full so we check payouts on service startup
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      let monitorOp =
-            makeClient
-              amqp
-              (Proxy :: Proxy TezosChainWatcher.MonitorOperationEndpoint)
-      -- Payout handler thread
-      -- we don't need to cancel this do we?
-      -- TODO: what if multiple instances are running this?
-      void . async . forever $ do
-        atomically $ takeTMVar newPayoutVar
-        newPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "NotIssued"
-        forM_ newPayouts $ \Payout {id = payoutId, to, size} -> do
-          let fee = 0 -- TODO:
-          hash_ <- Tezos.Cli.makePayout tezosCli to size fee
-          -- Update transaction as pending, set tx hash
-          Pg.runLogged dbPool $
-            Pg.runUpdate $
-            Pg.update
-              (payouts schema)
-              (\Payout {hash, status} ->
-                 [ hash Pg.<-. Pg.val_ (Just hash_)
-                 , status Pg.<-. Pg.val_ "Pending"
-                 ])
-              (\Payout {id} -> id Pg.==. Pg.val_ payoutId)
-          -- watch pending transactions
-          pendingPayouts <-
-            Pg.runLogged dbPool $ selectPayoutsByStatus "Pending"
-          forM_ pendingPayouts $ \Payout {id = payoutId, hash} ->
-            case hash of
-              Nothing -> throw BugException -- Log error and set to pending?
-              Just h ->
-                monitorOp h $
-                tapStream_
-                  (\case
-                     Left exn -> throw exn
-                     Right (Tezos.NotIncluded _) -> do
-                       return ()
-                     Right (Tezos.Included _) -> return ()
-                     Right (Tezos.Confirmed _) ->
-                       Pg.runLogged dbPool $
-                       Pg.runUpdate $
-                       Pg.update
-                         (payouts schema)
-                         (\Payout {status} ->
-                            [status Pg.<-. Pg.val_ "Confirmed"])
-                         (\Payout {id} -> id Pg.==. Pg.val_ payoutId))
       f $
         T
           { dbPool
@@ -129,9 +93,8 @@ instance Service T where
           , accessControlClient
           , paymentWriter
           , paymentStream
-          , newPayoutVar
           }
-  rpcHandlers _ = panic "unimplemented"
+  rpcHandlers = payoutHandler
   valuesPublished _ = ()
   eventProducers t = (return $ paymentStream t, paymentMaterializer t)
   eventConsumers = blockConsumer
