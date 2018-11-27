@@ -263,26 +263,26 @@ requestRetryPolicy :: RetryPolicy
 requestRetryPolicy =
   capDelay (30 * secMicros) $ exponentialBackoff (50 * milliMicros)
 
--- | Returns the updated event queue and a list of EITHER invalidated block hashes OR dequeued
--- block events.
+-- | Returns the updated event queue, any final block events to stream, any new provisional block
+-- events, and any invalidated provisional block hashes.
 updateEventQueueWith ::
      Http.Client
   -> Int
   -> [BlockEvent]
   -> BlockEvent
-  -> IO ([BlockEvent], Either [BlockHash] [BlockEvent])
+  -> IO ([BlockEvent], [BlockEvent], [BlockEvent], [BlockHash])
 updateEventQueueWith httpClient finalizationLag queue newEvent = do
   let minNumberInQueue = minimum $ fmap (\BlockEvent {number} -> number) queue
-  (augmentedQueue, droppedItems) <-
+  (updatedQueue, addedProvisionalEvents, invalidatedEvents) <-
     if null queue
-      then return ([newEvent], [])
+      then return ([newEvent], [newEvent], [])
       else do
-        let stitchOrRewind eventsToAdd = do
+        let stitchOrRewind newEvents = do
               BlockEvent {number, predecessor} <-
-                fromJustUnsafe BugException $ last eventsToAdd
+                fromJustUnsafe BugException $ last newEvents
               when (number <= minNumberInQueue) $
                 throw UnexpectedResultException
-              let (droppedItems, remainingQueue) =
+              let (invalidatedEvents, remainingQueue) =
                     span (\BlockEvent {hash} -> predecessor /= hash) queue
               if null remainingQueue
                 then do
@@ -294,14 +294,14 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
                       (const $ getBlock httpClient $ untag predecessor) >>=
                     toBlockEvent
                   -- ^ Rewind (until a predecessor is found in the queue).
-                  stitchOrRewind $ eventsToAdd ++ [forkPredecessor]
-                else return (eventsToAdd ++ remainingQueue, droppedItems)
-                -- ^ Stitch (new events to the front of the queue).
+                  stitchOrRewind $ newEvents ++ [forkPredecessor]
+                else return
+                       ( newEvents ++ remainingQueue
+                       , newEvents
+                       , invalidatedEvents)
+                -- ^ Stitch (new events to the beginning of the queue).
         stitchOrRewind [newEvent]
-  if length augmentedQueue > finalizationLag
-    then do
-      let (newQueue, eventsToStream) = splitAt finalizationLag augmentedQueue
-      return (newQueue, Right eventsToStream)
-    else do
-      let hashesToInvalidate = fmap (\BlockEvent {hash} -> hash) droppedItems
-      return (augmentedQueue, Left hashesToInvalidate)
+  let (trimmedQueue, finalizedEvents) = splitAt finalizationLag updatedQueue
+  let invalidatedHashes = fmap (\BlockEvent {hash} -> hash) invalidatedEvents
+  return
+    (trimmedQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes)

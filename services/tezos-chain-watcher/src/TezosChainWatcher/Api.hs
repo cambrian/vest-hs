@@ -15,17 +15,8 @@ data RewardInfoRequest = RewardInfoRequest
 type RewardInfoEndpoint
    = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct [Tezos.RewardInfo])
 
-type ImplicitOriginationsEndpoint
-   = Endpoint 'NoAuth T Amqp.T "implicitOriginations" Tezos.ImplicitAddress ('Direct [Tezos.OriginatedAddress])
+type HighestSeenBlockNumberValue
+   = ValueTopic T Amqp.T "highestSeenBlockNumber" Word64
 
-type LatestBlockEventValue
-   = ValueTopic T Amqp.T "latestBlockEvent" Tezos.BlockEvent
-
+-- | This refers specifically to final block events (confirmed 60 times).
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
-
-type ProvisionalBlockEvents
-   = Event T Amqp.T "provisionalBlocks" ProvisionalEvent
-
-instance Indexable ProvisionalEvent where
-  type IndexOf ProvisionalEvent = Int
-  index = fst

@@ -70,40 +70,42 @@ streamBlockEventsDurable ::
      T
   -> Int
   -> IndexOf BlockEvent
-  -> IO (Stream QueueBuffer BlockEvent, Stream QueueBuffer [BlockHash]) -- Events/invalidations.
+  -> IO ( Stream QueueBuffer BlockEvent
+        , Stream QueueBuffer BlockEvent
+        , Stream QueueBuffer [BlockHash])
 streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
   let updateEventQueue = updateEventQueueWith httpClient finalizationLag
   (finalWriter, finalStream) <- newStream
+  (provisionalWriter, provisionalStream) <- newStream
   (invalidationWriter, invalidationStream) <- newStream
   let streamQueuedFrom eventQueue blockNumber = do
         provisionalEvent <-
           recovering
-            requestRetryPolicy -- TODO: Modify retry between materializing/streaming states.
+            requestRetryPolicy
             recoveryCases
             (const $ materializeBlockEvent httpClient (fromIntegral blockNumber))
-        let BlockEvent {number = provisionalNumber} = provisionalEvent
-        (newEventQueue, invalidationsOrEvents) <-
+        -- ^ TODO: Modify retry between materializing/streaming states.
+        (newEventQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes) <-
           updateEventQueue eventQueue provisionalEvent
-          -- ^ Recovers and retries internally if its HTTP requests fail.
-        when (finalizationLag > 0) $
-          log Debug "queued provisional block event" provisionalNumber
-        case invalidationsOrEvents of
-          Left invalidations ->
-            unless (null invalidations) $ do
-              writeStream invalidationWriter invalidations
-              log Debug "pushed block invalidations" invalidations
-          Right finalEvents ->
-            mapM_
-              (\finalEvent -> do
-                 writeStream finalWriter finalEvent
-                 let BlockEvent {number = finalNumber} = finalEvent
-                 let numberAndLag = (finalNumber, finalizationLag)
-                 log Debug "produced block event on lag" numberAndLag)
-              finalEvents
+        -- ^ Recovers and retries internally if its HTTP requests fail.
+        mapM_
+          (\event -> do
+             writeStream finalWriter event
+             let BlockEvent {number, hash} = event
+             log Debug "pushed final block event" (number, hash))
+          finalizedEvents
+        mapM_
+          (\event -> do
+             writeStream provisionalWriter event
+             let BlockEvent {number, hash} = event
+             log Debug "pushed provisional block event" (number, hash))
+          addedProvisionalEvents
+        unless (null invalidatedHashes) $ do
+          writeStream invalidationWriter invalidatedHashes
+          log Debug "pushed invalidated block hashes" invalidatedHashes
         streamQueuedFrom newEventQueue (blockNumber + 1)
-  log Debug "streaming on lag" finalizationLag
   async $ streamQueuedFrom [] startBlockNumber
-  return (finalStream, invalidationStream)
+  return (finalStream, provisionalStream, invalidationStream)
 
 toCycleEventStream ::
      Stream QueueBuffer BlockEvent
