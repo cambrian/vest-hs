@@ -18,7 +18,7 @@ type OriginatedAddress = Tagged "Originated" Address
 
 type AddressSecret = Text' "TzAddressSecret"
 
-type SignedOperationContents = Text' "TzSignedOperationContents"
+type SignedOperation = Text' "TzSignedOperation"
 
 data DelegationInfo = DelegationInfo
   { delegator :: OriginatedAddress

@@ -30,7 +30,7 @@ data T = T
   , accessControlClient :: AccessControl.Client.T
   , paymentWriter :: StreamWriter PaymentEvent
   , paymentStream :: Stream QueueBuffer PaymentEvent
-  , newPaymentVar :: TMVar ()
+  , newPayoutVar :: TMVar ()
   }
 
 instance HasNamespace T where

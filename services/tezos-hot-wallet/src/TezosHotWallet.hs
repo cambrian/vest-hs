@@ -50,7 +50,7 @@ payoutHandler t@T {dbPool} PayoutRequest {id, to, size} = do
       (payouts schema)
       (Pg.insertValues [Payout id to size Nothing "NotIssued" time])
       Pg.onConflictDefault
-  void . atomically $ tryPutTMVar (newPaymentVar t) ()
+  void . atomically $ tryPutTMVar (newPayoutVar t) ()
 
 paymentMaterializer :: T -> Word64 -> IO PaymentEvent
 paymentMaterializer T {dbPool} idx_ = do
@@ -70,7 +70,7 @@ instance Service T where
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
     (paymentWriter, paymentStream) <- newStream
-    newPaymentVar <- newTMVarIO ()
+    newPayoutVar <- newTMVarIO () -- init this mvar as full so we check payouts on service startup
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
@@ -81,8 +81,9 @@ instance Service T where
               (Proxy :: Proxy TezosChainWatcher.MonitorOperationEndpoint)
       -- Payout handler thread
       -- we don't need to cancel this do we?
+      -- TODO: what if multiple instances are running this?
       void . async . forever $ do
-        atomically $ takeTMVar newPaymentVar
+        atomically $ takeTMVar newPayoutVar
         newPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "NotIssued"
         forM_ newPayouts $ \Payout {id = payoutId, to, size} -> do
           let fee = 0 -- TODO:
@@ -128,7 +129,7 @@ instance Service T where
           , accessControlClient
           , paymentWriter
           , paymentStream
-          , newPaymentVar
+          , newPayoutVar
           }
   rpcHandlers _ = panic "unimplemented"
   valuesPublished _ = ()

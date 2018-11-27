@@ -88,8 +88,8 @@ newtype Specific s a = Specific
 
 instance (HasNamespace s, Resource a) => Resource (Specific s a) where
   type ResourceConfig (Specific s a) = ResourceConfig a
-  makeLogged = makeLogged
-  cleanupLogged = cleanupLogged
+  makeLogged cfg = Specific <$> makeLogged cfg
+  cleanupLogged = cleanupLogged . base
   resourceName = namespace @s <> "-" <> resourceName @a
 
 instance (HasNamespace s, Loadable a) => Loadable (Specific s a) where
