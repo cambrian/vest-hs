@@ -21,14 +21,5 @@ type HighestSeenBlockNumberValue
 -- | This refers specifically to final block events (confirmed 60 times).
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
 
--- | The Word8 field is the number of blocks for which the operation has been in a given state
--- (i.e. confirmations of that state).
-data OperationStatus
-  = NotIncluded Word8
-  | Included (Tezos.BlockHash, Word8)
-  | Confirmed Tezos.BlockHash
-  | Error -- Add a Text for error message?
-  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
-
 type MonitorOperationEndpoint
    = Endpoint 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming (Either Tezos.OperationException Tezos.OperationStatus))
