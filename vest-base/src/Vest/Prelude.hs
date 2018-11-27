@@ -3,7 +3,6 @@ module Vest.Prelude
   , module Reexports
   ) where
 
-import Vest.Prelude.Blockchain as Reexports
 import Vest.Prelude.Core as Reexports
 import Vest.Prelude.Counter as Reexports
 import Vest.Prelude.Crypto as Reexports
