@@ -14,28 +14,6 @@ import Vest
 platformFee :: Rational
 platformFee = 0.5
 
-calculateDividend ::
-     [(FixedQty XTZ, Rational)]
-  -> FixedQty XTZ
-  -> FixedQty XTZ
-  -> FixedQty XTZ
-  -> FixedQty XTZ
--- ^ TODO: use tagged types for xtz values?
--- @delegatedSize is for one user
-calculateDividend tiers reward stakingBalance delegatedSize =
-  let (dividend, _) =
-        foldl'
-          (\(div, rem) (tierStart, rate) ->
-             if tierStart > rem
-               then (div, rem)
-               else ( div +
-                      rationalOf reward ^*
-                      (rate * ((rem - tierStart) ^/^ stakingBalance))
-                    , tierStart))
-          (0, delegatedSize)
-          tiers
-   in fixedOf Floor dividend
-
 blockConsumer :: T -> Consumers BlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; the relevant dividends are paid out when a delegator pays its bill.
@@ -57,11 +35,24 @@ blockConsumer t@T {dbPool} =
           Pg.runLogged dbPool (wasRewardAlreadyProcessed cycleNum delegate) >>=
             (`when` return ())
           priceTiers <- Pg.runLogged dbPool $ getDelegatePriceTiers delegate
-          let dividends_ =
+          let dividend amtDelegated =
+                let (rationalDividend, _) =
+                      foldl'
+                        (\(div, rem) (tierStart, rate) ->
+                           if tierStart > rem
+                             then (div, rem)
+                             else ( div +
+                                    rationalOf reward ^*
+                                    (rate *
+                                     ((rem - tierStart) ^/^ stakingBalance))
+                                  , tierStart))
+                        (0, amtDelegated)
+                        priceTiers
+                 in fixedOf Floor rationalDividend
+              dividends_ =
                 map
                   (\Tezos.DelegationInfo {delegator, size} ->
-                     ( delegator
-                     , calculateDividend priceTiers reward stakingBalance size))
+                     (delegator, dividend size))
                   delegations
               totalDividends =
                 foldr
