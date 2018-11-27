@@ -12,6 +12,7 @@ import Vest
 
 type PaymentEvents = Event T Amqp.T "payments" PaymentEvent
 
+-- | Size includes the fee; the actual transaction amount will be (size - fee).
 data PayoutRequest = PayoutRequest
   { id :: UUID
   , to :: Tezos.Address

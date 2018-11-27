@@ -16,4 +16,4 @@ type InjectEndpoint
 
 -- | Higher priority inject endpoint for internal use
 type InjectVestEndpoint
-   = EndpointJson ('Auth (AccessControl.Auth.T 'Permission.InjectOperation)) TezosOperationQueue.T Amqp.T "injectVest" Tezos.SignedOperation ('Direct Tezos.OperationHash)
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.InjectOperation)) TezosOperationQueue.T Amqp.T "injectVest" Tezos.SignedOperation ('Direct Tezos.OperationHash)

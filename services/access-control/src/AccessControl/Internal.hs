@@ -8,8 +8,8 @@ import Vest
 
 type SignedToken = SignedText' "AccessToken"
 
--- TODO: this is ugly, but replacing PublicKey here makes the implementation of access control
--- itself way uglier
+-- "ACPublicKey" is an ugly name, but replacing PublicKey so that other modules can use
+-- AccessControl.PublicKey makes the implementation of access control itself way uglier
 newtype ACPublicKey = ACPublicKey
   { unwrap :: PublicKey
   } deriving newtype (Eq, Show, Read, Generic, ToJSON, FromJSON)

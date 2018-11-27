@@ -41,7 +41,6 @@ blockConsumer T {dbPool, paymentWriter, vestAddress} =
    in (nextUnseen, f)
 
 payoutHandler :: T -> AccessControl.Auth.Claims -> PayoutRequest -> IO ()
--- ^ Size includes the fee; the actual transaction amount will be (size - fee).
 payoutHandler t@T {dbPool, tezosCli} AccessControl.Auth.Claims {name} req@PayoutRequest { id
                                                                                         , to
                                                                                         , size
