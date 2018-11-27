@@ -82,8 +82,8 @@ instance Service T where
   description = "Front-end stats server for Tezos."
   init configPaths f = do
     (RawStubData rawStubData) <- load configPaths
-    withLoadable configPaths $ \webSocket ->
-      f $ T {webSocket, rawStubData, streamDelayMillis = 500}
+    withLoadable configPaths $ \(webSocket :<|> redis) ->
+      f $ T {webSocket, redis, rawStubData, streamDelayMillis = 500}
   rpcHandlers t = overview t :<|> bakersFn t :<|> implicit t :<|> operation t
   valuesPublished _ = ()
   eventProducers _ = ()

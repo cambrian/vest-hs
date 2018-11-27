@@ -26,11 +26,14 @@ data Args = Args -- This must be a data and not a newtype for cmdargs &= annotat
   { configDir :: FilePath
   } deriving (Data)
 
+-- | We tried an implementation where we wouldn't require redisconnection for services that only
+-- serve RPCs, but decided that the additional complexity isn't worth it.
 class ( HasNamespace a
       , Server a (RpcSpec a)
       , Publisher a (ValueSpec a)
       , Producer a (EventsProduced a)
       , Consumer a (EventsConsumed a)
+      , Has RedisConnection a
       ) =>
       Service a
   where
@@ -62,48 +65,21 @@ class ( HasNamespace a
     program (unpack $ exe @a) &=
     CmdArgs.summary (unpack $ summary @a) &=
     help (unpack $ description @a)
-
--- | Services need to acquire a service-wide lock if they publish or consume anything. Otherwise
--- any service instance may serve RPCs.
-data AcquiresServiceLock
-  = AcquireServiceLock
-  | NoServiceLock
-
-class Service a =>
-      Service_ (lock :: AcquiresServiceLock) a
-  where
-  run_ :: [Path Abs Dir] -> (a -> IO b) -> IO Void
-  start_ :: IO Void
-  start_ = do
-    Args {configDir} <- cmdArgs $ args @a
-    paths <- configPaths @a configDir
-    run_ @lock @a paths return
-
-instance Service a => Service_ 'NoServiceLock a where
-  run_ paths f =
-    init paths $ \a -> do
+  run :: [Path Abs Dir] -> IO Void
+  run paths =
+    init @a paths $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
-      -- TODO: also include materializer RPC?
-      f a
-      log_ Debug "service setup completed, now running forever"
-      blockForever
-
-instance (Service a, Has RedisConnection a) =>
-         Service_ 'AcquireServiceLock a where
-  run_ paths f =
-    run_ @'NoServiceLock @a paths $ \a -> do
       void . async . withDistributedLock a (Tagged (namespace @a) <> "-events") $ do
         publish a (Proxy :: Proxy (ValueSpec a)) $ valuesPublished a
         produce a (Proxy :: Proxy (EventsProduced a)) $ eventProducers a
         consume a (Proxy :: Proxy (EventsConsumed a)) $ eventConsumers a
-      f a
-
-start ::
-     forall a. Service_ 'AcquireServiceLock a
-  => IO Void
--- ^ This alias is provided to encourage service implementations to not forget to do service-locked
--- things.
-start = start_ @'AcquireServiceLock @a
+      log_ Debug "service setup completed, now running forever"
+      blockForever
+  start :: IO Void
+  start = do
+    Args {configDir} <- cmdArgs $ args @a
+    paths <- configPaths @a configDir
+    run @a paths
 
 -- | TODO: move (and rename?)
 newtype Specific s a = Specific

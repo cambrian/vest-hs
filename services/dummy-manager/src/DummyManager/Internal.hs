@@ -7,6 +7,7 @@ import Vest
 
 data T = T
   { webSocket :: WebSocket.T
+  , redis :: RedisConnection
   }
 
 instance HasNamespace T where
@@ -14,3 +15,6 @@ instance HasNamespace T where
 
 instance Has WebSocket.T T where
   get = webSocket
+
+instance Has RedisConnection T where
+  get = redis

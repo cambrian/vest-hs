@@ -24,6 +24,7 @@ localConfigDir = "config/local"
 data TestServer = TestServer
   { amqp :: Amqp.T
   , accessControlClient :: AccessControl.Client.T
+  , redis :: RedisConnection
   }
 
 instance HasNamespace TestServer where
@@ -31,6 +32,9 @@ instance HasNamespace TestServer where
 
 instance Has Amqp.T TestServer where
   get = amqp
+
+instance Has RedisConnection TestServer where
+  get = redis
 
 -- There has to be a way to automatically derive this... right?
 instance Has AccessControl.Client.T TestServer where
@@ -52,10 +56,10 @@ instance Service TestServer where
   description = ""
   init paths f = do
     accessControlPublicKey <- load paths
-    withLoadable paths $ \amqp -> do
+    withLoadable paths $ \(amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey "testServerSeed"
-      f $ TestServer {amqp, accessControlClient}
+      f $ TestServer {amqp, accessControlClient, redis}
   rpcHandlers _ = const return :<|> const return
   valuesPublished _ = ()
   eventProducers _ = ()

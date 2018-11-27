@@ -64,7 +64,8 @@ instance Service T where
   summary = "dummy-manager v0.1.0"
   description = "Dummy manager service."
   init configPaths f =
-    withLoadable configPaths $ \webSocket -> f $ T {webSocket}
+    withLoadable configPaths $ \(webSocket :<|> redis) ->
+      f $ T {webSocket, redis}
   rpcHandlers _ = handlers
   valuesPublished _ = ()
   eventProducers _ = ()
