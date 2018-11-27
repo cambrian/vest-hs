@@ -44,13 +44,14 @@ blockConsumer T {dbPool, paymentWriter} =
    in (nextUnseen, f)
 
 payoutHandler :: T -> AccessControl.Auth.Claims -> PayoutRequest -> IO ()
+-- ^ Size includes the fee; the actual transaction amount will be (size-fee).
 payoutHandler t@T {dbPool, tezosCli} AccessControl.Auth.Claims {name} req@PayoutRequest { id
                                                                                         , to
                                                                                         , size
+                                                                                        , fee
                                                                                         } = do
   log Debug "payout requested" (name, req)
-  let fee = 0 -- TODO:
-  signedTransaction <- Tezos.Cli.forgeTransaction tezosCli to size fee
+  signedTransaction <- Tezos.Cli.forgeTransaction tezosCli to (size - fee) fee
   let inject =
         makeClient t (Proxy :: Proxy TezosOperationQueue.InjectVestEndpoint)
   hash <- inject signedTransaction

@@ -16,6 +16,7 @@ data PayoutRequest = PayoutRequest
   { id :: UUID
   , to :: Tezos.Address
   , size :: FixedQty XTZ
+  , fee :: FixedQty XTZ
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
 type PayoutEndpoint

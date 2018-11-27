@@ -97,7 +97,8 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
 
 instance Service T where
   type RpcSpec T = RewardInfoEndpoint
-  type ValueSpec T = HighestSeenBlockNumberValue
+  type ValueSpec T = (HighestSeenBlockNumberValue
+                      :<|> OperationFeeValue)
   type EventsProduced T = BlockEvents
   type EventsConsumed T = ()
   summary = "Tezos Chain Watcher v0.1.0"
@@ -122,6 +123,6 @@ instance Service T where
           , highestSeenStream
           }
   rpcHandlers = rewardInfo
-  valuesPublished = highestSeenStream
+  valuesPublished t = highestSeenStream t :<|> panic "TODO"
   eventProducers t = (return $ finalEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()

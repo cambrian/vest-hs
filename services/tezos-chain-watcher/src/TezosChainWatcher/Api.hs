@@ -15,8 +15,11 @@ data RewardInfoRequest = RewardInfoRequest
 type RewardInfoEndpoint
    = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct [Tezos.RewardInfo])
 
+-- | TODO: consider condensing
 type HighestSeenBlockNumberValue
    = ValueTopic T Amqp.T "highestSeenBlockNumber" Word64
+
+type OperationFeeValue = ValueTopic T Amqp.T "OperationFee" (FixedQty XTZ)
 
 -- | This refers specifically to final block events (confirmed 60 times).
 type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent

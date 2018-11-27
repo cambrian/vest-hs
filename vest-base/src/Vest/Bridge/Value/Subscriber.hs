@@ -1,10 +1,16 @@
 module Vest.Bridge.Value.Subscriber
   ( SubscriberBindings
   , Subscriber(..)
+  , MissingValueException(..)
   ) where
 
 import Vest.Bridge.Value.Prelude
 import Vest.Prelude
+
+-- TODO: throw this exception when a subscription is made to an empty value
+data MissingValueException topic =
+  MissingValueException
+  deriving (Eq, Show, Exception)
 
 type family SubscriberBindings spec where
   SubscriberBindings () = ()

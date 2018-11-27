@@ -112,8 +112,7 @@ blockConsumer t@T {dbPool} =
    in (Pg.runLogged dbPool selectNextBlock, handleBlock)
 
 paymentConsumer :: T -> Consumers PaymentEvents
--- TODO: transaction fees
-paymentConsumer t@T {dbPool} =
+paymentConsumer t@T {dbPool, operationFee} =
   let nextPayment = Pg.runLogged dbPool $ Pg.nextUnseenIndex $ payments schema
       issuePayout = makeClient t (Proxy :: Proxy PayoutEndpoint)
       f PaymentEvent {idx, from, size, time = paymentTime} = do
@@ -122,6 +121,9 @@ paymentConsumer t@T {dbPool} =
         isPlatformDelegate_ <- Pg.runLogged dbPool $ isPlatformDelegate from
         time <- now
         when isPlatformDelegate_ $ do
+          fee <-
+            readLatestValue operationFee >>=
+            fromJustUnsafe (MissingValueException @OperationFeeValue)
           billsOutstanding_ <-
             Pg.runLogged dbPool $ billsOutstanding $ Tagged from
           let (billIdsPaid, refund) =
@@ -141,7 +143,7 @@ paymentConsumer t@T {dbPool} =
             when (isJust $ payoutId payout) $ return ()
             id <- nextUUID
             -- TODO: Make sure this can't fail.
-            issuePayout $ PayoutRequest id (untag delegator) size
+            issuePayout $ PayoutRequest id (untag delegator) size fee
             Pg.runLoggedTransaction dbPool $ do
               Pg.runInsert $
                 Pg.insert
@@ -152,7 +154,7 @@ paymentConsumer t@T {dbPool} =
                 Pg.save
                   (dividends schema)
                   (dividend {payout = PayoutId $ Just id} :: Dividend)
-          -- Mark bills paidm
+          -- Mark bills paid
           Pg.runLogged dbPool $
             Pg.runUpdate $
             Pg.update
@@ -162,7 +164,7 @@ paymentConsumer t@T {dbPool} =
           -- Issue refund if necessarym
           when (refund > fixedQty @Mutez 0) $ do
             refundId <- nextUUID
-            issuePayout $ PayoutRequest refundId from refund
+            issuePayout $ PayoutRequest refundId from refund fee
             -- ^ TODO: Make sure this can't fail.
             Pg.runLoggedTransaction dbPool $ do
               Pg.runInsert $
@@ -198,8 +200,9 @@ instance Service T where
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
+      operationFee <- subscribe amqp (Proxy :: Proxy OperationFeeValue)
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      f $ T {dbPool, amqp, redis, accessControlClient}
+      f $ T {dbPool, amqp, redis, accessControlClient, operationFee}
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()

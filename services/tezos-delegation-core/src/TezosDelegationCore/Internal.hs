@@ -12,6 +12,7 @@ data T = T
   , amqp :: Amqp.T
   , redis :: RedisConnection
   , accessControlClient :: AccessControl.Client.T
+  , operationFee :: Stream ValueBuffer (FixedQty XTZ)
   }
 
 instance HasNamespace T where
