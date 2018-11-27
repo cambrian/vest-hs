@@ -80,6 +80,7 @@ instance Service T where
               amqp
               (Proxy :: Proxy TezosChainWatcher.MonitorOperationEndpoint)
       -- Payout handler thread
+      -- we don't need to cancel this do we?
       void . async . forever $ do
         atomically $ takeTMVar newPaymentVar
         newPayouts <- Pg.runLogged dbPool $ selectPayoutsByStatus "NotIssued"
@@ -92,7 +93,9 @@ instance Service T where
             Pg.update
               (payouts schema)
               (\Payout {hash, status} ->
-                 [hash Pg.<-. Pg.val_ hash_, status Pg.<-. Pg.val_ "Pending"])
+                 [ hash Pg.<-. Pg.val_ (Just hash_)
+                 , status Pg.<-. Pg.val_ "Pending"
+                 ])
               (\Payout {id} -> id Pg.==. Pg.val_ payoutId)
           -- watch pending transactions
           pendingPayouts <-

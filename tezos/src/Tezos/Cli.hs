@@ -32,9 +32,8 @@ extractAddress T {eztzExe, tezosNodeUri, addressSecret = Tagged addressSecret} =
         (fromJustUnsafe BugException . last $ lines output)
       return . Just $ Tagged lastLine
 
--- | Returns Nothing if the payout was not successfully injected.
-makePayout ::
-     T -> Address -> FixedQty XTZ -> FixedQty XTZ -> IO (Maybe OperationHash)
+-- | TODO: break into forge/inject
+makePayout :: T -> Address -> FixedQty XTZ -> FixedQty XTZ -> IO OperationHash
 makePayout T { eztzExe
              , tezosNodeUri
              , addressSecret = Tagged addressSecret
@@ -51,9 +50,9 @@ makePayout T { eztzExe
     readProcess
       (proc eztzExe ["transfer", node, from, to, amount, feeRaw, timeout])
   case exitCode of
-    ExitFailure _ -> return Nothing
+    ExitFailure _ -> panic "TODO: change me"
     ExitSuccess -> do
       lastLine <-
         toStrict . decodeUtf8 <$>
         (fromJustUnsafe BugException . last $ lines output)
-      return . Just $ Tagged lastLine
+      return $ Tagged lastLine
