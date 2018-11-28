@@ -151,6 +151,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                      else (paid, rem))
                 ([], size)
                 billsOutstanding_
+            shouldRefund = isPlatformDelegate_ && refundSize > 0
         dividendsPaid <-
           foldr (<>) [] <$>
           mapM (Pg.runLogged dbPool . dividendsForBill) billIdsPaid
@@ -168,7 +169,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                 newDividends
         refundId <- nextUUID -- only used if refundSize > 0
         refund <-
-          if isPlatformDelegate_ && refundSize > 0
+          if shouldRefund
             then return [PayoutRequest refundId from refundSize]
             else return []
         let payouts_ = refund <> dividends_
@@ -199,7 +200,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                  [ Payment
                      idx
                      (PayoutId $
-                      if refundSize > 0
+                      if shouldRefund
                         then Just refundId
                         else Nothing)
                      time
