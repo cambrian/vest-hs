@@ -65,12 +65,12 @@ blockConsumer t@T {dbPool, platformFee} =
                        (PayoutId Nothing)
                        time)
                   delegations
-              totalDividends =
+              totalDividendSize =
                 foldr (\Dividend {size} tot -> tot + size) 0 dividends_
-              grossDelegateReward = reward - totalDividends
-              vestCut =
+              grossDelegateReward = reward - totalDividendSize
+              platformCharge =
                 fixedOf Ceiling $ rationalOf grossDelegateReward ^* platformFee
-              paymentOwed = totalDividends + vestCut
+              paymentOwed = totalDividendSize + platformCharge
           -- Persist reward/bill/dividends.
           Pg.runLoggedTransaction dbPool $ do
             Pg.runInsert $
