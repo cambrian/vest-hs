@@ -1,3 +1,7 @@
+-- Assumes that we always have enough XTZ on hand to complete requested payouts. This assumption
+-- holds for the delegation marketplace platform in isolation, but it's not out of the question for
+-- future products to use more liquidity. In such a scenario we would have to extend the hot wallet
+-- to queue payouts and possibly also pull funds from cold storage.
 module TezosHotWallet
   ( module TezosHotWallet
   ) where
