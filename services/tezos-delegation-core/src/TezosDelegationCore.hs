@@ -24,6 +24,19 @@ blockConsumer :: T -> Consumers FinalizedBlockEvents
 -- This happens in the payment consumer.
 blockConsumer t@T {dbPool, platformFee} =
   let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
+      dividendSize reward stakingBalance priceTiers sizeDelegated =
+        let (rationalSize, _) =
+              foldl'
+                (\(div, rem) (tierStart, rate) ->
+                   if tierStart > rem
+                     then (div, rem)
+                     else ( div +
+                            rationalOf reward ^*
+                            (rate * ((rem - tierStart) ^/^ stakingBalance))
+                          , tierStart))
+                (0, sizeDelegated)
+                priceTiers
+         in fixedOf Floor rationalSize
       handleCycle blockNum cycleNum cycleTime = do
         Pg.runLogged dbPool (Pg.wasHandled (cycles schema) cycleNum) >>=
           (`when` return ())
@@ -39,35 +52,28 @@ blockConsumer t@T {dbPool, platformFee} =
           Pg.runLogged dbPool (wasRewardAlreadyProcessed cycleNum delegate) >>=
             (`when` return ())
           priceTiers <- Pg.runLogged dbPool $ getDelegatePriceTiers delegate
-          let dividend amtDelegated =
-                let (rationalDividend, _) =
-                      foldl'
-                        (\(div, rem) (tierStart, rate) ->
-                           if tierStart > rem
-                             then (div, rem)
-                             else ( div +
-                                    rationalOf reward ^*
-                                    (rate *
-                                     ((rem - tierStart) ^/^ stakingBalance))
-                                  , tierStart))
-                        (0, amtDelegated)
-                        priceTiers
-                 in fixedOf Floor rationalDividend
-              dividends_ =
+          billId <- nextUUID
+          let dividends_ =
                 map
                   (\Tezos.DelegationInfo {delegator, size} ->
-                     (delegator, dividend size))
+                     Dividend
+                       (CycleNumber cycleNum)
+                       (DelegateAddress delegate)
+                       delegator
+                       (dividendSize reward stakingBalance priceTiers size)
+                       (BillId billId)
+                       (PayoutId Nothing)
+                       time)
                   delegations
               totalDividends =
                 foldr
-                  (\(_, size) tot -> tot + size)
+                  (\Dividend {size} tot -> tot + size)
                   (fixedQty @Mutez 0)
                   dividends_
               grossDelegateReward = reward - totalDividends
               vestCut =
                 fixedOf Ceiling $ rationalOf grossDelegateReward ^* platformFee
               paymentOwed = totalDividends + vestCut
-          billId <- nextUUID
           -- Persist reward/bill/dividends.
           Pg.runLoggedTransaction dbPool $ do
             Pg.runInsert $
@@ -96,20 +102,10 @@ blockConsumer t@T {dbPool, platformFee} =
                        time
                    ])
                 Pg.onConflictDefault
-            forM_ dividends_ $ \(delegator, size) ->
-              Pg.runInsert $
+            Pg.runInsert $
               Pg.insert
                 (dividends schema)
-                (Pg.insertValues
-                   [ Dividend
-                       (CycleNumber cycleNum)
-                       (DelegateAddress delegate)
-                       delegator
-                       size
-                       (BillId billId)
-                       (PayoutId Nothing)
-                       time
-                   ])
+                (Pg.insertValues dividends_)
                 Pg.onConflictDefault
         -- Mark cycle as processed.
         Pg.runLogged dbPool $
