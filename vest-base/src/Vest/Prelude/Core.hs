@@ -9,7 +9,7 @@ import Control.Concurrent.STM.Delay as Vest.Prelude.Core
 import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
 import Control.Concurrent.STM.TSem as Vest.Prelude.Core
 import Control.Concurrent.STM.TVar as Vest.Prelude.Core
-import Control.Exception.Safe as Vest.Prelude.Core hiding (throwTo)
+import Control.Exception.Safe as Vest.Prelude.Core hiding (throwTo) -- rename throwTo to evilThrowTo
 import qualified Control.Exception.Safe
 import Control.Monad.Extra as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
@@ -167,7 +167,8 @@ asyncDetached' :: IO a -> IO (Async' t a)
 asyncDetached' x = Tagged <$> asyncDetached x
 
 evilThrowTo :: (Exception e) => ThreadId -> e -> IO ()
--- ^ DO NOT USE unless you really really know what you're doing.
+-- ^ Rename of @throwTo to make it more clear that this fn is to be avoided unless you're certain
+-- that what you're doing is correct.
 evilThrowTo = Control.Exception.Safe.throwTo
 
 fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a

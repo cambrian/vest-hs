@@ -94,7 +94,6 @@ callStreaming t req f = do
   (headersWithSignature, reqText) <-
     packRequest @fmt (get @(AuthSigner auth) t) req
   (resultWriter, results) <- newStream
-  -- TODO: replace with withAsync?
   void . async $
     callRaw (get @transport t) rawRoute headersWithSignature reqText $ \nextRes -> do
       let timeoutAck f = timeout timeout_ f >>= fromRightUnsafe
@@ -112,6 +111,7 @@ callStreaming t req f = do
               EndOfResults -> closeStream resultWriter
       loop timeoutAck `catchAny` evilThrowTo mainThread
   f results
+  -- TODO: throw exceptions as strict exceptions in the body of this function
 
 instance ( KnownNat timeout
          , Serializable fmt req
