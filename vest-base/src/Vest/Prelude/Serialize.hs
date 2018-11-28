@@ -78,41 +78,42 @@ instance {-# OVERLAPPABLE #-} Show a => Serializable 'Pretty a where
 instance {-# OVERLAPPABLE #-} Read a => Deserializable 'Pretty a where
   deserialize = read
 
--- Gives duplicate instance error for some reason:
+-- Gives duplicate instance error since the right side is identical to the above:
+-- TODO: add phantom type param to Serializable/Deserializable to get around this?
 -- instance {-# OVERLAPS #-} ConvertibleStrings a Text =>
 --                           Serializable 'Pretty a where
 --   serialize = convertString
 -- instance {-# OVERLAPS #-} ConvertibleStrings Text a =>
 --                           Deserializable 'Pretty a where
 --   deserialize = Just . convertString
-instance {-# OVERLAPS #-} Serializable 'Pretty String where
+instance {-# OVERLAPPING #-} Serializable 'Pretty String where
   serialize = convertString
 
-instance {-# OVERLAPS #-} Deserializable 'Pretty String where
+instance {-# OVERLAPPING #-} Deserializable 'Pretty String where
   deserialize = Just . convertString
 
-instance {-# OVERLAPS #-} Serializable 'Pretty Text where
+instance {-# OVERLAPPING #-} Serializable 'Pretty Text where
   serialize = convertString
 
-instance {-# OVERLAPS #-} Deserializable 'Pretty Text where
+instance {-# OVERLAPPING #-} Deserializable 'Pretty Text where
   deserialize = Just . convertString
 
-instance {-# OVERLAPS #-} Serializable 'Pretty LazyText where
+instance {-# OVERLAPPING #-} Serializable 'Pretty LazyText where
   serialize = convertString
 
-instance {-# OVERLAPS #-} Deserializable 'Pretty LazyText where
+instance {-# OVERLAPPING #-} Deserializable 'Pretty LazyText where
   deserialize = Just . convertString
 
-instance {-# OVERLAPS #-} Serializable 'Pretty ByteString where
+instance {-# OVERLAPPING #-} Serializable 'Pretty ByteString where
   serialize = convertString
 
-instance {-# OVERLAPS #-} Deserializable 'Pretty ByteString where
+instance {-# OVERLAPPING #-} Deserializable 'Pretty ByteString where
   deserialize = Just . convertString
 
-instance {-# OVERLAPS #-} Serializable 'Pretty LazyByteString where
+instance {-# OVERLAPPING #-} Serializable 'Pretty LazyByteString where
   serialize = convertString
 
-instance {-# OVERLAPS #-} Deserializable 'Pretty LazyByteString where
+instance {-# OVERLAPPING #-} Deserializable 'Pretty LazyByteString where
   deserialize = Just . convertString
 
 instance {-# OVERLAPPING #-} Serializable 'Pretty a =>

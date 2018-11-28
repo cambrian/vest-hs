@@ -3,6 +3,7 @@ module Transport.Amqp
   , Config(..)
   ) where
 
+import Control.Concurrent.STM.TQueue
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
 import qualified Data.HashTable.IO as HashTable
 import qualified Data.Map as Map
@@ -152,17 +153,21 @@ instance RpcTransport T where
     -> Route
     -> Headers
     -> Text' "Request"
-    -> (Text' "Response" -> IO ())
-    -> IO (IO' "Cleanup" ())
-  callRaw T {publishChan, responseQueue, responseHandlers} route headers reqText respond = do
+    -> (IO (Text' "Response") -> IO a)
+    -> IO a
+  callRaw T {publishChan, responseQueue, responseHandlers} route headers reqText f = do
     id <- nextUUID'
-    HashTable.insert responseHandlers id respond
-    AMQP.publishMsg
-      publishChan
-      ""
-      (untag route)
-      (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
-    return $ Tagged $ HashTable.delete responseHandlers id
+    q <- newTQueueIO
+    HashTable.insert responseHandlers id (atomically . writeTQueue q)
+    void $
+      AMQP.publishMsg
+        publishChan
+        ""
+        (untag route)
+        (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
+    finally
+      (f $ atomically $ readTQueue q)
+      (HashTable.delete responseHandlers id)
 
 declareValueExchange :: AMQP.Channel -> ValueName -> IO ()
 declareValueExchange chan (Tagged exchangeName) =

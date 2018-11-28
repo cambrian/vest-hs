@@ -150,3 +150,4 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - vest-base
+    - tasty-discover

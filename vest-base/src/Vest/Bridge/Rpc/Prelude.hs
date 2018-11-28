@@ -2,7 +2,6 @@ module Vest.Bridge.Rpc.Prelude
   ( module Vest.Bridge.Rpc.Prelude
   ) where
 
-import qualified Control.Exception as Evil
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import Vest.Prelude
@@ -33,8 +32,9 @@ class RpcTransport t where
     -> Route
     -> Headers
     -> Text' "Request"
-    -> (Text' "Response" -> IO ()) -- ^ Called per response.
-    -> IO (IO' "Cleanup" ()) -- ^ TODO: refactor to take a callback that is passed a nextResponse Fn, so that cleanup is handled automatically.
+    -> (IO (Text' "Response") -> IO a)
+    -- ^ Response consumer callback. The transport may run cleanup after this fn finishes.
+    -> IO a
 
 -- | A descriptive reimplementation of Maybe.
 data AuthOrNoAuth a
@@ -75,13 +75,14 @@ timeoutsPerHeartbeat = 2
 
 type Headers = HashMap (Text' "Header") Text
 
-data RpcResponse a
-  = RpcResponseClientException Text
-  | RpcResponseServerException
-  | RpcResponse a
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+data RpcException
+  = RpcClientException Text
+  | RpcServerException
+  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON, Exception)
 
-$(deriveTypeScript defaultOptions ''RpcResponse)
+$(deriveTypeScript defaultOptions ''RpcException)
+
+type RpcResponse a = Either RpcException a
 
 data StreamingResponse a
   = Heartbeat
@@ -94,4 +95,4 @@ $(deriveTypeScript defaultOptions ''StreamingResponse)
 newtype HeartbeatLostException =
   HeartbeatLostException Duration
   deriving (Eq, Read, Show, Generic)
-  deriving anyclass (Evil.Exception, ToJSON, FromJSON)
+  deriving anyclass (Exception, ToJSON, FromJSON)

@@ -47,6 +47,6 @@ instance ( HasNamespace service
     (writer, stream) <- newStream @ValueBuffer
     subscribeValue
       (get @transport t)
-      (serialize' @'Pretty $ namespaced @service (Proxy :: Proxy name))
+      (serialize' @'Pretty $ Namespaced @service (Proxy :: Proxy name))
       (writeStream writer <=< deserializeUnsafe' @fmt)
     return stream

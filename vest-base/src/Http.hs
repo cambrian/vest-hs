@@ -57,7 +57,7 @@ instance Resource Client where
             (fromIntegral port)
             (unpack $ untag path)
         call :: ClientM a -> IO a
-        call req = runClientM req clientEnv >>= fromRightOrThrowLeft
+        call req = runClientM req clientEnv >>= fromRightUnsafe
     return $ Client call
   cleanup :: Client -> IO ()
   -- ^ closeManager is apparently deprecated, since managers close on their own when they are no

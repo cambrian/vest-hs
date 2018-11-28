@@ -230,7 +230,7 @@ makeStreamReader buf = do
           -- that parallelFilterValuesM runs threads internally, so we cannot simply wrap propagate
           -- in an async block.
           TMap.parallelFilterValuesM (`writeStream'` a) downstreams `catchAny`
-          throwTo thisThread
+          evilThrowTo thisThread
         propagate
   propagator <-
     asyncDetached $ do

@@ -6,9 +6,11 @@ module Transport.WebSocket
   , ResponseMessage(..)
   ) where
 
+import Control.Concurrent.STM.TQueue
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import qualified Data.HashTable.IO as HashTable
+import Data.Text (breakOn)
 import qualified Network.HTTP.Types as Http
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
@@ -188,19 +190,20 @@ instance RpcTransport T where
     -> Route
     -> Headers
     -> Text' "Request"
-    -> (Text' "Response" -> IO ())
-    -> IO (IO' "Cleanup" ())
-  callRaw T {clientRequestHandlers, clientResponseHandlers} route headers reqText respond = do
-    namespace <-
-      deserializeUnsafe' @'Pretty @(Namespaced "Server" Text) route >>-
-      getNamespace'
-    id <- nextUUID'
+    -> (IO (Text' "Response") -> IO a)
+    -> IO a
+  callRaw T {clientRequestHandlers, clientResponseHandlers} route headers reqText f = do
+    let namespace = Tagged $ fst $ breakOn "/" $ untag route
     makeRequest <-
       HashTable.lookup clientRequestHandlers namespace >>=
       fromJustUnsafe (NoServerForNamespace namespace)
-    HashTable.insert clientResponseHandlers id respond
+    id <- nextUUID'
+    q <- newTQueueIO
+    HashTable.insert clientResponseHandlers id (atomically . writeTQueue q)
     makeRequest $ RequestMessage {id, headers, route, reqText}
-    return $ Tagged $ HashTable.delete clientResponseHandlers id
+    finally
+      (f $ atomically $ readTQueue q)
+      (HashTable.delete clientResponseHandlers id)
 
 instance Loadable T where
   configFile = [relfile|websocket.yaml|]

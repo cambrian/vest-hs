@@ -10,8 +10,8 @@ import Control.Concurrent.STM.Delay as Vest.Prelude.Core
 import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
 import Control.Concurrent.STM.TSem as Vest.Prelude.Core
 import Control.Concurrent.STM.TVar as Vest.Prelude.Core
-import qualified Control.Exception as Evil (Exception, throwTo)
-import Control.Exception.Safe as Vest.Prelude.Core
+import Control.Exception.Safe as Vest.Prelude.Core hiding (throwTo) -- rename throwTo to evilThrowTo
+import qualified Control.Exception.Safe
 import Control.Monad.Extra as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
 import Control.Monad.Trans.Maybe as Vest.Prelude.Core
@@ -39,7 +39,7 @@ import Protolude as Vest.Prelude.Core hiding
   , getSum
   , handle
   , handleJust
-  , log -- clashes with Logger.log
+  , log -- clashes with Log.log
   , magnitude
   , mask
   , mask_
@@ -167,9 +167,10 @@ asyncDetached = Async.async
 asyncDetached' :: IO a -> IO (Async' t a)
 asyncDetached' x = Tagged <$> asyncDetached x
 
-evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
--- ^ DO NOT USE unless you really really know what you're doing.
-evilThrowTo = Evil.throwTo
+evilThrowTo :: (Exception e) => ThreadId -> e -> IO ()
+-- ^ Rename of @throwTo to make it more clear that this fn is to be avoided unless you're certain
+-- that what you're doing is correct.
+evilThrowTo = Control.Exception.Safe.throwTo
 
 fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a
 fromJustUnsafe e Nothing = throw e
@@ -179,9 +180,9 @@ eitherFromMaybe :: l -> Maybe r -> Either l r
 eitherFromMaybe l Nothing = Left l
 eitherFromMaybe _ (Just r) = Right r
 
-fromRightOrThrowLeft :: (Exception e) => Either e a -> IO a
-fromRightOrThrowLeft (Left e) = throw e
-fromRightOrThrowLeft (Right a) = return a
+fromRightUnsafe :: (Exception e) => Either e a -> IO a
+fromRightUnsafe (Left e) = throw e
+fromRightUnsafe (Right a) = return a
 
 justSTM :: STM (Maybe a) -> STM a
 -- ^ Retries until Just is received.

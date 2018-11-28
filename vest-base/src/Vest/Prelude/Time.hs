@@ -3,7 +3,6 @@ module Vest.Prelude.Time
   ) where
 
 import qualified Control.Concurrent
-import qualified Control.Exception as Evil (Exception)
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import Data.Fixed
@@ -40,7 +39,7 @@ type Duration = NominalDiffTime
 newtype TimeoutException =
   TimeoutException Duration
   deriving (Eq, Read, Show, Generic)
-  deriving anyclass (Evil.Exception, ToJSON, FromJSON)
+  deriving anyclass (Exception, ToJSON, FromJSON)
 
 instance VectorSpace Duration where
   type Scalar Duration = Rational
@@ -97,10 +96,6 @@ timeoutRenewable t f = do
           Nothing -> Left $ TimeoutException t
           Just a -> Right a
   return (renew, result)
-
-throwIfTimeout :: Either TimeoutException a -> IO a
-throwIfTimeout (Left exn) = throw exn
-throwIfTimeout (Right a) = return a
 
 data ZeroIntervalException =
   ZeroIntervalException
