@@ -42,7 +42,7 @@ specTsTypesToObject _ SpecTsTypes { hasAuth
     , "streaming" .= isStreaming
     , "timeoutMillis" .= timeoutMillis
     , "route" .= route
-    , "namespacedRoute" .= serialize' @'Pretty $ Namespaced @service route
+    , "namespacedRoute" .= serialize' @'Pretty (Namespaced @service route)
     -- ^ Eventually: Can we make this call into a function somewhere?
     , "req" .= req
     , "res" .= res
