@@ -167,7 +167,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                    PayoutRequest
                      {id = fromMaybe (panic "impossible") id, to, size})
                 newDividends
-        refundId <- nextUUID -- only used if refundSize > 0
+        refundId <- nextUUID -- only used if shouldRefund = True
         refund <-
           if shouldRefund
             then return [PayoutRequest refundId from refundSize]
@@ -200,7 +200,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                  [ Payment
                      idx
                      (PayoutId $
-                      if shouldRefund
+                      if shouldRefundg
                         then Just refundId
                         else Nothing)
                      time
