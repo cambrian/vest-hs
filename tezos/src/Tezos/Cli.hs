@@ -2,12 +2,12 @@ module Tezos.Cli
   ( T(..)
   , extractAddress
   , forgeBatchTransaction
-  , forgeTransaction
   ) where
 
 import Control.Retry
 import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import Data.ByteString.Lazy.Char8 (lines)
+import qualified Data.HashMap.Strict as HashMap
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified GHC.Base
 import System.Process.Typed
@@ -64,21 +64,22 @@ forgeRetryPolicy :: RetryPolicy
 forgeRetryPolicy =
   capDelay (30 * secMicros) $ exponentialBackoff (50 * milliMicros)
 
+serializeRecipient :: (Address, FixedQty XTZ) -> Text
+serializeRecipient (Tagged address, size) =
+  address <> " " <> show @Integer (fromIntegral size)
+
 forgeBatchTransaction ::
      T -> HashMap Address (FixedQty XTZ) -> FixedQty XTZ -> IO SignedOperation
-forgeBatchTransaction = panic "unimplemented"
-
-forgeTransaction ::
-     T -> Address -> FixedQty XTZ -> FixedQty XTZ -> IO SignedOperation
-forgeTransaction T { eztzExe
-                   , tezosNodeUri
-                   , addressSecret = Tagged addressSecret
-                   , timeoutSeconds
-                   } (Tagged recipient) size fee = do
+forgeBatchTransaction T { eztzExe
+                        , tezosNodeUri
+                        , addressSecret = Tagged addressSecret
+                        , timeoutSeconds
+                        } recipientMap fee = do
   let node = makeOption "node" tezosNodeUri
       from = makeOption "fromSK" addressSecret
-      to = makeOption "toPKH" recipient
-      amount = makeOption "amount" $ show @Integer $ fromIntegral size
+      recipients =
+        makeOption "recipient" . serializeRecipient <$>
+        HashMap.toList recipientMap
       feeRaw = makeOption "fee" $ show @Integer $ fromIntegral fee
       timeout = makeOption "timeout" $ show timeoutSeconds
   -- Retry on probably benign failures (like timeouts).
@@ -90,12 +91,11 @@ forgeTransaction T { eztzExe
          readProcess
            (proc
               eztzExe
-              ["forgeTransfer", node, from, to, amount, feeRaw, timeout])
+              (["forgeBatchTransfer", node, from, feeRaw, timeout] ++ recipients))
        case exitCode of
          ExitFailure _ -> do
            error <- lastLineUnsafe output
            if error == "Timeout"
              then throw $ CliRecoverableException "timeout"
-             else log Error "transaction forge failed" output >>
-                  throw BugException
+             else log Error "batch forge failed" output >> throw BugException
          ExitSuccess -> Tagged <$> lastLineUnsafe output)
