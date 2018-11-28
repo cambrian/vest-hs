@@ -19,8 +19,8 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
-  , finalizedEventStream :: Stream QueueBuffer Tezos.BlockEvent
-  , provisionalEventStream :: Stream QueueBuffer Tezos.BlockEvent
+  , finalizedBlockEventStream :: Stream QueueBuffer Tezos.BlockEvent
+  , provisionalBlockEventStream :: Stream QueueBuffer Tezos.BlockEvent
   , finalizedHeightStream :: Stream ValueBuffer Word64
   }
 

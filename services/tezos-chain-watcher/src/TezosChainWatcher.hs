@@ -22,7 +22,7 @@ monitorOperation ::
      T
   -> (Tezos.OperationHash, Word8)
   -> IO (Stream ValueBuffer Tezos.OperationStatus)
-monitorOperation T {dbPool, provisionalEventStream} (opHash, threshold) = do
+monitorOperation T {dbPool, provisionalBlockEventStream} (opHash, threshold) = do
   (statusWriter, statusStream) <- newStream
   lastBlockHashVar <- newEmptyTMVarIO
   opStatusVar <- newEmptyTMVarIO
@@ -83,7 +83,7 @@ monitorOperation T {dbPool, provisionalEventStream} (opHash, threshold) = do
                Tezos.Confirmed _ -> return False
                Tezos.Rejected -> return False
                _ -> return True)
-      provisionalEventStream
+      provisionalBlockEventStream
   return statusStream
 
 -- | This DB materializer waits on persistence of the desired event to occur.
@@ -170,7 +170,7 @@ instance Service T where
   type RpcSpec T = RewardInfoEndpoint
                    :<|> MonitorOperationEndpoint
   type ValueSpec T = FinalizedHeightValue
-  type EventsProduced T = BlockEvents
+  type EventsProduced T = FinalizedBlockEvents
   type EventsConsumed T = ()
   summary = "Tezos Chain Watcher v0.1.0"
   description = "Tezos chain watcher and blockchain cache."
@@ -180,7 +180,7 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      (finalizedEventStream, provisionalEventStream, finalizedHeightStream) <-
+      (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos finalizationLag
       f $
         T
@@ -189,11 +189,12 @@ instance Service T where
           , redis
           , tezos
           , accessControlClient
-          , finalizedEventStream
-          , provisionalEventStream
+          , finalizedBlockEventStream
+          , provisionalBlockEventStream
           , finalizedHeightStream
           }
   rpcHandlers t = rewardInfo t :<|> monitorOperation t
   valuesPublished = finalizedHeightStream
-  eventProducers t = (return $ finalizedEventStream t, materializeBlockEvent t)
+  eventProducers t =
+    (return $ finalizedBlockEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()

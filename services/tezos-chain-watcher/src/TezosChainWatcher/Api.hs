@@ -23,5 +23,4 @@ type FinalizedHeightValue = ValueTopic T Amqp.T "finalizedHeight" Word64
 -- TODO: Write.
 type OperationFeeValue = ValueTopic T Amqp.T "OperationFee" (FixedQty XTZ)
 
--- | This refers specifically to final block events (confirmed 60 times).
-type BlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
+type FinalizedBlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
