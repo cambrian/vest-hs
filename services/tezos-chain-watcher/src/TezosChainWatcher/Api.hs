@@ -18,9 +18,7 @@ type RewardInfoEndpoint
 type MonitorOperationEndpoint
    = Endpoint 'NoAuth T Amqp.T "monitorOperation" (Tezos.OperationHash, Word8) ('Streaming Tezos.OperationStatus)
 
--- TODO: Renaming job (also for finalized).
-type HighestSeenBlockNumberValue
-   = ValueTopic T Amqp.T "highestSeenBlockNumber" Word64
+type FinalizedHeightValue = ValueTopic T Amqp.T "finalizedHeight" Word64
 
 -- TODO: Write.
 type OperationFeeValue = ValueTopic T Amqp.T "OperationFee" (FixedQty XTZ)

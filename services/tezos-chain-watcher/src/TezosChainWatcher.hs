@@ -39,9 +39,13 @@ monitorOperation T {dbPool, provisionalEventStream} (opHash, threshold) = do
           Nothing -> return $ Tezos.NotIncluded 0
           Just (blockHash, blockNumber) -> do
             let confirmations = fromIntegral $ currentBlockNumber - blockNumber
-            if confirmations < threshold
-              then return $ Tezos.Included (blockHash, confirmations)
-              else return $ Tezos.Confirmed blockHash
+            -- ^ If confirmations is negative, it means we had a forked chain whose head we are
+            -- still catching up to. A block that is yet to be streamed contains our operation.
+            if confirmations < 0
+              then return $ Tezos.NotIncluded 0
+              else if confirmations < threshold
+                     then return $ Tezos.Included (blockHash, confirmations)
+                     else return $ Tezos.Confirmed blockHash
   void . async $
     takeWhileMStream -- Continue until op confirmed or rejected.
       (\event@Tezos.BlockEvent {hash, number, predecessor} -> do
@@ -85,9 +89,10 @@ monitorOperation T {dbPool, provisionalEventStream} (opHash, threshold) = do
 -- | This DB materializer waits on persistence of the desired event to occur.
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
 materializeBlockEvent t@T {dbPool} blockNumber = do
-  highestSeenStream <- subscribe t (Proxy :: Proxy HighestSeenBlockNumberValue)
-  takeWhileMStream (return . (blockNumber >)) highestSeenStream >>= waitStream
-  Pg.runLogged dbPool (selectFinalBlockEventByNumber blockNumber) >>=
+  finalizedHeightStream <- subscribe t (Proxy :: Proxy FinalizedHeightValue)
+  takeWhileMStream (return . (blockNumber >)) finalizedHeightStream >>=
+    waitStream
+  Pg.runLogged dbPool (selectFinalizedBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
 
 streamBlockEvents ::
@@ -98,38 +103,37 @@ streamBlockEvents ::
         , Stream QueueBuffer Tezos.BlockEvent
         , Stream ValueBuffer Word64)
 streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
-  highestSeenBlockNumber <- Pg.runLogged dbPool (selectMaxBlockNumber Final)
+  highestSeenBlockNumber <- Pg.runLogged dbPool (selectMaxBlockNumber Finalized)
   let nextBlockNumber = highestSeenBlockNumber + 1
-  highestSeenProvisionalBlockNumberVar <-
+  provisionalHeightVar <-
     Pg.runLogged dbPool (selectMaxBlockNumber NotDeleted) >>= newTVarIO
-  (finalEventStream_, provisionalEventStream_, invalidatedHashesStream) <-
+  (finalizedEventStream_, provisionalEventStream_, invalidatedHashesStream) <-
     Tezos.streamBlockEventsDurable tezos finalizationLag nextBlockNumber
-  (highestSeenWriter, highestSeenStream) <- newStream
-  -- Persist final block events before streaming them.
-  finalEventStream <-
+  (finalizedHeightWriter, finalizedHeightStream) <- newStream
+  -- Persist finalized block events before streaming them.
+  finalizedEventStream <-
     mapMStream
       (\event -> do
          updatedAt <- now
          let deletedAt = updatedAt
              Tezos.BlockEvent {hash, number} = event
-         highestSeen <- readTVarIO highestSeenProvisionalBlockNumberVar
-         log Debug "waiting to persist block event" (number, highestSeen)
-         atomically $
-           readTVar highestSeenProvisionalBlockNumberVar >>= check . (number <=)
+         provisionalHeight <- readTVarIO provisionalHeightVar
+         log Debug "waiting to persist block event" (number, provisionalHeight)
+         atomically $ readTVar provisionalHeightVar >>= check . (number <=)
          -- ^ Ensure that we have seen provisional events at at least this block level (we want
-         -- final block events to strictly lag their provisional counterparts).
+         -- finalized block events to strictly lag their provisional counterparts).
          log Debug "persisting block event" number
          Pg.runLoggedTransaction
            dbPool
            (do finalized <- finalizeProvisionalBlockEvent updatedAt hash
                unless finalized $ liftIO $ throw BugException
                deleteOldProvisionalBlockEvents deletedAt number)
-         -- ^ Promote a provisional event to a final event (a provisional event must exist with the
-         -- desired hash, or something is wrong with our DB state).
-         writeStream highestSeenWriter number
+         -- ^ Promote a provisional event to a finalized event (a provisional event must exist with
+         -- the desired hash, or something is wrong with our DB state).
+         writeStream finalizedHeightWriter number
          log Debug "persisted block event" number
          return event)
-      finalEventStream_
+      finalizedEventStream_
   -- Persist provisional block events before streaming them.
   provisionalEventStream <-
     mapMStream
@@ -140,14 +144,16 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
          Pg.runLoggedTransaction
            dbPool
            (insertProvisionalBlockEvent createdAt event)
-         highestSeen <- readTVarIO highestSeenProvisionalBlockNumberVar
-         when (number > highestSeen) $
-           atomically $ writeTVar highestSeenProvisionalBlockNumberVar number
+         provisionalHeight <- readTVarIO provisionalHeightVar
+         when (number > provisionalHeight) $
+           atomically $ writeTVar provisionalHeightVar number
          log Debug "persisted provisional block event" (number, hash)
          return event)
       provisionalEventStream_
-  -- Add no-op consumers to make sure final/provisional event writes do not block.
-  mapM_ (tapStream_ $ void . return) [finalEventStream, provisionalEventStream]
+  -- Add no-op consumers to make sure finalized/provisional event writes do not block.
+  mapM_
+    (tapStream_ $ void . return)
+    [finalizedEventStream, provisionalEventStream]
   -- Invalidate provisional events as necessary.
   tapStream_
     (\hashes -> do
@@ -158,12 +164,12 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
          (deleteProvisionalBlockEventsByHash deletedAt hashes)
        log Debug "invalidated provisional block events" hashes)
     invalidatedHashesStream
-  return (finalEventStream, provisionalEventStream, highestSeenStream)
+  return (finalizedEventStream, provisionalEventStream, finalizedHeightStream)
 
 instance Service T where
   type RpcSpec T = RewardInfoEndpoint
                    :<|> MonitorOperationEndpoint
-  type ValueSpec T = HighestSeenBlockNumberValue
+  type ValueSpec T = FinalizedHeightValue
   type EventsProduced T = BlockEvents
   type EventsConsumed T = ()
   summary = "Tezos Chain Watcher v0.1.0"
@@ -174,7 +180,7 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      (finalEventStream, provisionalEventStream, highestSeenStream) <-
+      (finalizedEventStream, provisionalEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos finalizationLag
       f $
         T
@@ -183,11 +189,11 @@ instance Service T where
           , redis
           , tezos
           , accessControlClient
-          , finalEventStream
+          , finalizedEventStream
           , provisionalEventStream
-          , highestSeenStream
+          , finalizedHeightStream
           }
   rpcHandlers t = rewardInfo t :<|> monitorOperation t
-  valuesPublished = highestSeenStream
-  eventProducers t = (return $ finalEventStream t, materializeBlockEvent t)
+  valuesPublished = finalizedHeightStream
+  eventProducers t = (return $ finalizedEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()

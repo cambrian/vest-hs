@@ -75,7 +75,7 @@ streamBlockEventsDurable ::
         , Stream QueueBuffer [BlockHash])
 streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
   let updateEventQueue = updateEventQueueWith httpClient finalizationLag
-  (finalWriter, finalStream) <- newStream
+  (finalizedWriter, finalizedStream) <- newStream
   (provisionalWriter, provisionalStream) <- newStream
   (invalidationWriter, invalidationStream) <- newStream
   let streamQueuedFrom eventQueue blockNumber = do
@@ -90,9 +90,9 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
         -- ^ Recovers and retries internally if its HTTP requests fail.
         mapM_
           (\event -> do
-             writeStream finalWriter event
+             writeStream finalizedWriter event
              let BlockEvent {number, hash} = event
-             log Debug "pushed final block event" (number, hash))
+             log Debug "pushed finalized block event" (number, hash))
           finalizedEvents
         mapM_
           (\event -> do
@@ -105,7 +105,7 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
           log Debug "pushed invalidated block hashes" invalidatedHashes
         streamQueuedFrom newEventQueue (blockNumber + 1)
   async $ streamQueuedFrom [] startBlockNumber
-  return (finalStream, provisionalStream, invalidationStream)
+  return (finalizedStream, provisionalStream, invalidationStream)
 
 toCycleEventStream ::
      Stream QueueBuffer BlockEvent

@@ -19,9 +19,9 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
-  , finalEventStream :: Stream QueueBuffer Tezos.BlockEvent
+  , finalizedEventStream :: Stream QueueBuffer Tezos.BlockEvent
   , provisionalEventStream :: Stream QueueBuffer Tezos.BlockEvent
-  , highestSeenStream :: Stream ValueBuffer Word64
+  , finalizedHeightStream :: Stream ValueBuffer Word64
   }
 
 instance Loadable TezosFinalizationLag where
