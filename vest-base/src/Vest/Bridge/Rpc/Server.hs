@@ -94,22 +94,22 @@ serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
                 (verifyRequest (get @(AuthVerifier auth) t) reqText headers) >>=
               fromRightUnsafe
             req <- deserializeUnsafe' @fmt reqText
-            sender (sendToClient . RpcResponse) (handler claims req))
+            sender (sendToClient . Right) (handler claims req))
         [ Handler $ \(x :: AuthException) -> do
-            sendToClient $ RpcResponseClientException $ show x
+            sendToClient $ Left $ RpcClientException $ show x
             log Warn "Handler exception" x
         , Handler $ \(x :: InvalidCallException) -> do
-            sendToClient $ RpcResponseClientException $ show x
+            sendToClient $ Left $ RpcClientException $ show x
             log Warn "Handler exception" x
         , Handler $ \(x :: DeserializeException fmt) -> do
-            sendToClient $ RpcResponseClientException $ show x
+            sendToClient $ Left $ RpcClientException $ show x
             log Warn "Handler exception" x
         , Handler $ \(x :: SomeException) -> do
-            sendToClient RpcResponseServerException
+            sendToClient $ Left RpcServerException
             log Error "Handler server exception" x
         ]
       where
-        sendToClient = respond . serialize' @fmt @(RpcResponse res)
+        sendToClient = respond . serialize' @fmt
 
 instance ( HasNamespace t
          , RpcTransport transport

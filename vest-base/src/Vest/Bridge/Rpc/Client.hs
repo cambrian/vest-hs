@@ -78,10 +78,7 @@ callDirect t req = do
   let rawRoute = serialize' @'Pretty $ Namespaced @server (Proxy :: Proxy route)
   callRaw (get @transport t) rawRoute headersWithSignature reqText $ \nextRes -> do
     resText <- timeout (natSeconds @timeout) nextRes >>= fromRightUnsafe
-    deserializeUnsafe' @fmt resText >>= \case
-      RpcResponseClientException eText -> throw $ ClientException eText
-      RpcResponseServerException -> throw ServerException
-      RpcResponse res -> return res
+    deserializeUnsafe' @fmt resText >>= fromRightUnsafe @RpcException
 
 callStreaming ::
      forall timeout fmt auth transport server route t req res a.
@@ -117,17 +114,12 @@ callStreaming t req f = do
             fromRightUnsafe
           loop timeout' = do
             (resText :: Text' "Response") <- timeout' nextRes
-            deserializeUnsafe' @fmt resText >>= \case
-              RpcResponseClientException eText ->
-                throw $ ClientException eText -- TODO: close result stream on exceptions?
-              RpcResponseServerException -> throw ServerException
-              RpcResponse response ->
-                case response of
-                  Heartbeat -> loop timeoutHeartbeats
-                  Result res -> do
-                    writeStream resultWriter res
-                    loop timeoutHeartbeats
-                  EndOfResults -> closeStream resultWriter
+            deserializeUnsafe' @fmt resText >>= fromRightUnsafe @RpcException >>= \case
+              Heartbeat -> loop timeoutHeartbeats
+              Result res -> do
+                writeStream resultWriter res
+                loop timeoutHeartbeats
+              EndOfResults -> closeStream resultWriter
       loop timeoutAck `catchAny` evilThrowTo mainThread
   f results
 

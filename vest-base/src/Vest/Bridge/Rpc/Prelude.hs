@@ -76,13 +76,14 @@ timeoutsPerHeartbeat = 2
 
 type Headers = HashMap (Text' "Header") Text
 
-data RpcResponse a
-  = RpcResponseClientException Text
-  | RpcResponseServerException
-  | RpcResponse a
-  deriving (Eq, Ord, Show, Read, Generic, Hashable, ToJSON, FromJSON)
+data RpcException
+  = RpcClientException Text
+  | RpcServerException
+  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON, Exception)
 
-$(deriveTypeScript defaultOptions ''RpcResponse)
+$(deriveTypeScript defaultOptions ''RpcException)
+
+type RpcResponse a = Either RpcException a
 
 data StreamingResponse a
   = Heartbeat
