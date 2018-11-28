@@ -3,11 +3,11 @@ import qualified AccessControl.Auth
 import qualified AccessControl.Client
 import qualified AccessControl.Permission as Permission
 import qualified AccessControl.TestClient as TestClient
+import qualified Amqp
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Yaml as Yaml
 import Test
-import qualified Transport.Amqp as Amqp
 import Vest
 
 acConfigDir :: FilePath

@@ -6,8 +6,8 @@ import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import qualified Tezos
 import qualified TezosStats.Internal as TezosStats
-import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified WebSocket
 
 data TimeSize = TimeSize
   { time :: Time

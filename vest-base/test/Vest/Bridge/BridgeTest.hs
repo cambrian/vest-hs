@@ -2,10 +2,10 @@ module Vest.Bridge.BridgeTest
   ( test_bridge
   ) where
 
+import qualified Amqp
 import Test
-import qualified Transport.Amqp as Amqp
-import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified WebSocket
 
 -- TODO: Add test for HeartbeatLostExceptions.
 -- TODO: Add test for server exceptions.

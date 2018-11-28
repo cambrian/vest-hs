@@ -1,11 +1,11 @@
-module TezosOperationQueue
-  ( module TezosOperationQueue
+module TezosInjector
+  ( module TezosInjector
   ) where
 
 import qualified AccessControl.Client
 import qualified Tezos
-import TezosOperationQueue.Api as TezosOperationQueue
-import TezosOperationQueue.Internal as TezosOperationQueue
+import TezosInjector.Api as TezosInjector
+import TezosInjector.Internal as TezosInjector
 import Vest
 
 type Api = InjectEndpoint
@@ -19,8 +19,8 @@ instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  summary = "tezos-operation-queue v0.1.0"
-  description = "RPC queue for Tezos operations signed on the front-end."
+  summary = "tezos-injector v0.1.0"
+  description = "Injects Tezos operations and makes sure they go through."
   init configPaths f = do
     (accessControlPublicKey :<|> seed) <- load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> webSocket) -> do

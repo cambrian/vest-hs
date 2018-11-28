@@ -1,4 +1,4 @@
-import TezosOperationQueue
+import TezosInjector
 import Vest
 
 main :: IO Void

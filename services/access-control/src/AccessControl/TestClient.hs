@@ -3,7 +3,7 @@ module AccessControl.TestClient
   ) where
 
 import qualified AccessControl.Client
-import qualified Transport.Amqp as Amqp
+import qualified Amqp
 import Vest
 
 -- | General purpose test client

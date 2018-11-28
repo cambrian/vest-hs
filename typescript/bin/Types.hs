@@ -4,16 +4,16 @@ import qualified DummyManager
 import System.Console.CmdArgs
 import System.Random
 import Text.Replace
-import qualified TezosOperationQueue
+import qualified TezosInjector
 import qualified TezosStats
-import qualified Transport.WebSocket as WebSocket
 import Typescript
 import Vest hiding (Args, summary)
+import qualified WebSocket
 
 typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =
   [ generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
-  , generateTsDeclarations (Proxy :: Proxy TezosOperationQueue.Api)
+  , generateTsDeclarations (Proxy :: Proxy TezosInjector.Api)
   , generateTsDeclarations (Proxy :: Proxy TezosStats.Api)
   , generateTsDeclarations (Proxy :: Proxy TezosStats.AuxiliaryTypes)
   -- Put any additional APIs here.

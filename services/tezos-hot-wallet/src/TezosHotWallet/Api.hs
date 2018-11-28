@@ -4,10 +4,10 @@ module TezosHotWallet.Api
 
 import qualified AccessControl.Auth
 import qualified AccessControl.Permission as Permission
+import qualified Amqp
 import qualified Tezos
 import TezosHotWallet.Internal
 import TezosHotWallet.Internal as TezosHotWallet.Api (PaymentEvent(..))
-import qualified Transport.Amqp as Amqp
 import Vest
 
 type PaymentEvents = Event T Amqp.T "payments" PaymentEvent

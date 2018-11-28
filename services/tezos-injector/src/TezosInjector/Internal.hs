@@ -1,12 +1,12 @@
-module TezosOperationQueue.Internal
-  ( module TezosOperationQueue.Internal
+module TezosInjector.Internal
+  ( module TezosInjector.Internal
   ) where
 
 import qualified AccessControl.Client
+import qualified Amqp
 import qualified Postgres
-import qualified Transport.Amqp as Amqp
-import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified WebSocket
 
 data T = T
   { dbPool :: Pool (Specific T Postgres.Connection)

@@ -1,4 +1,4 @@
-module Transport.Amqp
+module Amqp
   ( T(..)
   , Config(..)
   ) where

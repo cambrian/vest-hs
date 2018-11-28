@@ -6,7 +6,7 @@ module AccessControl.Client
 import qualified AccessControl
 import qualified AccessControl.Auth as Auth
 import qualified AccessControl.Permission as Permission
-import qualified Transport.Amqp as Amqp
+import qualified Amqp
 import Vest
 
 -- Contains logic for both signing and verification. Not split up because most services will

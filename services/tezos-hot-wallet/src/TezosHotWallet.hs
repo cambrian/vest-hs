@@ -16,7 +16,7 @@ import TezosChainWatcher.Api as TezosChainWatcher
 import TezosHotWallet.Api as TezosHotWallet
 import TezosHotWallet.Db
 import TezosHotWallet.Internal as TezosHotWallet
-import TezosOperationQueue.Api as TezosOperationQueue
+import TezosInjector.Api as TezosInjector
 import Vest
 
 blockConsumer :: T -> Consumers FinalizedBlockEvents
@@ -54,8 +54,7 @@ payoutHandler t@T {dbPool, tezosCli} AccessControl.Auth.Claims {name} (requests,
         map (\PayoutRequest {to, size} -> (to, size)) requests
   signedTransactionBatch <-
     Tezos.Cli.forgeBatchTransaction tezosCli recipients fee
-  let inject =
-        makeClient t (Proxy :: Proxy TezosOperationQueue.InjectVestEndpoint)
+  let inject = makeClient t (Proxy :: Proxy TezosInjector.InjectVestEndpoint)
   hash <- inject signedTransactionBatch
   time <- now
   Pg.runLogged dbPool $

@@ -5,7 +5,7 @@ module AccessControl.Api
 import qualified AccessControl.Auth as Auth
 import qualified AccessControl.Internal as AccessControl
 import qualified AccessControl.Permission as Permission
-import qualified Transport.Amqp as Amqp
+import qualified Amqp
 import Vest
 
 type TokenEndpoint
