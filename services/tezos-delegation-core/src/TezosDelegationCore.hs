@@ -152,6 +152,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                 ([], size)
                 billsOutstanding_
             shouldRefund = isPlatformDelegate_ && refundSize > 0
+            -- ^ Note: in the future we may want more sophisticated logic re. when to make refunds
         dividendsPaid <-
           foldr (<>) [] <$>
           mapM (Pg.runLogged dbPool . dividendsForBill) billIdsPaid
@@ -200,7 +201,7 @@ paymentConsumer t@T {dbPool, operationFee} =
                  [ Payment
                      idx
                      (PayoutId $
-                      if shouldRefundg
+                      if shouldRefund
                         then Just refundId
                         else Nothing)
                      time
