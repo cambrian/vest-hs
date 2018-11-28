@@ -1,4 +1,5 @@
 -- Module for super base things. This file should be mostly reexports.
+-- TODO: We should review the ordering of functions in this file (and maybe group them into files).
 module Vest.Prelude.Core
   ( module Vest.Prelude.Core
   ) where
@@ -183,7 +184,7 @@ fromRightOrThrowLeft (Left e) = throw e
 fromRightOrThrowLeft (Right a) = return a
 
 justSTM :: STM (Maybe a) -> STM a
--- ^ Retries until Just is received
+-- ^ Retries until Just is received.
 justSTM s =
   s >>= \case
     Nothing -> retry
@@ -237,7 +238,7 @@ getHostPid = do
   CPid pid <- getProcessID
   return $ pack host <> ":" <> show pid
 
--- | Consider using units of measure for this
+-- | Consider using units of measure for this.
 class VectorDivisible a where
   (^/^) :: a -> a -> Rational
 
@@ -248,7 +249,7 @@ instance Num a => AdditiveGroup a where
   negateV = negate
   (^-^) = (-)
 
--- | Compiler doesn't like this
+-- | Compiler doesn't like this:
 -- instance Num a => VectorSpace a where
 --   type Scalar a = a
 --   (*^) = (*)

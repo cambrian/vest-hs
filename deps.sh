@@ -1,7 +1,6 @@
 #!/bin/bash
 # Updates any volatile dependencies (those that aren't under some package control system, like our
-# own executables) and places them in the Haskell local bin (which should be in your path after
-# running setup.sh).
+# own executables) and places them in the ~/.vest-hs directory.
 
 cd $TMPDIR
 rm -rf eztz-simple
@@ -15,6 +14,8 @@ npm run-script build > ~/.vest-hs/eztz-simple-build.log 2>&1
 cp -f lib/eztz-simple ~/.vest-hs/
 chmod +x ~/.vest-hs/eztz-simple
 echo "Copied eztz-simple to ~/.vest-hs."
-echo "Downloading funnel"
-curl -L https://github.com/agnivade/funnel/releases/download/v0.2.1/funnel_darwin-amd64 > ~/.vest-hs/funnel_darwin-amd64
+echo "Downloading funnel (logging tool)."
+# Eventually: Maybe some magic to build the right funnel executable by platform?
+curl -L https://github.com/agnivade/funnel/releases/download/v0.2.1/funnel_darwin-amd64 > ~/.vest-hs/funnel_darwin-amd64 2>~/.vest-hs/funnel-download.log
 chmod +x ~/.vest-hs/funnel_darwin-amd64
+echo "Copied funnel to ~/.vest-hs."

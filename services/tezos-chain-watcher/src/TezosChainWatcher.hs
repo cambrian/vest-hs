@@ -26,13 +26,13 @@ monitorOperation T {dbPool, provisionalBlockEventStream} (opHash, threshold) = d
   (statusWriter, statusStream) <- newStream
   lastBlockHashVar <- newEmptyTMVarIO
   opStatusVar <- newEmptyTMVarIO
-  -- | Save a new op status.
+  -- Save a new op status.
   let saveOpStatus newOpStatus = do
         void $ atomically $ swapTMVar opStatusVar newOpStatus
         writeStream statusWriter newOpStatus
-  -- | See if a block event contains the op hash being monitored.
+  -- See if a block event contains the op hash being monitored.
   let opContainedIn Tezos.BlockEvent {operations} = opHash `elem` operations
-  -- | Query the DB for an op status.
+  -- Query the DB for an op status.
   let materializeOpStatus currentBlockNumber = do
         blockInfoMaybe <- Pg.runLogged dbPool $ selectBlockInfoForOpHash opHash
         case blockInfoMaybe of
