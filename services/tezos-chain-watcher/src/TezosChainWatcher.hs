@@ -204,3 +204,5 @@ instance Service T where
   eventProducers t =
     (return $ finalizedBlockEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()
+
+type PublicApi = RpcSpec T

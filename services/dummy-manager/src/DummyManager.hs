@@ -8,16 +8,6 @@ import DummyManager.Api as DummyManager
 import DummyManager.Internal as DummyManager
 import Vest
 
-type Api
-   = AddIntsEndpoint
-     :<|> AddIntsBadEndpoint
-     :<|> EchoThriceEndpoint
-     :<|> EchoThriceBadEndpoint
-     :<|> ConcatTextAuthEndpoint
-     :<|> EchoThriceAuthEndpoint
-     :<|> VoidEndpoint
-     :<|> VoidStreamEndpoint
-
 addInts :: AddIntsRequest -> IO Int
 addInts AddIntsRequest {a, b} = do
   threadDelay (ms 30)
@@ -45,15 +35,15 @@ unit _ = return ()
 unitStream :: () -> IO (Stream ValueBuffer ())
 unitStream _ = streamFromList $ replicate 3 ()
 
-handlers :: Handlers Api
-handlers =
-  addInts :<|> addInts :<|> echoThrice :<|> echoThrice :<|> concatTextAuth :<|>
-  echoThriceAuth :<|>
-  unit :<|>
-  unitStream
-
 instance Service T where
-  type RpcSpec T = Api
+  type RpcSpec T = AddIntsEndpoint
+                   :<|> AddIntsBadEndpoint
+                   :<|> EchoThriceEndpoint
+                   :<|> EchoThriceBadEndpoint
+                   :<|> ConcatTextAuthEndpoint
+                   :<|> EchoThriceAuthEndpoint
+                   :<|> VoidEndpoint
+                   :<|> VoidStreamEndpoint
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
@@ -62,7 +52,13 @@ instance Service T where
   init configPaths f =
     withLoadable configPaths $ \(webSocket :<|> redis) ->
       f $ T {webSocket, redis}
-  rpcHandlers _ = handlers
+  rpcHandlers _ =
+    addInts :<|> addInts :<|> echoThrice :<|> echoThrice :<|> concatTextAuth :<|>
+    echoThriceAuth :<|>
+    unit :<|>
+    unitStream
   valuesPublished _ = ()
   eventProducers _ = ()
   eventConsumers _ = ()
+
+type PublicApi = RpcSpec T

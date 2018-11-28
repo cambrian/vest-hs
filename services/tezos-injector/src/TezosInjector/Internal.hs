@@ -17,7 +17,7 @@ data T = T
   }
 
 instance HasNamespace T where
-  type Namespace T = "tezos-operation-queue"
+  type Namespace T = "tezos-injector"
 
 instance Has (Pool (Specific T Postgres.Connection)) T where
   get = dbPool

@@ -12,9 +12,9 @@ import qualified WebSocket
 
 typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =
-  [ generateTsDeclarations (Proxy :: Proxy DummyManager.Api)
-  , generateTsDeclarations (Proxy :: Proxy TezosInjector.Api)
-  , generateTsDeclarations (Proxy :: Proxy TezosStats.Api)
+  [ generateTsDeclarations (Proxy :: Proxy DummyManager.PublicApi)
+  , generateTsDeclarations (Proxy :: Proxy TezosInjector.PublicApi)
+  , generateTsDeclarations (Proxy :: Proxy TezosStats.PublicApi)
   , generateTsDeclarations (Proxy :: Proxy TezosStats.AuxiliaryTypes)
   -- Put any additional APIs here.
   ]

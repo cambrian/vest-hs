@@ -3,22 +3,11 @@ module TezosStats
   ( module TezosStats
   ) where
 
--- import qualified AccessControl.Client as AccessControlClient
 import qualified Data.HashMap.Strict as HashMap
-
--- import qualified Db
 import qualified Tezos
 import TezosStats.Api as TezosStats
 import TezosStats.Internal as TezosStats
-
--- import qualified Transport.Amqp as Amqp
 import Vest
-
-type Api
-   = OverviewEndpoint
-     :<|> BakersEndpoint
-     :<|> ImplicitEndpoint
-     :<|> OperationEndpoint
 
 overview :: T -> () -> IO TezosStats.OverviewResponse
 overview T {rawStubData} _ = do
@@ -56,16 +45,6 @@ operation T {rawStubData, streamDelayMillis} opHash = do
         closeStream writer
       return stream
 
-type AuxiliaryTypes
-   = Baker
-     :<|> DelegateFraction
-     :<|> DelegateInfo
-     :<|> LedgerOperation
-     :<|> LedgerOperationType
-     :<|> OriginatedAddress
-     :<|> TimeRate
-     :<|> TimeSize
-
 newtype RawStubData =
   RawStubData Text
   deriving newtype (IsString, FromJSON)
@@ -74,10 +53,13 @@ instance Loadable RawStubData where
   configFile = [relfile|stub-data.json|]
 
 instance Service T where
+  type RpcSpec T = OverviewEndpoint
+                   :<|> BakersEndpoint
+                   :<|> ImplicitEndpoint
+                   :<|> OperationEndpoint
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  type RpcSpec T = Api
   summary = "tezos-stats v0.1.0"
   description = "Front-end stats server for Tezos."
   init configPaths f = do
@@ -88,3 +70,15 @@ instance Service T where
   valuesPublished _ = ()
   eventProducers _ = ()
   eventConsumers _ = ()
+
+type PublicApi = RpcSpec T
+
+type AuxiliaryTypes
+   = Baker
+     :<|> DelegateFraction
+     :<|> DelegateInfo
+     :<|> LedgerOperation
+     :<|> LedgerOperationType
+     :<|> OriginatedAddress
+     :<|> TimeRate
+     :<|> TimeSize

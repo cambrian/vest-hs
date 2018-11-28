@@ -7,7 +7,6 @@ import System.Console.CmdArgs
 import System.Directory
 import System.FilePath
 import Text.EDE
-
 import qualified TezosInjector
 import qualified TezosStats
 import Typescript
@@ -16,11 +15,11 @@ import Vest hiding (Args, (</>), summary)
 callersToGenerate :: [Object]
 callersToGenerate =
   [ specToNamespaceObject
-      (Proxy :: Proxy DummyManager.T, Proxy :: Proxy DummyManager.Api)
+      (Proxy :: Proxy DummyManager.T, Proxy :: Proxy DummyManager.PublicApi)
   , specToNamespaceObject
-      (Proxy :: Proxy TezosInjector.T, Proxy :: Proxy TezosInjector.Api)
+      (Proxy :: Proxy TezosInjector.T, Proxy :: Proxy TezosInjector.PublicApi)
   , specToNamespaceObject
-      (Proxy :: Proxy TezosStats.T, Proxy :: Proxy TezosStats.Api)
+      (Proxy :: Proxy TezosStats.T, Proxy :: Proxy TezosStats.PublicApi)
   -- Put any additional APIs here.
   ]
 

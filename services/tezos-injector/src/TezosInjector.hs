@@ -2,20 +2,28 @@ module TezosInjector
   ( module TezosInjector
   ) where
 
+import qualified AccessControl.Auth
 import qualified AccessControl.Client
 import qualified Tezos
 import TezosInjector.Api as TezosInjector
 import TezosInjector.Internal as TezosInjector
 import Vest
 
-type Api = InjectEndpoint
-
--- TODO: Un-stub; add Vest inject.
+-- TODO: Un-stub.
 inject :: T -> Tezos.SignedOperation -> IO ()
-inject _ _ = return ()
+inject _ _ = panic "unimplemented"
+
+-- TODO: Un-stub.
+injectVest ::
+     T
+  -> AccessControl.Auth.Claims
+  -> Tezos.SignedOperation
+  -> IO Tezos.OperationHash
+injectVest _ _ _ = panic "unimplemented"
 
 instance Service T where
-  type RpcSpec T = Api
+  type RpcSpec T = InjectEndpoint
+                   :<|> InjectVestEndpoint
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
@@ -27,7 +35,9 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {dbPool, amqp, redis, webSocket, accessControlClient}
-  rpcHandlers = inject
+  rpcHandlers t = inject t :<|> injectVest t
   valuesPublished _ = ()
   eventProducers _ = ()
   eventConsumers _ = ()
+
+type PublicApi = InjectEndpoint
