@@ -9,8 +9,8 @@ import Control.Concurrent.STM.Delay as Vest.Prelude.Core
 import Control.Concurrent.STM.TMVar as Vest.Prelude.Core
 import Control.Concurrent.STM.TSem as Vest.Prelude.Core
 import Control.Concurrent.STM.TVar as Vest.Prelude.Core
-import qualified Control.Exception as Evil (Exception, throwTo)
-import Control.Exception.Safe as Vest.Prelude.Core
+import Control.Exception.Safe as Vest.Prelude.Core hiding (throwTo)
+import qualified Control.Exception.Safe
 import Control.Monad.Extra as Vest.Prelude.Core
 import Control.Monad.STM as Vest.Prelude.Core
 import Control.Monad.Trans.Maybe as Vest.Prelude.Core
@@ -166,9 +166,9 @@ asyncDetached = Async.async
 asyncDetached' :: IO a -> IO (Async' t a)
 asyncDetached' x = Tagged <$> asyncDetached x
 
-evilThrowTo :: (Evil.Exception e) => ThreadId -> e -> IO ()
+evilThrowTo :: (Exception e) => ThreadId -> e -> IO ()
 -- ^ DO NOT USE unless you really really know what you're doing.
-evilThrowTo = Evil.throwTo
+evilThrowTo = Control.Exception.Safe.throwTo
 
 fromJustUnsafe :: (Exception e) => e -> Maybe a -> IO a
 fromJustUnsafe e Nothing = throw e

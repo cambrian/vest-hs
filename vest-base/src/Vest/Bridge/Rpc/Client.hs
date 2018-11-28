@@ -26,16 +26,6 @@ type family ClientBindings spec where
                   :<|> b) = (ClientBindings a
                              :<|> ClientBindings b)
 
-newtype ClientException =
-  ClientException Text
-  deriving (Eq, Show)
-  deriving anyclass (Exception)
-
-data ServerException =
-  ServerException
-  deriving (Eq, Show)
-  deriving anyclass (Exception)
-
 class Client t spec where
   makeClient :: t -> Proxy spec -> ClientBindings spec
 

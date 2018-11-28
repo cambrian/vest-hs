@@ -2,7 +2,6 @@ module Vest.Bridge.Rpc.Prelude
   ( module Vest.Bridge.Rpc.Prelude
   ) where
 
-import qualified Control.Exception as Evil
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import Vest.Prelude
@@ -96,4 +95,4 @@ $(deriveTypeScript defaultOptions ''StreamingResponse)
 newtype HeartbeatLostException =
   HeartbeatLostException Duration
   deriving (Eq, Read, Show, Generic)
-  deriving anyclass (Evil.Exception, ToJSON, FromJSON)
+  deriving anyclass (Exception, ToJSON, FromJSON)
