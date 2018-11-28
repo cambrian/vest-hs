@@ -41,8 +41,8 @@ replaceRules :: [Replace]
 replaceRules =
   [ Replace "IEndOfResults<T>" "IEndOfResults"
   , Replace "IHeartbeat<T>" "IHeartbeat"
-  , Replace "IRpcResponseClientException<T>" "IRpcResponseClientException"
-  , Replace "IRpcResponseServerException<T>" "IRpcResponseServerException"
+  , Replace "IRpcClientException<T>" "IRpcClientException"
+  , Replace "IRpcServerException<T>" "IRpcServerException"
   , Replace "Tagged<\"Header\", string>" "string"
   , Replace "\"" "\'"
   , Replace ";" ""
@@ -68,7 +68,7 @@ main = do
     unpack
       (versionText <> taggedType <> textAlias <> unitType <>
        (pack . formatTSDeclarations . concat $
-        [ getTypeScriptDeclarations (Proxy :: Proxy RpcResponse)
+        [ getTypeScriptDeclarations (Proxy :: Proxy RpcException)
         , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)
