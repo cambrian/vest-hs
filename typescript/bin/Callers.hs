@@ -8,7 +8,7 @@ import System.Directory
 import System.FilePath
 import Text.EDE
 
-import qualified TezosOperationQueue
+import qualified TezosInjector
 import qualified TezosStats
 import Typescript
 import Vest hiding (Args, (</>), summary)
@@ -18,8 +18,7 @@ callersToGenerate =
   [ specToNamespaceObject
       (Proxy :: Proxy DummyManager.T, Proxy :: Proxy DummyManager.Api)
   , specToNamespaceObject
-      ( Proxy :: Proxy TezosOperationQueue.T
-      , Proxy :: Proxy TezosOperationQueue.Api)
+      (Proxy :: Proxy TezosInjector.T, Proxy :: Proxy TezosInjector.Api)
   , specToNamespaceObject
       (Proxy :: Proxy TezosStats.T, Proxy :: Proxy TezosStats.Api)
   -- Put any additional APIs here.

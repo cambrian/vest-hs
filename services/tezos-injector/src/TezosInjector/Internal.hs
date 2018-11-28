@@ -1,5 +1,5 @@
-module TezosOperationQueue.Internal
-  ( module TezosOperationQueue.Internal
+module TezosInjector.Internal
+  ( module TezosInjector.Internal
   ) where
 
 import qualified AccessControl.Client

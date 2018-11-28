@@ -154,7 +154,7 @@ instance Contravariant StreamWriter where
   contramap f (StreamWriter write close) = StreamWriter (write . f) close
 
 contraM :: ((b -> IO Bool) -> a -> IO Bool) -> StreamWriter b -> StreamWriter a
--- ^ Generalized monadic contramap
+-- ^ Generalized effectful contramap
 {-# INLINE contraM #-}
 contraM f (StreamWriter write close) = StreamWriter (f write) close
 

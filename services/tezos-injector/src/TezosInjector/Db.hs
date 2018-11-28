@@ -1,5 +1,5 @@
-module TezosOperationQueue.Db
-  ( module TezosOperationQueue.Db
+module TezosInjector.Db
+  ( module TezosInjector.Db
   ) where
 
 import Postgres

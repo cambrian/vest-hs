@@ -87,7 +87,7 @@ library:
   - tezos-chain-watcher/src
   - tezos-delegation-core/src
   - tezos-hot-wallet/src
-  - tezos-operation-queue/src
+  - tezos-injector/src
   - tezos-stats/src
 
 executables:
@@ -116,9 +116,9 @@ executables:
     source-dirs:          tezos-hot-wallet/bin
     dependencies:
     - services
-  tezos-operation-queue:
+  tezos-injector:
     main:                 Main.hs
-    source-dirs:          tezos-operation-queue/bin
+    source-dirs:          tezos-injector/bin
     dependencies:
     - services
   tezos-stats:
@@ -178,9 +178,9 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  tezos-operation-queue-test:
+  tezos-injector-test:
     main:                       Spec.hs
-    source-dirs:                tezos-operation-queue/test
+    source-dirs:                tezos-injector/test
     ghc-options:
     - -threaded
     - -rtsopts
