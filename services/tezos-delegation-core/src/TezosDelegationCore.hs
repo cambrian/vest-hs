@@ -66,10 +66,7 @@ blockConsumer t@T {dbPool, platformFee} =
                        time)
                   delegations
               totalDividends =
-                foldr
-                  (\Dividend {size} tot -> tot + size)
-                  (fixedQty @Mutez 0)
-                  dividends_
+                foldr (\Dividend {size} tot -> tot + size) 0 dividends_
               grossDelegateReward = reward - totalDividends
               vestCut =
                 fixedOf Ceiling $ rationalOf grossDelegateReward ^* platformFee

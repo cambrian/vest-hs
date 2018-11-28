@@ -1,4 +1,6 @@
--- TODO: consider replacing safe-money with units for better interop with other dimensional types
+-- TODO: consider replacing safe-money with units (units of measure) for better interop with other
+-- dimensional types
+-- To construct FixedQty or RationalQty values, just use number literals.
 module Vest.Prelude.Money
   ( module Vest.Prelude.Money
   ) where
@@ -53,17 +55,8 @@ fixedOfRem ::
   => Approximation
   -> RationalQty currency
   -> (FixedQty currency, RationalQty currency)
--- ^ Converts rational qty to (fixed qty, remainder)
+-- ^ Rounds rational qty to (fixed qty, remainder)
 fixedOfRem = discreteFromDense
-
-rationalQty :: Rational -> Dense currency
-rationalQty = dense'
-
-fixedQty ::
-     forall unit currency. GoodScale (Scale currency unit)
-  => Integer
-  -> Discrete currency unit
-fixedQty = discrete
 
 instance VectorDivisible (RationalQty currency) where
   a ^/^ b = toRational a / toRational b
