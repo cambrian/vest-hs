@@ -2,11 +2,12 @@ module TezosStats.Internal
   ( module TezosStats.Internal
   ) where
 
+import Vest
+
 -- import qualified AccessControl.Client as AccessControlClient
 -- import qualified Db
--- import qualified Transport.Amqp as Amqp
-import qualified Transport.WebSocket as WebSocket
-import Vest
+-- import qualified Amqp
+import qualified WebSocket
 
 data T = T
     -- db :: Db.Connection

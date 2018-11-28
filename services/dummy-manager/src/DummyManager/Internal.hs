@@ -2,8 +2,8 @@ module DummyManager.Internal
   ( module DummyManager.Internal
   ) where
 
-import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified WebSocket
 
 data T = T
   { webSocket :: WebSocket.T

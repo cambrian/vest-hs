@@ -6,9 +6,9 @@ import System.Random
 import Text.Replace
 import qualified TezosOperationQueue
 import qualified TezosStats
-import qualified Transport.WebSocket as WebSocket
 import Typescript
 import Vest hiding (Args, summary)
+import qualified WebSocket
 
 typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =

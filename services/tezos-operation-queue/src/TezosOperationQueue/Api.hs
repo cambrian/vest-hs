@@ -4,11 +4,11 @@ module TezosOperationQueue.Api
 
 import qualified AccessControl.Auth
 import qualified AccessControl.Permission as Permission
+import qualified Amqp
 import qualified Tezos
 import qualified TezosOperationQueue.Internal as TezosOperationQueue
-import qualified Transport.Amqp as Amqp
-import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified WebSocket
 
 -- | Public endpoint for browsers to hit
 type InjectEndpoint

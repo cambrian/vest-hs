@@ -3,7 +3,7 @@ module AccessControl.Internal
   ) where
 
 import qualified AccessControl.Permission as Permission
-import qualified Transport.Amqp as Amqp
+import qualified Amqp
 import Vest
 
 type SignedToken = SignedText' "AccessToken"

@@ -3,8 +3,8 @@ module TezosDelegationCore.Internal
   ) where
 
 import qualified AccessControl.Client
+import qualified Amqp
 import qualified Postgres
-import qualified Transport.Amqp as Amqp
 import Vest
 
 data T = T

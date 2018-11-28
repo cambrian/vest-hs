@@ -3,10 +3,10 @@ module TezosHotWallet.Internal
   ) where
 
 import qualified AccessControl.Client
+import qualified Amqp
 import qualified Postgres
 import qualified Tezos
 import qualified Tezos.Cli
-import qualified Transport.Amqp as Amqp
 import Vest
 
 -- TODO: consider deduplicating PaymentEvent and Db.Payment

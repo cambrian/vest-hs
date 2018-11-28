@@ -3,10 +3,10 @@ module TezosChainWatcher.Internal
   ) where
 
 import qualified AccessControl.Client
+import qualified Amqp
 import qualified Postgres
 import qualified Tezos
 import qualified Tezos.Rpc
-import qualified Transport.Amqp as Amqp
 import Vest
 
 newtype TezosFinalizationLag =

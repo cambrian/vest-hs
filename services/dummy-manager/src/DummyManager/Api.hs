@@ -5,8 +5,8 @@ module DummyManager.Api
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import DummyManager.Internal as DummyManager
-import qualified Transport.WebSocket as WebSocket
 import Vest
+import qualified WebSocket
 
 data AddIntsRequest = AddIntsRequest
   { a :: Int

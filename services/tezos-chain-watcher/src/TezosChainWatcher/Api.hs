@@ -2,9 +2,9 @@ module TezosChainWatcher.Api
   ( module TezosChainWatcher.Api
   ) where
 
+import qualified Amqp
 import qualified Tezos
 import TezosChainWatcher.Internal
-import qualified Transport.Amqp as Amqp
 import Vest
 
 data RewardInfoRequest = RewardInfoRequest
