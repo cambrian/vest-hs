@@ -18,7 +18,7 @@ newtype PlatformFee =
 instance Loadable PlatformFee where
   configFile = [relfile|platform-fee.yaml|]
 
-blockConsumer :: T -> Consumers BlockEvents
+blockConsumer :: T -> Consumers FinalizedBlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; the relevant dividends are paid out when a delegator pays its bill.
 -- This happens in the payment consumer.
@@ -205,7 +205,7 @@ paymentConsumer t@T {dbPool, operationFee} =
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
-  type EventsConsumed T = BlockEvents
+  type EventsConsumed T = FinalizedBlockEvents
                           :<|> PaymentEvents
   type RpcSpec T = ()
   summary = "Tezos Delegation Core v0.1.0"

@@ -14,7 +14,7 @@ import TezosHotWallet.Internal as TezosHotWallet
 import TezosOperationQueue.Api as TezosOperationQueue
 import Vest
 
-blockConsumer :: T -> Consumers BlockEvents
+blockConsumer :: T -> Consumers FinalizedBlockEvents
 blockConsumer T {dbPool, paymentWriter, vestAddress} =
   let nextUnseen = Pg.runLogged dbPool $ Pg.nextUnseenIndex $ blocks schema
       f Tezos.BlockEvent {number = blockNum, transactions} = do
@@ -70,7 +70,7 @@ paymentMaterializer T {dbPool} idx_ = do
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = PaymentEvents
-  type EventsConsumed T = TezosChainWatcher.BlockEvents
+  type EventsConsumed T = TezosChainWatcher.FinalizedBlockEvents
   type RpcSpec T = PayoutEndpoint
   summary = "Tezos Hot Wallet v0.1.0"
   description = "The Vest hot wallet manager for Tezos."

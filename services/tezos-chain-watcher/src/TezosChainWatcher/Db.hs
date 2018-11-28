@@ -150,7 +150,7 @@ schema = unCheckDatabase checkedSchema
 data BlockState
   = NotDeleted -- Just not deleted.
   | Provisional -- Provisional and not deleted.
-  | Final -- Not provisional and not deleted.
+  | Finalized -- Not provisional and not deleted.
   deriving (Eq)
 
 -- This type signature is gnarly.
@@ -160,7 +160,7 @@ filterBlocksByState Provisional =
   filter_
     (\Block {blockIsProvisional, blockIsDeleted} ->
        (blockIsProvisional ==. val_ True) &&. (blockIsDeleted ==. val_ False))
-filterBlocksByState Final =
+filterBlocksByState Finalized =
   filter_
     (\Block {blockIsProvisional, blockIsDeleted} ->
        (blockIsProvisional ==. val_ False) &&. (blockIsDeleted ==. val_ False))
@@ -235,16 +235,29 @@ toBlockEvent (Block number hash predecessor cycleNumber fee time _ _ _ _) = do
       , transactions
       }
 
-selectFinalBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
-selectFinalBlockEventByNumber queryNumber = do
+selectFinalizedBlockEventByNumber :: Word64 -> Pg (Maybe Tezos.BlockEvent)
+selectFinalizedBlockEventByNumber queryNumber = do
   blockMaybe <-
     runSelectReturningOne $
     select $
     filter_ (\block -> blockNumber block ==. val_ queryNumber) $
-    filterBlocksByState Final (all_ (blocks schema))
+    filterBlocksByState Finalized (all_ (blocks schema))
   case blockMaybe of
     Nothing -> return Nothing
     Just block -> Just <$> toBlockEvent block
+
+selectBlockInfoForOpHash ::
+     Tezos.OperationHash -> Pg (Maybe (Tezos.BlockHash, Word64))
+selectBlockInfoForOpHash hash =
+  runSelectReturningOne $
+  select $ do
+    op <-
+      filter_ (\Operation {operationHash} -> operationHash ==. val_ hash) $
+      all_ (operations schema)
+    block <- filterBlocksByState NotDeleted $ all_ (blocks schema)
+    guard_ (operationBlockHash op ==. BlockHash (blockHash block))
+    let Block {blockHash, blockNumber} = block
+    pure (blockHash, blockNumber)
 
 insertTezosOpHashes :: Tezos.BlockHash -> Time -> [Tezos.OperationHash] -> Pg ()
 insertTezosOpHashes blockHash createdAt tezosOpHashes =

@@ -72,16 +72,12 @@ instance Indexable BlockEvent where
   type IndexOf BlockEvent = Word64
   index = number
 
-newtype OperationException =
-  OperationException Text
-  deriving (Eq, Read, Show, Generic)
-  deriving anyclass (Exception, ToJSON, FromJSON)
-
--- | the Word8 field is the number of blocks for which the operation has been in a given state, i.e.
--- confirmations.
--- TODO: move back to Vest.Prelude.Blockchain?
+-- | The Word8 field is the number of blocks for which the operation has been in a given state
+-- (i.e. confirmations of that state).
+-- Eventually: Move back to Vest.Prelude.Blockchain if other blockchains use this?
 data OperationStatus
   = NotIncluded Word8
   | Included (BlockHash, Word8)
   | Confirmed BlockHash
+  | Rejected
   deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)

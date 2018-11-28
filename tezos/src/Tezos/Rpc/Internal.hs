@@ -263,8 +263,8 @@ requestRetryPolicy :: RetryPolicy
 requestRetryPolicy =
   capDelay (30 * secMicros) $ exponentialBackoff (50 * milliMicros)
 
--- | Returns the updated event queue, any final block events to stream, any new provisional block
--- events, and any invalidated provisional block hashes.
+-- | Returns the updated event queue, any finalized block events to stream, any new provisional
+-- block events, and any invalidated provisional block hashes.
 updateEventQueueWith ::
      Http.Client
   -> Int
