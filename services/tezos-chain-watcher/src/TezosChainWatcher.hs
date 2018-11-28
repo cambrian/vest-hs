@@ -170,6 +170,7 @@ instance Service T where
   type RpcSpec T = RewardInfoEndpoint
                    :<|> MonitorOperationEndpoint
   type ValueSpec T = FinalizedHeightValue
+                     :<|> OperationFeeValue
   type EventsProduced T = FinalizedBlockEvents
   type EventsConsumed T = ()
   summary = "Tezos Chain Watcher v0.1.0"
@@ -180,6 +181,10 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
+      -- TODO: Make this actually report something useful.
+      -- Good starter task for newcomers to the codebase.
+      (operationFeeWriter, operationFeeStream) <- newStream
+      writeStream operationFeeWriter 0
       (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos finalizationLag
       f $
@@ -192,9 +197,10 @@ instance Service T where
           , finalizedBlockEventStream
           , provisionalBlockEventStream
           , finalizedHeightStream
+          , operationFeeStream
           }
   rpcHandlers t = rewardInfo t :<|> monitorOperation t
-  valuesPublished = finalizedHeightStream
+  valuesPublished t = finalizedHeightStream t :<|> operationFeeStream t
   eventProducers t =
     (return $ finalizedBlockEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()

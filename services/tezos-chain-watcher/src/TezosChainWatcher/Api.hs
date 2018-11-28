@@ -20,7 +20,6 @@ type MonitorOperationEndpoint
 
 type FinalizedHeightValue = ValueTopic T Amqp.T "finalizedHeight" Word64
 
--- TODO: Write.
-type OperationFeeValue = ValueTopic T Amqp.T "OperationFee" (FixedQty XTZ)
+type OperationFeeValue = ValueTopic T Amqp.T "operationFee" (FixedQty XTZ)
 
 type FinalizedBlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
