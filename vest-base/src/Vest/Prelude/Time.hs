@@ -98,10 +98,6 @@ timeoutRenewable t f = do
           Just a -> Right a
   return (renew, result)
 
-throwIfTimeout :: Either TimeoutException a -> IO a
-throwIfTimeout (Left exn) = throw exn
-throwIfTimeout (Right a) = return a
-
 data ZeroIntervalException =
   ZeroIntervalException
   deriving (Eq, Show, Ord, Generic)

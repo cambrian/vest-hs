@@ -178,9 +178,9 @@ eitherFromMaybe :: l -> Maybe r -> Either l r
 eitherFromMaybe l Nothing = Left l
 eitherFromMaybe _ (Just r) = Right r
 
-fromRightOrThrowLeft :: (Exception e) => Either e a -> IO a
-fromRightOrThrowLeft (Left e) = throw e
-fromRightOrThrowLeft (Right a) = return a
+fromRightUnsafe :: (Exception e) => Either e a -> IO a
+fromRightUnsafe (Left e) = throw e
+fromRightUnsafe (Right a) = return a
 
 justSTM :: STM (Maybe a) -> STM a
 -- ^ Retries until Just is received

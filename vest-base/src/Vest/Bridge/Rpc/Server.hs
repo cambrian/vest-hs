@@ -92,7 +92,7 @@ serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
         (do claims <-
               atomically
                 (verifyRequest (get @(AuthVerifier auth) t) reqText headers) >>=
-              fromRightOrThrowLeft
+              fromRightUnsafe
             req <- deserializeUnsafe' @fmt reqText
             sender (sendToClient . RpcResponse) (handler claims req))
         [ Handler $ \(x :: AuthException) -> do

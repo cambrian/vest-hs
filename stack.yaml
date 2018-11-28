@@ -1,9 +1,9 @@
 resolver: lts-12.14
 
 packages:
-- services
-- tezos
-- typescript
+# - services
+# - tezos
+# - typescript
 - vest-base
 
 extra-deps:

@@ -73,27 +73,15 @@ callDirect ::
   -> req
   -> IO res
 callDirect t req = do
-  resultVar <- newEmptyMVar
-  mainThread <- myThreadId
   (headersWithSignature, reqText) <-
     packRequest @fmt (get @(AuthSigner auth) t) req
   let rawRoute = serialize' @'Pretty $ Namespaced @server (Proxy :: Proxy route)
-      handleResponse resOrExcText =
-        deserializeUnsafe' @fmt resOrExcText >>= \case
-          RpcResponseClientException eText ->
-            evilThrowTo mainThread $ ClientException eText
-          RpcResponseServerException -> evilThrowTo mainThread ServerException
-          RpcResponse res -> putMVar resultVar res
-  Tagged doCleanup <-
-    callRaw
-      (get @transport t)
-      rawRoute
-      headersWithSignature
-      reqText
-      handleResponse
-  result <- timeout (natSeconds @timeout) (readMVar resultVar)
-  doCleanup
-  throwIfTimeout result
+  callRaw (get @transport t) rawRoute headersWithSignature reqText $ \nextRes -> do
+    resText <- timeout (natSeconds @timeout) nextRes >>= fromRightUnsafe
+    deserializeUnsafe' @fmt resText >>= \case
+      RpcResponseClientException eText -> throw $ ClientException eText
+      RpcResponseServerException -> throw ServerException
+      RpcResponse res -> return res
 
 callStreaming ::
      forall timeout fmt auth transport server route t req res a.
@@ -115,46 +103,32 @@ callStreaming t req f = do
   let timeout_ = natSeconds @timeout
       twoHeartbeats = 2 *^ timeoutsPerHeartbeat *^ timeout_
       rawRoute = serialize' @'Pretty $ Namespaced @server (Proxy :: Proxy route)
-  (resultPusher, results) <- newStream
-  (renewHeartbeatTimer, heartbeatLostOrDone) <-
-    timeoutRenewable twoHeartbeats $ waitStream results
-  gotFirstResponse <- newEmptyMVar
   mainThread <- myThreadId
   (headersWithSignature, reqText) <-
     packRequest @fmt (get @(AuthSigner auth) t) req
-  let handleResponse resOrExcText = do
-        void $ tryPutMVar gotFirstResponse ()
-        renewHeartbeatTimer twoHeartbeats
-        deserializeUnsafe' @fmt resOrExcText >>= \case
-          RpcResponseClientException eText ->
-            evilThrowTo mainThread $ ClientException eText
-          RpcResponseServerException -> evilThrowTo mainThread ServerException
-            -- does this cause doCleanup to get skipped?
-          RpcResponse response ->
-            case response of
-              Heartbeat -> return ()
-              Result res -> writeStream resultPusher res
-              EndOfResults -> closeStream resultPusher
-  Tagged doCleanup <-
-    callRaw
-      (get @transport t)
-      rawRoute
-      headersWithSignature
-      reqText
-      handleResponse
-  timeout timeout_ (takeMVar gotFirstResponse) >>= \case
-    Left exn -> do
-      closeStream resultPusher
-      doCleanup
-      throw exn
-    Right () ->
-      void . asyncDetached $ do
-        heartbeatLostOrDone_ <- heartbeatLostOrDone
-        doCleanup
-        case heartbeatLostOrDone_ of
-          Left (TimeoutException time) ->
-            evilThrowTo mainThread $ HeartbeatLostException time
-          _ -> return ()
+  (resultWriter, results) <- newStream
+  -- TODO: replace with withAsync?
+  void . async $
+    callRaw (get @transport t) rawRoute headersWithSignature reqText $ \nextRes -> do
+      let timeoutAck f = timeout timeout_ f >>= fromRightUnsafe
+          timeoutHeartbeats f =
+            timeout twoHeartbeats f >>-
+            first (\(TimeoutException time) -> HeartbeatLostException time) >>=
+            fromRightUnsafe
+          loop timeout' = do
+            (resText :: Text' "Response") <- timeout' nextRes
+            deserializeUnsafe' @fmt resText >>= \case
+              RpcResponseClientException eText ->
+                throw $ ClientException eText -- TODO: close result stream on exceptions?
+              RpcResponseServerException -> throw ServerException
+              RpcResponse response ->
+                case response of
+                  Heartbeat -> loop timeoutHeartbeats
+                  Result res -> do
+                    writeStream resultWriter res
+                    loop timeoutHeartbeats
+                  EndOfResults -> closeStream resultWriter
+      loop timeoutAck `catchAny` evilThrowTo mainThread
   f results
 
 instance ( KnownNat timeout

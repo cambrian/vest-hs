@@ -33,8 +33,9 @@ class RpcTransport t where
     -> Route
     -> Headers
     -> Text' "Request"
-    -> (Text' "Response" -> IO ()) -- ^ Called per response.
-    -> IO (IO' "Cleanup" ()) -- ^ TODO: refactor to take a callback that is passed a nextResponse Fn, so that cleanup is handled automatically.
+    -> (IO (Text' "Response") -> IO a)
+    -- ^ Response consumer callback. The transport may run cleanup after this fn finishes.
+    -> IO a
 
 -- | A descriptive reimplementation of Maybe.
 data AuthOrNoAuth a
