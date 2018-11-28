@@ -36,6 +36,9 @@ textAlias = "type Text<T extends string> = Tagged<T, string>\n\n"
 unitType :: Text
 unitType = "type Unit = Array<Boolean>\n\n"
 
+rpcResponseType :: Text
+rpcResponseType = "type RpcResponse<T> = Either<RpcException, T>\n\n"
+
 -- Hard-coded substitutions.
 replaceRules :: [Replace]
 replaceRules =
@@ -66,9 +69,10 @@ main = do
   versionText <- version
   putText . pack . replaceWithList replaceRules $
     unpack
-      (versionText <> taggedType <> textAlias <> unitType <>
+      (versionText <> taggedType <> textAlias <> unitType <> rpcResponseType <>
        (pack . formatTSDeclarations . concat $
-        [ getTypeScriptDeclarations (Proxy :: Proxy RpcException)
+        [ getTypeScriptDeclarations (Proxy :: Proxy (RpcResponse ())) -- Either.
+        , getTypeScriptDeclarations (Proxy :: Proxy RpcException)
         , getTypeScriptDeclarations (Proxy :: Proxy StreamingResponse)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.RequestMessage)
         , getTypeScriptDeclarations (Proxy :: Proxy WebSocket.ResponseMessage)
