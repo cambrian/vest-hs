@@ -38,6 +38,7 @@ data PayoutT f = Payout
   , hash :: C f Tezos.OperationHash
   , to :: C f Tezos.Address
   , size :: C f (FixedQty XTZ)
+  , fee :: C f (FixedQty XTZ)
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 

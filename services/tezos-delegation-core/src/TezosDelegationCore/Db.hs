@@ -72,7 +72,7 @@ data BillT f = Bill
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
   , createdAt :: C f Time
-  , paidAt :: C f (Maybe Time)
+  , paidAt :: C (Nullable f) Time
   } deriving (Generic, Beamable)
 
 type Bill = BillT Identity
@@ -156,9 +156,12 @@ deriving instance Read (PrimaryKey DividendT Identity)
 deriving instance Show (PrimaryKey DividendT Identity)
 
 -- Presence in this table means that a particular payout has been accepted by the hot wallet, and
--- will be completed. The size and recipient don't need to be stored here.
+-- will be completed.
 data PayoutT f = Payout
   { id :: C f UUID
+  , to :: C f Tezos.Address
+  , size :: C f (FixedQty XTZ)
+  , fee :: C f (FixedQty XTZ)
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -186,32 +189,6 @@ deriving instance Eq (PrimaryKey PayoutT (Nullable Identity))
 deriving instance Read (PrimaryKey PayoutT (Nullable Identity))
 
 deriving instance Show (PrimaryKey PayoutT (Nullable Identity))
-
-data RefundT f = Refund
-  { payment :: PrimaryKey PaymentT f
-  , size :: C f (FixedQty XTZ)
-  , payout :: PrimaryKey PayoutT f
-  , createdAt :: C f Time
-  } deriving (Generic, Beamable)
-
-type Refund = RefundT Identity
-
-deriving instance Eq Refund
-
-deriving instance Read Refund
-
-deriving instance Show Refund
-
-instance Table RefundT where
-  data PrimaryKey RefundT f = RefundPayment (PrimaryKey PaymentT f)
-                              deriving (Generic, Beamable)
-  primaryKey Refund {payment} = RefundPayment payment
-
-deriving instance Eq (PrimaryKey RefundT Identity)
-
-deriving instance Read (PrimaryKey RefundT Identity)
-
-deriving instance Show (PrimaryKey RefundT Identity)
 
 data DelegationT f = Delegation
   { delegator :: C f Tezos.OriginatedAddress
@@ -247,6 +224,7 @@ deriving instance Show (PrimaryKey DelegationT Identity)
 -- | Represents payments processed.
 data PaymentT f = Payment
   { idx :: C f Word64
+  , refund :: PrimaryKey PayoutT (Nullable f)
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -279,7 +257,6 @@ data Schema f = Schema
   , bills :: f (TableEntity BillT)
   , payouts :: f (TableEntity PayoutT)
   , dividends :: f (TableEntity DividendT)
-  , refunds :: f (TableEntity RefundT)
   , payouts :: f (TableEntity PayoutT)
   , delegations :: f (TableEntity DelegationT)
   , payments :: f (TableEntity PaymentT)

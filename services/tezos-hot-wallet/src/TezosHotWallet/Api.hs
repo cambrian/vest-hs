@@ -17,8 +17,11 @@ data PayoutRequest = PayoutRequest
   { id :: UUID
   , to :: Tezos.Address
   , size :: FixedQty XTZ
-  , fee :: FixedQty XTZ
   } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
 
+-- For simplicity, we only expose a batch endpoint.
+-- The FixedQty XTZ parameter is the transaction fee
+-- TODO: formatting lmao
 type PayoutEndpoint
-   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.IssuePayout)) T Amqp.T "payout" PayoutRequest ('Direct ())
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.IssuePayout)) T Amqp.T "payout" ( [PayoutRequest]
+                                                                                       , FixedQty XTZ) ('Direct ())

@@ -4,6 +4,7 @@ module TezosHotWallet
 
 import qualified AccessControl.Auth
 import qualified AccessControl.Client
+import qualified Data.HashMap.Strict as HashMap
 import qualified Postgres as Pg
 import qualified Tezos
 import qualified Tezos.Cli
@@ -40,23 +41,27 @@ blockConsumer T {dbPool, paymentWriter, vestAddress} =
             Pg.onConflictDefault
    in (nextUnseen, f)
 
-payoutHandler :: T -> AccessControl.Auth.Claims -> PayoutRequest -> IO ()
-payoutHandler t@T {dbPool, tezosCli} AccessControl.Auth.Claims {name} req@PayoutRequest { id
-                                                                                        , to
-                                                                                        , size
-                                                                                        , fee
-                                                                                        } = do
-  log Debug "payout requested" (name, req)
-  signedTransaction <- Tezos.Cli.forgeTransaction tezosCli to (size - fee) fee
+payoutHandler ::
+     T -> AccessControl.Auth.Claims -> ([PayoutRequest], FixedQty XTZ) -> IO ()
+payoutHandler t@T {dbPool, tezosCli} AccessControl.Auth.Claims {name} (requests, fee) = do
+  log Debug "payouts requested" (name, requests)
+  let recipients =
+        HashMap.fromList $
+        map (\PayoutRequest {to, size} -> (to, size)) requests
+  signedTransactionBatch <-
+    Tezos.Cli.forgeBatchTransaction tezosCli recipients fee
   let inject =
         makeClient t (Proxy :: Proxy TezosOperationQueue.InjectVestEndpoint)
-  hash <- inject signedTransaction
+  hash <- inject signedTransactionBatch
   time <- now
   Pg.runLogged dbPool $
     Pg.runInsert $
     Pg.insert
       (payouts schema)
-      (Pg.insertValues [Payout id hash to size time])
+      (Pg.insertValues $
+       map
+         (\PayoutRequest {id, to, size} -> Payout id hash to size fee time)
+         requests)
       Pg.onConflictDefault
 
 paymentMaterializer :: T -> Word64 -> IO PaymentEvent
