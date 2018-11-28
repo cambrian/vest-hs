@@ -38,7 +38,7 @@ import Protolude as Vest.Prelude.Core hiding
   , getSum
   , handle
   , handleJust
-  , log -- clashes with Logger.log
+  , log -- clashes with Log.log
   , magnitude
   , mask
   , mask_

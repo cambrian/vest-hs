@@ -85,7 +85,7 @@ serve_ ::
   -> IO ()
 serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
   where
-    rawRoute = serialize' @'Pretty $ namespaced @t (Proxy :: Proxy route)
+    rawRoute = serialize' @'Pretty $ Namespaced @t (Proxy :: Proxy route)
     asyncHandle headers reqText respond =
       async $
       catches

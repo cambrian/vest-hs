@@ -9,6 +9,7 @@ module Transport.WebSocket
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import qualified Data.HashTable.IO as HashTable
+import Data.Text (breakOn)
 import qualified Network.HTTP.Types as Http
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
@@ -191,9 +192,7 @@ instance RpcTransport T where
     -> (Text' "Response" -> IO ())
     -> IO (IO' "Cleanup" ())
   callRaw T {clientRequestHandlers, clientResponseHandlers} route headers reqText respond = do
-    namespace <-
-      deserializeUnsafe' @'Pretty @(Namespaced "Server" Text) route >>-
-      getNamespace'
+    let namespace = Tagged $ fst $ breakOn "/" $ untag route
     id <- nextUUID'
     makeRequest <-
       HashTable.lookup clientRequestHandlers namespace >>=
