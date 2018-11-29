@@ -1,4 +1,4 @@
-import TezosDelegationCore
+import TezosPlatformCore
 import Vest
 
 main :: IO Void

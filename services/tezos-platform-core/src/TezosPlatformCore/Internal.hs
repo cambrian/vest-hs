@@ -1,5 +1,5 @@
-module TezosDelegationCore.Internal
-  ( module TezosDelegationCore.Internal
+module TezosPlatformCore.Internal
+  ( module TezosPlatformCore.Internal
   ) where
 
 import qualified AccessControl.Client
@@ -17,7 +17,7 @@ data T = T
   }
 
 instance HasNamespace T where
-  type Namespace T = "tezos-delegation-core"
+  type Namespace T = "tezos-platform-core"
 
 instance Has (Pool (Specific T Postgres.Connection)) T where
   get = dbPool

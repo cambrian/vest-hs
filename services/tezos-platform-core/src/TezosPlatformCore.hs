@@ -1,14 +1,14 @@
-module TezosDelegationCore
-  ( module TezosDelegationCore
+module TezosPlatformCore
+  ( module TezosPlatformCore
   ) where
 
 import qualified AccessControl.Client
 import qualified Postgres as Pg
 import qualified Tezos
 import TezosChainWatcher.Api
-import TezosDelegationCore.Db
-import TezosDelegationCore.Internal as TezosDelegationCore
 import qualified TezosInjector.Api as TezosInjector
+import TezosPlatformCore.Db
+import TezosPlatformCore.Internal as TezosPlatformCore
 import Vest
 
 newtype PlatformFee =
@@ -126,7 +126,7 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
                                                                        } = do
   alreadyHandled <- Pg.runLogged dbPool $ wasPaymentHandled hash
   fromPlatformDelegate <- Pg.runLogged dbPool $ isPlatformDelegate from
-  toVest <- return $ to = panic "TODO"
+  toVest <- return $ to == panic "TODO"
   when (toVest && fromPlatformDelegate && not alreadyHandled) $ do
     let issuePayouts =
           makeClient t (Proxy :: Proxy TezosInjector.PayoutEndpoint)

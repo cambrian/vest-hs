@@ -1,5 +1,5 @@
-module TezosDelegationCore.Db
-  ( module TezosDelegationCore.Db
+module TezosPlatformCore.Db
+  ( module TezosPlatformCore.Db
   ) where
 
 import Postgres
