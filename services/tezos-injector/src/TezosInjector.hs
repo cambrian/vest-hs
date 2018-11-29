@@ -14,11 +14,7 @@ inject :: T -> Tezos.SignedOperation -> IO ()
 inject _ _ = panic "unimplemented"
 
 -- TODO: Un-stub.
-payout ::
-     T
-  -> AccessControl.Auth.Claims
-  -> HashMap Tezos.Address (FixedQty XTZ)
-  -> IO ()
+payout :: T -> AccessControl.Auth.Claims -> BatchPayout -> IO ()
 payout _ _ _ = panic "unimplemented"
 
 instance Service T where

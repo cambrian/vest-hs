@@ -15,7 +15,18 @@ import qualified WebSocket
 type InjectEndpoint
    = EndpointJson 'NoAuth TezosInjector.T WebSocket.T "inject" Tezos.SignedOperation ('Direct ())
 
+data Payout = Payout
+  { id :: UUID
+  , to :: Tezos.Address
+  , size :: FixedQty XTZ
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
+data BatchPayout = BatchPayout
+  { payouts :: [Payout]
+  , fee :: FixedQty XTZ
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
 -- | Payout endpoint for Vest services to hit. Returns when logical operation has been received and
 -- persisted.
 type PayoutEndpoint
-   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.IssuePayout)) TezosInjector.T Amqp.T "payout" (HashMap Tezos.Address (FixedQty XTZ)) ('Direct ())
+   = Endpoint ('Auth (AccessControl.Auth.T 'Permission.IssuePayout)) TezosInjector.T Amqp.T "payout" BatchPayout ('Direct ())
