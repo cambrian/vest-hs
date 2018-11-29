@@ -69,7 +69,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                                    priceTiers
                                    size
                              , payout = PayoutId Nothing
-                             , createdAt = time
+                             , created_at = time
                              })
                         delegations
                     totalDividendSize =
@@ -78,17 +78,17 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                     platformCharge =
                       fixedOf Ceiling $
                       rationalOf grossDelegateReward ^* platformFee
-                    paymentOwed = totalDividendSize + platformCharge
+                    payment_owed = totalDividendSize + platformCharge
                     reward_ =
                       Reward
                         { cycle = CycleNumber cycleNumber
                         , delegate = DelegateAddress delegate
                         , size = reward
-                        , stakingBalance
-                        , delegatedBalance
-                        , paymentOwed
+                        , staking_balance = stakingBalance
+                        , delegated_balance = delegatedBalance
+                        , payment_owed
                         , payment = PaymentHash Nothing
-                        , createdAt = time
+                        , created_at = time
                         }
                 return (reward_, dividends))
              rewardInfos
@@ -102,8 +102,8 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
           (Pg.insertValues
              [ Cycle
                  { number = cycleNumber
-                 , firstBlock = BlockNumber blockNumber
-                 , createdAt = time
+                 , first_block = BlockNumber blockNumber
+                 , created_at = time
                  }
              ])
           Pg.onConflictDefault
@@ -137,13 +137,12 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
     rewardsUnpaid_ <- Pg.runLogged dbPool $ rewardsUnpaid $ Tagged from
     let (rewardsPaid, refundSize) =
           foldr
-            (\reward@Reward {paymentOwed} (paid, rem) ->
-               if rem >= paymentOwed
-                 then (reward : paid, rem - paymentOwed)
+            (\reward@Reward {payment_owed} (paid, rem) ->
+               if rem >= payment_owed
+                 then (reward : paid, rem - payment_owed)
                  else (paid, rem))
             ([], size)
             rewardsUnpaid_
-        -- ^ Note: in the future we may want more sophisticated logic re. when to make refunds
     dividendsPaid <-
       foldr (<>) [] <$>
       mapM (Pg.runLogged dbPool . dividendsForReward) rewardsPaid
@@ -173,7 +172,7 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
           (Pg.insertValues $
            map
              (\TezosInjector.Payout {id, to, size} ->
-                Payout {id, to, size, fee, createdAt = time})
+                Payout {id, to, size, fee, created_at = time})
              allPayouts)
           Pg.onConflictDefault
       Pg.runInsert $
@@ -190,7 +189,7 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
                      if refundSize > 0
                        then Just refundId
                        else Nothing
-                 , createdAt = time
+                 , created_at = time
                  }
              ])
           Pg.onConflictDefault
@@ -224,7 +223,7 @@ blockConsumer t@T {dbPool} =
                [ Block
                    { number = blockNumber
                    , time = blockTime
-                   , createdAt = time
+                   , created_at = time
                    , handled = False
                    }
                ]) $
@@ -244,7 +243,7 @@ instance Service T where
   type EventsProduced T = ()
   type EventsConsumed T = FinalizedBlockEvents
   type RpcSpec T = ()
-  summary = "Tezos Delegation Core v0.1.0"
+  summary = "Vest Platform Core for Tezos v0.1.0"
   description =
     "Tracks how much delegates owe their delegators for each reward event, and issues payouts on behalf of delegates."
   init configPaths f = do
