@@ -7,11 +7,38 @@ import qualified Tezos
 import qualified Tezos.Rpc as Tezos
 import Vest
 
-data CycleT f = Cycle
+data BlockT f = Block
   { number :: C f Word64
   , time :: C f Time
-  , firstBlock :: C f Word64
-  , latestBlock :: C f Word64
+  , createdAt :: C f Time
+  , handled :: C f Bool
+  } deriving (Generic, Beamable)
+
+type Block = BlockT Identity
+
+deriving instance Eq Block
+
+deriving instance Read Block
+
+deriving instance Show Block
+
+instance Table BlockT where
+  data PrimaryKey BlockT f = BlockNumber{blockNumber :: C f Word64}
+                             deriving (Generic, Beamable)
+  primaryKey Block {number} = BlockNumber number
+
+deriving instance Eq (PrimaryKey BlockT Identity)
+
+deriving instance Read (PrimaryKey BlockT Identity)
+
+deriving instance Show (PrimaryKey BlockT Identity)
+
+instance IndexableTable BlockT where
+  indexColumn = number
+
+data CycleT f = Cycle
+  { number :: C f Word64
+  , firstBlock :: PrimaryKey BlockT f
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -41,7 +68,7 @@ data DelegateT f = Delegate
   { address :: C f Tezos.ImplicitAddress
   , name :: C f Text
   , description :: C f Text
-  , firstManagedCycle :: PrimaryKey CycleT f
+  , firstManagedBlock :: PrimaryKey BlockT f
   , priceTiers :: C f (PgJSON [(FixedQty XTZ, Rational)])
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
@@ -67,40 +94,14 @@ deriving instance Read (PrimaryKey DelegateT Identity)
 deriving instance Show (PrimaryKey DelegateT Identity)
 
 -- | Not accepting partial payments at the moment.
-data BillT f = Bill
-  { id :: C f UUID
-  , delegate :: PrimaryKey DelegateT f
-  , size :: C f (FixedQty XTZ)
-  , createdAt :: C f Time
-  , paidAt :: C (Nullable f) Time
-  } deriving (Generic, Beamable)
-
-type Bill = BillT Identity
-
-deriving instance Eq Bill
-
-deriving instance Read Bill
-
-deriving instance Show Bill
-
-instance Table BillT where
-  data PrimaryKey BillT f = BillId (C f UUID)
-                            deriving (Generic, Beamable)
-  primaryKey Bill {id} = BillId id
-
-deriving instance Eq (PrimaryKey BillT Identity)
-
-deriving instance Read (PrimaryKey BillT Identity)
-
-deriving instance Show (PrimaryKey BillT Identity)
-
 data RewardT f = Reward
   { cycle :: PrimaryKey CycleT f
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
-  , stakingBalace :: C f (FixedQty XTZ)
+  , stakingBalance :: C f (FixedQty XTZ)
   , delegatedBalance :: C f (FixedQty XTZ)
-  , bill :: PrimaryKey BillT f
+  , paymentOwed :: C f (FixedQty XTZ)
+  , payment :: PrimaryKey PaymentT (Nullable f)
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
 
@@ -125,11 +126,9 @@ deriving instance Read (PrimaryKey RewardT Identity)
 deriving instance Show (PrimaryKey RewardT Identity)
 
 data DividendT f = Dividend
-  { cycle :: PrimaryKey CycleT f
-  , delegate :: PrimaryKey DelegateT f
+  { reward :: PrimaryKey RewardT f
   , delegator :: C f Tezos.OriginatedAddress
   , size :: C f (FixedQty XTZ)
-  , bill :: PrimaryKey BillT f
   , payout :: PrimaryKey PayoutT (Nullable f)
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
@@ -143,11 +142,10 @@ deriving instance Read Dividend
 deriving instance Show Dividend
 
 instance Table DividendT where
-  data PrimaryKey DividendT f = DividendPKey (PrimaryKey CycleT f)
-                                           (PrimaryKey DelegateT f) (C f Tezos.OriginatedAddress)
+  data PrimaryKey DividendT f = DividendPKey (PrimaryKey RewardT f)
+                                           (C f Tezos.OriginatedAddress)
                                 deriving (Generic, Beamable)
-  primaryKey Dividend {cycle, delegate, delegator} =
-    DividendPKey cycle delegate delegator
+  primaryKey Dividend {reward, delegator} = DividendPKey reward delegator
 
 deriving instance Eq (PrimaryKey DividendT Identity)
 
@@ -155,8 +153,7 @@ deriving instance Read (PrimaryKey DividendT Identity)
 
 deriving instance Show (PrimaryKey DividendT Identity)
 
--- Presence in this table means that a particular payout has been accepted by the hot wallet, and
--- will be completed.
+-- All payouts from Vest to other people. Includes e.g. dividends and refunds
 data PayoutT f = Payout
   { id :: C f UUID
   , to :: C f Tezos.Address
@@ -221,9 +218,12 @@ deriving instance Read (PrimaryKey DelegationT Identity)
 
 deriving instance Show (PrimaryKey DelegationT Identity)
 
--- | Represents payments processed.
+-- | Payments from bakers.
 data PaymentT f = Payment
-  { idx :: C f Word64
+  { hash :: C f Tezos.OperationHash
+  , from :: C f Tezos.Address
+  , size :: C f (FixedQty XTZ)
+  , block :: PrimaryKey BlockT f
   , refund :: PrimaryKey PayoutT (Nullable f)
   , createdAt :: C f Time
   } deriving (Generic, Beamable)
@@ -237,9 +237,9 @@ deriving instance Read Payment
 deriving instance Show Payment
 
 instance Table PaymentT where
-  data PrimaryKey PaymentT f = PaymentIndex (C f Word64)
+  data PrimaryKey PaymentT f = PaymentHash (C f Tezos.OperationHash)
                                deriving (Generic, Beamable)
-  primaryKey Payment {idx} = PaymentIndex idx
+  primaryKey Payment {hash} = PaymentHash hash
 
 deriving instance Eq (PrimaryKey PaymentT Identity)
 
@@ -247,17 +247,19 @@ deriving instance Read (PrimaryKey PaymentT Identity)
 
 deriving instance Show (PrimaryKey PaymentT Identity)
 
-instance IndexableTable PaymentT where
-  indexColumn = idx
+deriving instance Eq (PrimaryKey PaymentT (Nullable Identity))
+
+deriving instance Read (PrimaryKey PaymentT (Nullable Identity))
+
+deriving instance Show (PrimaryKey PaymentT (Nullable Identity))
 
 data Schema f = Schema
-  { cycles :: f (TableEntity CycleT)
+  { blocks :: f (TableEntity BlockT)
+  , cycles :: f (TableEntity CycleT)
   , delegates :: f (TableEntity DelegateT)
   , rewards :: f (TableEntity RewardT)
-  , bills :: f (TableEntity BillT)
   , payouts :: f (TableEntity PayoutT)
   , dividends :: f (TableEntity DividendT)
-  , payouts :: f (TableEntity PayoutT)
   , delegations :: f (TableEntity DelegationT)
   , payments :: f (TableEntity PaymentT)
   } deriving (Generic)
@@ -270,48 +272,58 @@ checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 schema :: DatabaseSettings Postgres Schema
 schema = unCheckDatabase checkedSchema
 
-selectNextBlock :: Pg Word64
-selectNextBlock = do
+selectNextUnhandledBlock :: Pg Word64
+-- Assumes that we don't have any gaps in handled blocks.
+selectNextUnhandledBlock = do
+  let number Block {number} = number
   m <-
     runSelectReturningOne $
     select $
-    latestBlock <$> limit_ 1 (orderBy_ (desc_ . number) $ all_ $ cycles schema)
+    number <$>
+    limit_
+      1
+      (orderBy_ (desc_ . number) $
+       filter_ (\Block {handled} -> handled ==. val_ True) $
+       all_ $ blocks schema)
   return $
     case m of
       Nothing -> fromIntegral Tezos.firstReadableBlockNumber
       Just n -> n + 1
 
-delegatesTrackedAtCycle :: Word64 -> Pg [Tezos.ImplicitAddress]
-delegatesTrackedAtCycle cycle =
+delegatesTrackedAtBlock :: Word64 -> Pg [Tezos.ImplicitAddress]
+delegatesTrackedAtBlock block =
   runSelectReturningList $
   select $
   address <$>
   filter_
-    ((val_ cycle >=.) . cycleNumber . firstManagedCycle)
+    ((val_ block >=.) . blockNumber . firstManagedBlock)
     (all_ $ delegates schema)
 
-wasRewardAlreadyProcessed :: Word64 -> Tezos.ImplicitAddress -> Pg Bool
-wasRewardAlreadyProcessed cycle delegate =
+wasRewardProcessed :: Word64 -> Tezos.ImplicitAddress -> Pg Bool
+wasRewardProcessed cycle delegate =
   isJust <$>
   runSelectReturningOne
     (lookup_ (rewards schema) $
      RewardPKey (CycleNumber cycle) (DelegateAddress delegate))
 
-billsOutstanding :: Tezos.ImplicitAddress -> Pg [Bill]
-billsOutstanding delegate_ =
+rewardsUnpaid :: Tezos.ImplicitAddress -> Pg [Reward]
+rewardsUnpaid delegate_ =
   runSelectReturningList $
   select $
-  orderBy_ (\Bill {createdAt} -> asc_ createdAt) $
+  orderBy_ (\Reward {createdAt} -> asc_ createdAt) $
   filter_
-    (\Bill {delegate, paidAt} ->
-       DelegateAddress (val_ delegate_) ==. delegate &&. paidAt ==. val_ Nothing) $
-  all_ $ bills schema
+    (\Reward {delegate, payment} ->
+       DelegateAddress (val_ delegate_) ==. delegate &&. payment ==.
+       val_ (PaymentHash Nothing)) $
+  all_ $ rewards schema
 
-dividendsForBill :: UUID -> Pg [Dividend]
-dividendsForBill billId =
+dividendsForReward :: Reward -> Pg [Dividend]
+-- ^ Not possible to batch this query because beam does not support composite types
+-- see: https://github.com/tathougies/beam/issues/309
+dividendsForReward reward_ =
   runSelectReturningList $
   select $
-  filter_ (\Dividend {bill} -> BillId (val_ billId) ==. bill) $
+  filter_ (\Dividend {reward} -> reward ==. val_ (pk reward_)) $
   all_ $ dividends schema
 
 isPlatformDelegate :: Tezos.Address -> Pg Bool
@@ -326,3 +338,8 @@ getDelegatePriceTiers addr = do
   case m of
     Nothing -> liftIO $ throw BugException
     Just Delegate {priceTiers = PgJSON tiers} -> return tiers
+
+wasPaymentHandled :: Tezos.OperationHash -> Pg Bool
+wasPaymentHandled hash =
+  isJust <$>
+  runSelectReturningOne (lookup_ (payments schema) $ PaymentHash hash)

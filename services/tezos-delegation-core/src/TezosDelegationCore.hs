@@ -8,7 +8,7 @@ import qualified Tezos
 import TezosChainWatcher.Api
 import TezosDelegationCore.Db
 import TezosDelegationCore.Internal as TezosDelegationCore
-import TezosHotWallet.Api
+import qualified TezosInjector.Api as TezosInjector
 import Vest
 
 newtype PlatformFee =
@@ -18,195 +18,235 @@ newtype PlatformFee =
 instance Loadable PlatformFee where
   configFile = [relfile|platform-fee.yaml|]
 
+handleCycle :: T -> Tezos.BlockEvent -> IO ()
+handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
+                                                       , cycleNumber
+                                                       } = do
+  alreadyHandled <-
+    Pg.runLogged dbPool $ Pg.wasHandled (cycles schema) cycleNumber
+  unless alreadyHandled $ do
+    let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
+        dividendSize reward stakingBalance priceTiers sizeDelegated =
+          let (rationalSize, _) =
+                foldl'
+                  (\(div, rem) (tierStart, rate) ->
+                     if tierStart > rem
+                       then (div, rem)
+                       else ( div +
+                              rationalOf reward ^*
+                              (rate * ((rem - tierStart) ^/^ stakingBalance))
+                            , tierStart))
+                  (0, sizeDelegated)
+                  priceTiers
+           in fixedOf Floor rationalSize
+    delegates <- Pg.runLogged dbPool $ delegatesTrackedAtBlock blockNumber
+    rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNumber delegates
+    time <- now
+    (allRewards, allDividends) <-
+      do rewardsAndDividends <-
+           mapM
+             (\Tezos.RewardInfo { delegate
+                                , reward
+                                , stakingBalance
+                                , delegatedBalance
+                                , delegations
+                                } -> do
+                priceTiers <-
+                  Pg.runLogged dbPool $ getDelegatePriceTiers delegate
+                let dividends =
+                      map
+                        (\Tezos.DelegationInfo {delegator, size} ->
+                           Dividend
+                             { reward =
+                                 RewardPKey
+                                   (CycleNumber cycleNumber)
+                                   (DelegateAddress delegate)
+                             , delegator
+                             , size =
+                                 dividendSize
+                                   reward
+                                   stakingBalance
+                                   priceTiers
+                                   size
+                             , payout = PayoutId Nothing
+                             , createdAt = time
+                             })
+                        delegations
+                    totalDividendSize =
+                      foldr (\Dividend {size} tot -> tot + size) 0 dividends
+                    grossDelegateReward = reward - totalDividendSize
+                    platformCharge =
+                      fixedOf Ceiling $
+                      rationalOf grossDelegateReward ^* platformFee
+                    paymentOwed = totalDividendSize + platformCharge
+                    reward_ =
+                      Reward
+                        { cycle = CycleNumber cycleNumber
+                        , delegate = DelegateAddress delegate
+                        , size = reward
+                        , stakingBalance
+                        , delegatedBalance
+                        , paymentOwed
+                        , payment = PaymentHash Nothing
+                        , createdAt = time
+                        }
+                return (reward_, dividends))
+             rewardInfos
+         let (rs, ds) = unzip rewardsAndDividends
+         return (rs, foldr (<>) [] ds)
+    -- Persist reward/dividends, mark cycle as processed
+    Pg.runLoggedTransaction dbPool $ do
+      Pg.runInsert $
+        Pg.insert
+          (cycles schema)
+          (Pg.insertValues
+             [ Cycle
+                 { number = cycleNumber
+                 , firstBlock = BlockNumber blockNumber
+                 , createdAt = time
+                 }
+             ])
+          Pg.onConflictDefault
+      Pg.runInsert $
+        Pg.insert
+          (rewards schema)
+          (Pg.insertValues allRewards)
+          Pg.onConflictDefault
+      Pg.runInsert $
+        Pg.insert
+          (dividends schema)
+          (Pg.insertValues allDividends)
+          Pg.onConflictDefault
+
+handlePayment :: T -> Word64 -> Tezos.Transaction -> IO ()
+handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
+                                                                       , from
+                                                                       , to
+                                                                       , size
+                                                                       } = do
+  alreadyHandled <- Pg.runLogged dbPool $ wasPaymentHandled hash
+  fromPlatformDelegate <- Pg.runLogged dbPool $ isPlatformDelegate from
+  toVest <- return $ to = panic "TODO"
+  when (toVest && fromPlatformDelegate && not alreadyHandled) $ do
+    let issuePayouts =
+          makeClient t (Proxy :: Proxy TezosInjector.PayoutEndpoint)
+    time <- now
+    fee <-
+      readLatestValue operationFee >>=
+      fromJustUnsafe (MissingValueException @OperationFeeValue)
+    rewardsUnpaid_ <- Pg.runLogged dbPool $ rewardsUnpaid $ Tagged from
+    let (rewardsPaid, refundSize) =
+          foldr
+            (\reward@Reward {paymentOwed} (paid, rem) ->
+               if rem >= paymentOwed
+                 then (reward : paid, rem - paymentOwed)
+                 else (paid, rem))
+            ([], size)
+            rewardsUnpaid_
+        shouldRefund = toVest && fromPlatformDelegate && refundSize > 0
+        -- ^ Note: in the future we may want more sophisticated logic re. when to make refunds
+    dividendsPaid <-
+      foldr (<>) [] <$>
+      mapM (Pg.runLogged dbPool . dividendsForReward) rewardsPaid
+    updatedDividends <-
+      mapM
+        (\dividend -> do
+           payout <- PayoutId . Just <$> nextUUID
+           return (dividend {payout} :: Dividend))
+        dividendsPaid
+    let dividendPayouts =
+          map
+            (\Dividend {delegator = Tagged to, size, payout = PayoutId id} ->
+               TezosInjector.Payout
+                 {id = fromMaybe (panic "impossible") id, to, size})
+            updatedDividends
+    refundId <- nextUUID -- only used if shouldRefund = True
+    refundPayout <-
+      if shouldRefund
+        then return
+               [ TezosInjector.Payout
+                   {id = refundId, to = from, size = refundSize}
+               ]
+        else return []
+    let payouts_ = refundPayout <> dividendPayouts
+    issuePayouts $ TezosInjector.BatchPayout payouts_ fee
+    Pg.runLoggedTransaction dbPool $ do
+      Pg.runInsert $
+        Pg.insert
+          (payouts schema)
+          (Pg.insertValues $
+           map
+             (\TezosInjector.Payout {id, to, size} ->
+                Payout {id, to, size, fee, createdAt = time})
+             payouts_)
+          Pg.onConflictDefault
+      Pg.runInsert $
+        Pg.insert
+          (payments schema)
+          (Pg.insertValues
+             [ Payment
+                 { hash
+                 , from
+                 , size
+                 , block = BlockNumber blockNumber
+                 , refund =
+                     PayoutId $
+                     if shouldRefund
+                       then Just refundId
+                       else Nothing
+                 , createdAt = time
+                 }
+             ])
+          Pg.onConflictDefault
+      Pg.runInsert $
+        Pg.insert (dividends schema) (Pg.insertValues updatedDividends) $
+        Pg.onConflict (Pg.conflictingFields Pg.primaryKey) Pg.onConflictSetAll
+      Pg.runInsert $
+        Pg.insert
+          (rewards schema)
+          (Pg.insertValues $
+           fmap
+             (\reward -> reward {payment = PaymentHash $ Just hash})
+             rewardsPaid) $
+        Pg.onConflict (Pg.conflictingFields Pg.primaryKey) Pg.onConflictSetAll
+
 blockConsumer :: T -> Consumers FinalizedBlockEvents
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; the relevant dividends are paid out when a delegator pays its bill.
 -- This happens in the payment consumer.
-blockConsumer t@T {dbPool, platformFee} =
-  let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
-      dividendSize reward stakingBalance priceTiers sizeDelegated =
-        let (rationalSize, _) =
-              foldl'
-                (\(div, rem) (tierStart, rate) ->
-                   if tierStart > rem
-                     then (div, rem)
-                     else ( div +
-                            rationalOf reward ^*
-                            (rate * ((rem - tierStart) ^/^ stakingBalance))
-                          , tierStart))
-                (0, sizeDelegated)
-                priceTiers
-         in fixedOf Floor rationalSize
-      handleCycle blockNum cycleNum cycleTime = do
-        Pg.runLogged dbPool (Pg.wasHandled (cycles schema) cycleNum) >>=
-          (`when` return ())
-        delegates <- Pg.runLogged dbPool $ delegatesTrackedAtCycle cycleNum
-        rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNum delegates
+blockConsumer t@T {dbPool} =
+  let handleBlock blockEvent@Tezos.BlockEvent { number = blockNumber
+                                              , time = blockTime
+                                              , transactions
+                                              } = do
         time <- now
-        forM_ rewardInfos $ \Tezos.RewardInfo { delegate
-                                              , reward
-                                              , stakingBalance
-                                              , delegatedBalance
-                                              , delegations
-                                              } -> do
-          Pg.runLogged dbPool (wasRewardAlreadyProcessed cycleNum delegate) >>=
-            (`when` return ())
-          priceTiers <- Pg.runLogged dbPool $ getDelegatePriceTiers delegate
-          billId <- nextUUID
-          let dividends_ =
-                map
-                  (\Tezos.DelegationInfo {delegator, size} ->
-                     Dividend
-                       (CycleNumber cycleNum)
-                       (DelegateAddress delegate)
-                       delegator
-                       (dividendSize reward stakingBalance priceTiers size)
-                       (BillId billId)
-                       (PayoutId Nothing)
-                       time)
-                  delegations
-              totalDividendSize =
-                foldr (\Dividend {size} tot -> tot + size) 0 dividends_
-              grossDelegateReward = reward - totalDividendSize
-              platformCharge =
-                fixedOf Ceiling $ rationalOf grossDelegateReward ^* platformFee
-              paymentOwed = totalDividendSize + platformCharge
-          -- Persist reward/bill/dividends.
-          Pg.runLoggedTransaction dbPool $ do
-            Pg.runInsert $
-              Pg.insert
-                (bills schema)
-                (Pg.insertValues
-                   [ Bill
-                       billId
-                       (DelegateAddress delegate)
-                       paymentOwed
-                       time
-                       Nothing
-                   ])
-                Pg.onConflictDefault
-            Pg.runInsert $
-              Pg.insert
-                (rewards schema)
-                (Pg.insertValues
-                   [ Reward
-                       (CycleNumber cycleNum)
-                       (DelegateAddress delegate)
-                       reward
-                       stakingBalance
-                       delegatedBalance
-                       (BillId billId)
-                       time
-                   ])
-                Pg.onConflictDefault
-            Pg.runInsert $
-              Pg.insert
-                (dividends schema)
-                (Pg.insertValues dividends_)
-                Pg.onConflictDefault
-        -- Mark cycle as processed.
         Pg.runLogged dbPool $
           Pg.runInsert $
           Pg.insert
-            (cycles schema)
-            (Pg.insertValues [Cycle cycleNum cycleTime blockNum blockNum time])
-            Pg.onConflictDefault
-      handleBlock Tezos.BlockEvent {number = blockNumber, cycleNumber, time} = do
-        handleCycle blockNumber cycleNumber time
-        -- Mark block as processed.
+            (blocks schema)
+            (Pg.insertValues
+               [ Block
+                   { number = blockNumber
+                   , time = blockTime
+                   , createdAt = time
+                   , handled = False
+                   }
+               ]) $
+          Pg.onConflict Pg.anyConflict Pg.onConflictDoNothing
+        handleCycle t blockEvent
+        forM_ transactions $ handlePayment t blockNumber
         Pg.runLogged dbPool $
           Pg.runUpdate $
           Pg.update
-            (cycles schema)
-            (\Cycle {latestBlock} -> [latestBlock Pg.<-. Pg.val_ blockNumber])
-            (\Cycle {number} -> number Pg.==. Pg.val_ cycleNumber)
-   in (Pg.runLogged dbPool selectNextBlock, handleBlock)
-
-paymentConsumer :: T -> Consumers PaymentEvents
-paymentConsumer t@T {dbPool, operationFee} =
-  let nextPayment = Pg.runLogged dbPool $ Pg.nextUnseenIndex $ payments schema
-      issuePayouts = makeClient t (Proxy :: Proxy PayoutEndpoint)
-      f PaymentEvent {idx, from, size, time = paymentTime} = do
-        Pg.runLogged dbPool (Pg.wasHandled (payments schema) idx) >>=
-          (`when` return ())
-        isPlatformDelegate_ <- Pg.runLogged dbPool $ isPlatformDelegate from
-        time <- now
-        fee <-
-          readLatestValue operationFee >>=
-          fromJustUnsafe (MissingValueException @OperationFeeValue)
-        billsOutstanding_ <-
-          Pg.runLogged dbPool $ billsOutstanding $ Tagged from
-        let (billIdsPaid, refundSize) =
-              foldr
-                (\Bill {id, size} (paid, rem) ->
-                   if rem >= size
-                     then (id : paid, rem - size)
-                     else (paid, rem))
-                ([], size)
-                billsOutstanding_
-            shouldRefund = isPlatformDelegate_ && refundSize > 0
-            -- ^ Note: in the future we may want more sophisticated logic re. when to make refunds
-        dividendsPaid <-
-          foldr (<>) [] <$>
-          mapM (Pg.runLogged dbPool . dividendsForBill) billIdsPaid
-        newDividends <-
-          mapM
-            (\dividend -> do
-               payout <- PayoutId . Just <$> nextUUID
-               return (dividend {payout} :: Dividend))
-            dividendsPaid
-        let dividends_ =
-              map
-                (\Dividend {delegator = Tagged to, size, payout = PayoutId id} ->
-                   PayoutRequest
-                     {id = fromMaybe (panic "impossible") id, to, size})
-                newDividends
-        refundId <- nextUUID -- only used if shouldRefund = True
-        refund <-
-          if shouldRefund
-            then return [PayoutRequest refundId from refundSize]
-            else return []
-        let payouts_ = refund <> dividends_
-        issuePayouts (payouts_, fee)
-        Pg.runLoggedTransaction dbPool $ do
-          Pg.runInsert $
-            Pg.insert
-              (payouts schema)
-              (Pg.insertValues $
-               map
-                 (\PayoutRequest {id, to, size} -> Payout id to size fee time)
-                 payouts_)
-              Pg.onConflictDefault
-          Pg.runInsert $
-            Pg.insert (dividends schema) (Pg.insertValues newDividends) $
-            Pg.onConflict
-              (Pg.conflictingFields Pg.primaryKey)
-              Pg.onConflictSetAll
-          Pg.runUpdate $
-            Pg.update
-              (bills schema)
-              (\Bill {paidAt} -> [paidAt Pg.<-. Pg.val_ (Just paymentTime)])
-              (\Bill {id} -> id `Pg.in_` (Pg.val_ <$> billIdsPaid))
-          Pg.runInsert $
-            Pg.insert
-              (payments schema)
-              (Pg.insertValues
-                 [ Payment
-                     idx
-                     (PayoutId $
-                      if shouldRefund
-                        then Just refundId
-                        else Nothing)
-                     time
-                 ])
-              Pg.onConflictDefault
-   in (nextPayment, f)
+            (blocks schema)
+            (\Block {handled} -> [handled Pg.<-. Pg.val_ True])
+            (\Block {number} -> number Pg.==. Pg.val_ blockNumber)
+   in (Pg.runLogged dbPool selectNextUnhandledBlock, handleBlock)
 
 instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = FinalizedBlockEvents
-                          :<|> PaymentEvents
   type RpcSpec T = ()
   summary = "Tezos Delegation Core v0.1.0"
   description =
@@ -224,4 +264,4 @@ instance Service T where
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()
-  eventConsumers t = blockConsumer t :<|> paymentConsumer t
+  eventConsumers = blockConsumer
