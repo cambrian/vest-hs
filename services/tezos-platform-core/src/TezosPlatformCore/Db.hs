@@ -10,7 +10,7 @@ import Vest
 data BlockT f = Block
   { number :: C f Word64
   , time :: C f Time
-  , createdAt :: C f Time
+  , created_at :: C f Time
   , handled :: C f Bool
   } deriving (Generic, Beamable)
 
@@ -38,8 +38,8 @@ instance IndexableTable BlockT where
 
 data CycleT f = Cycle
   { number :: C f Word64
-  , firstBlock :: PrimaryKey BlockT f
-  , createdAt :: C f Time
+  , first_block :: PrimaryKey BlockT f
+  , created_at :: C f Time
   } deriving (Generic, Beamable)
 
 type Cycle = CycleT Identity
@@ -68,9 +68,9 @@ data DelegateT f = Delegate
   { address :: C f Tezos.ImplicitAddress
   , name :: C f Text
   , description :: C f Text
-  , firstManagedBlock :: PrimaryKey BlockT f
-  , priceTiers :: C f (PgJSON [(FixedQty XTZ, Rational)])
-  , createdAt :: C f Time
+  , first_managed_block :: PrimaryKey BlockT f
+  , price_tiers :: C f (PgJSON [(FixedQty XTZ, Rational)])
+  , created_at :: C f Time
   } deriving (Generic, Beamable)
 
 type Delegate = DelegateT Identity
@@ -98,11 +98,11 @@ data RewardT f = Reward
   { cycle :: PrimaryKey CycleT f
   , delegate :: PrimaryKey DelegateT f
   , size :: C f (FixedQty XTZ)
-  , stakingBalance :: C f (FixedQty XTZ)
-  , delegatedBalance :: C f (FixedQty XTZ)
-  , paymentOwed :: C f (FixedQty XTZ)
+  , staking_balance :: C f (FixedQty XTZ)
+  , delegated_balance :: C f (FixedQty XTZ)
+  , payment_owed :: C f (FixedQty XTZ)
   , payment :: PrimaryKey PaymentT (Nullable f)
-  , createdAt :: C f Time
+  , created_at :: C f Time
   } deriving (Generic, Beamable)
 
 type Reward = RewardT Identity
@@ -130,7 +130,7 @@ data DividendT f = Dividend
   , delegator :: C f Tezos.OriginatedAddress
   , size :: C f (FixedQty XTZ)
   , payout :: PrimaryKey PayoutT (Nullable f)
-  , createdAt :: C f Time
+  , created_at :: C f Time
   } deriving (Generic, Beamable)
 
 type Dividend = DividendT Identity
@@ -159,7 +159,7 @@ data PayoutT f = Payout
   , to :: C f Tezos.Address
   , size :: C f (FixedQty XTZ)
   , fee :: C f (FixedQty XTZ)
-  , createdAt :: C f Time
+  , created_at :: C f Time
   } deriving (Generic, Beamable)
 
 type Payout = PayoutT Identity
@@ -187,37 +187,30 @@ deriving instance Read (PrimaryKey PayoutT (Nullable Identity))
 
 deriving instance Show (PrimaryKey PayoutT (Nullable Identity))
 
-data DelegationT f = Delegation
-  { delegator :: C f Tezos.OriginatedAddress
-  , delegate :: PrimaryKey DelegateT f
-  , rewardCycle :: PrimaryKey CycleT f
-  , size :: C f (FixedQty XTZ)
-  , dividend :: PrimaryKey DividendT f
-  , createdAt :: C f Time
-  } deriving (Generic, Beamable)
-
-type Delegation = DelegationT Identity
-
-deriving instance Eq Delegation
-
-deriving instance Read Delegation
-
-deriving instance Show Delegation
-
-instance Table DelegationT where
-  data PrimaryKey DelegationT f = DelegationPKey (C f
-                                                  Tezos.OriginatedAddress)
-                                               (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
-                                  deriving (Generic, Beamable)
-  primaryKey Delegation {delegator, delegate, rewardCycle} =
-    DelegationPKey delegator delegate rewardCycle
-
-deriving instance Eq (PrimaryKey DelegationT Identity)
-
-deriving instance Read (PrimaryKey DelegationT Identity)
-
-deriving instance Show (PrimaryKey DelegationT Identity)
-
+-- TODO: use for tracking delegations attributable to vest.
+-- Hopefully this won't be necessary
+-- data DelegationT f = Delegation
+--   { delegator :: C f Tezos.OriginatedAddress
+--   , delegate :: PrimaryKey DelegateT f
+--   , reward_cycle :: PrimaryKey CycleT f
+--   , size :: C f (FixedQty XTZ)
+--   , dividend :: PrimaryKey DividendT f
+--   , created_at :: C f Time
+--   } deriving (Generic, Beamable)
+-- type Delegation = DelegationT Identity
+-- deriving instance Eq Delegation
+-- deriving instance Read Delegation
+-- deriving instance Show Delegation
+-- instance Table DelegationT where
+--   data PrimaryKey DelegationT f = DelegationPKey (C f
+--                                                   Tezos.OriginatedAddress)
+--                                                (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
+--                                   deriving (Generic, Beamable)
+--   primaryKey Delegation {delegator, delegate, rewardCycle} =
+--     DelegationPKey delegator delegate rewardCycle
+-- deriving instance Eq (PrimaryKey DelegationT Identity)
+-- deriving instance Read (PrimaryKey DelegationT Identity)
+-- deriving instance Show (PrimaryKey DelegationT Identity)
 -- | Payments from bakers.
 data PaymentT f = Payment
   { hash :: C f Tezos.OperationHash
@@ -225,7 +218,7 @@ data PaymentT f = Payment
   , size :: C f (FixedQty XTZ)
   , block :: PrimaryKey BlockT f
   , refund :: PrimaryKey PayoutT (Nullable f)
-  , createdAt :: C f Time
+  , created_at :: C f Time
   } deriving (Generic, Beamable)
 
 type Payment = PaymentT Identity
@@ -260,7 +253,7 @@ data Schema f = Schema
   , rewards :: f (TableEntity RewardT)
   , payouts :: f (TableEntity PayoutT)
   , dividends :: f (TableEntity DividendT)
-  , delegations :: f (TableEntity DelegationT)
+  -- , delegations :: f (TableEntity DelegationT)
   , payments :: f (TableEntity PaymentT)
   } deriving (Generic)
 
@@ -296,7 +289,7 @@ delegatesTrackedAtBlock block =
   select $
   address <$>
   filter_
-    ((val_ block >=.) . blockNumber . firstManagedBlock)
+    ((val_ block >=.) . blockNumber . first_managed_block)
     (all_ $ delegates schema)
 
 wasRewardProcessed :: Word64 -> Tezos.ImplicitAddress -> Pg Bool
@@ -310,7 +303,7 @@ rewardsUnpaid :: Tezos.ImplicitAddress -> Pg [Reward]
 rewardsUnpaid delegate_ =
   runSelectReturningList $
   select $
-  orderBy_ (\Reward {createdAt} -> asc_ createdAt) $
+  orderBy_ (\Reward {created_at} -> asc_ created_at) $
   filter_
     (\Reward {delegate, payment} ->
        DelegateAddress (val_ delegate_) ==. delegate &&. payment ==.
@@ -337,7 +330,7 @@ getDelegatePriceTiers addr = do
   m <- runSelectReturningOne $ lookup_ (delegates schema) $ DelegateAddress addr
   case m of
     Nothing -> liftIO $ throw BugException
-    Just Delegate {priceTiers = PgJSON tiers} -> return tiers
+    Just Delegate {price_tiers = PgJSON tiers} -> return tiers
 
 wasPaymentHandled :: Tezos.OperationHash -> Pg Bool
 wasPaymentHandled hash =

@@ -69,7 +69,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                                    priceTiers
                                    size
                              , payout = PayoutId Nothing
-                             , createdAt = time
+                             , created_at = time
                              })
                         delegations
                     totalDividendSize =
@@ -78,17 +78,17 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                     platformCharge =
                       fixedOf Ceiling $
                       rationalOf grossDelegateReward ^* platformFee
-                    paymentOwed = totalDividendSize + platformCharge
+                    payment_owed = totalDividendSize + platformCharge
                     reward_ =
                       Reward
                         { cycle = CycleNumber cycleNumber
                         , delegate = DelegateAddress delegate
                         , size = reward
-                        , stakingBalance
-                        , delegatedBalance
-                        , paymentOwed
+                        , staking_balance = stakingBalance
+                        , delegated_balance = delegatedBalance
+                        , payment_owed
                         , payment = PaymentHash Nothing
-                        , createdAt = time
+                        , created_at = time
                         }
                 return (reward_, dividends))
              rewardInfos
@@ -102,8 +102,8 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
           (Pg.insertValues
              [ Cycle
                  { number = cycleNumber
-                 , firstBlock = BlockNumber blockNumber
-                 , createdAt = time
+                 , first_block = BlockNumber blockNumber
+                 , created_at = time
                  }
              ])
           Pg.onConflictDefault
@@ -137,14 +137,12 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
     rewardsUnpaid_ <- Pg.runLogged dbPool $ rewardsUnpaid $ Tagged from
     let (rewardsPaid, refundSize) =
           foldr
-            (\reward@Reward {paymentOwed} (paid, rem) ->
-               if rem >= paymentOwed
-                 then (reward : paid, rem - paymentOwed)
+            (\reward@Reward {payment_owed} (paid, rem) ->
+               if rem >= payment_owed
+                 then (reward : paid, rem - payment_owed)
                  else (paid, rem))
             ([], size)
             rewardsUnpaid_
-        shouldRefund = toVest && fromPlatformDelegate && refundSize > 0
-        -- ^ Note: in the future we may want more sophisticated logic re. when to make refunds
     dividendsPaid <-
       foldr (<>) [] <$>
       mapM (Pg.runLogged dbPool . dividendsForReward) rewardsPaid
@@ -154,22 +152,19 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
            payout <- PayoutId . Just <$> nextUUID
            return (dividend {payout} :: Dividend))
         dividendsPaid
+    refundId <- nextUUID -- only used if refundSize > 0
     let dividendPayouts =
           map
             (\Dividend {delegator = Tagged to, size, payout = PayoutId id} ->
                TezosInjector.Payout
                  {id = fromMaybe (panic "impossible") id, to, size})
             updatedDividends
-    refundId <- nextUUID -- only used if shouldRefund = True
-    refundPayout <-
-      if shouldRefund
-        then return
-               [ TezosInjector.Payout
-                   {id = refundId, to = from, size = refundSize}
-               ]
-        else return []
-    let payouts_ = refundPayout <> dividendPayouts
-    issuePayouts $ TezosInjector.BatchPayout payouts_ fee
+        refundPayouts =
+          [ TezosInjector.Payout {id = refundId, to = from, size = refundSize}
+          | refundSize > 0
+          ]
+        allPayouts = refundPayouts <> dividendPayouts
+    issuePayouts $ TezosInjector.BatchPayout allPayouts fee
     Pg.runLoggedTransaction dbPool $ do
       Pg.runInsert $
         Pg.insert
@@ -177,8 +172,8 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
           (Pg.insertValues $
            map
              (\TezosInjector.Payout {id, to, size} ->
-                Payout {id, to, size, fee, createdAt = time})
-             payouts_)
+                Payout {id, to, size, fee, created_at = time})
+             allPayouts)
           Pg.onConflictDefault
       Pg.runInsert $
         Pg.insert
@@ -191,10 +186,10 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
                  , block = BlockNumber blockNumber
                  , refund =
                      PayoutId $
-                     if shouldRefund
+                     if refundSize > 0
                        then Just refundId
                        else Nothing
-                 , createdAt = time
+                 , created_at = time
                  }
              ])
           Pg.onConflictDefault
@@ -228,7 +223,7 @@ blockConsumer t@T {dbPool} =
                [ Block
                    { number = blockNumber
                    , time = blockTime
-                   , createdAt = time
+                   , created_at = time
                    , handled = False
                    }
                ]) $
@@ -248,7 +243,7 @@ instance Service T where
   type EventsProduced T = ()
   type EventsConsumed T = FinalizedBlockEvents
   type RpcSpec T = ()
-  summary = "Tezos Delegation Core v0.1.0"
+  summary = "Vest Platform Core for Tezos v0.1.0"
   description =
     "Tracks how much delegates owe their delegators for each reward event, and issues payouts on behalf of delegates."
   init configPaths f = do
