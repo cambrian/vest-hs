@@ -143,7 +143,6 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
                  else (paid, rem))
             ([], size)
             rewardsUnpaid_
-        shouldRefund = toVest && fromPlatformDelegate && refundSize > 0
         -- ^ Note: in the future we may want more sophisticated logic re. when to make refunds
     dividendsPaid <-
       foldr (<>) [] <$>
@@ -154,22 +153,19 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
            payout <- PayoutId . Just <$> nextUUID
            return (dividend {payout} :: Dividend))
         dividendsPaid
+    refundId <- nextUUID -- only used if refundSize > 0
     let dividendPayouts =
           map
             (\Dividend {delegator = Tagged to, size, payout = PayoutId id} ->
                TezosInjector.Payout
                  {id = fromMaybe (panic "impossible") id, to, size})
             updatedDividends
-    refundId <- nextUUID -- only used if shouldRefund = True
-    refundPayout <-
-      if shouldRefund
-        then return
-               [ TezosInjector.Payout
-                   {id = refundId, to = from, size = refundSize}
-               ]
-        else return []
-    let payouts_ = refundPayout <> dividendPayouts
-    issuePayouts $ TezosInjector.BatchPayout payouts_ fee
+        refundPayouts =
+          [ TezosInjector.Payout {id = refundId, to = from, size = refundSize}
+          | refundSize > 0
+          ]
+        allPayouts = refundPayouts <> dividendPayouts
+    issuePayouts $ TezosInjector.BatchPayout allPayouts fee
     Pg.runLoggedTransaction dbPool $ do
       Pg.runInsert $
         Pg.insert
@@ -178,7 +174,7 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
            map
              (\TezosInjector.Payout {id, to, size} ->
                 Payout {id, to, size, fee, createdAt = time})
-             payouts_)
+             allPayouts)
           Pg.onConflictDefault
       Pg.runInsert $
         Pg.insert
@@ -191,7 +187,7 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
                  , block = BlockNumber blockNumber
                  , refund =
                      PayoutId $
-                     if shouldRefund
+                     if refundSize > 0
                        then Just refundId
                        else Nothing
                  , createdAt = time
