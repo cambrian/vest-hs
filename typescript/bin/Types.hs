@@ -5,7 +5,7 @@ import System.Console.CmdArgs
 import System.Random
 import Text.Replace
 import qualified TezosInjector
-import qualified TezosStats
+import qualified TezosPlatformStats
 import Typescript
 import Vest hiding (Args, summary)
 import qualified WebSocket
@@ -14,8 +14,8 @@ typesToGenerate :: [[TSDeclaration]]
 typesToGenerate =
   [ generateTsDeclarations (Proxy :: Proxy DummyManager.PublicApi)
   , generateTsDeclarations (Proxy :: Proxy TezosInjector.PublicApi)
-  , generateTsDeclarations (Proxy :: Proxy TezosStats.PublicApi)
-  , generateTsDeclarations (Proxy :: Proxy TezosStats.AuxiliaryTypes)
+  , generateTsDeclarations (Proxy :: Proxy TezosPlatformStats.PublicApi)
+  , generateTsDeclarations (Proxy :: Proxy TezosPlatformStats.AuxiliaryTypes)
   -- Put any additional APIs here.
   ]
 

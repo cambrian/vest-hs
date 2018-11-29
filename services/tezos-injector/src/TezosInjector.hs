@@ -14,16 +14,16 @@ inject :: T -> Tezos.SignedOperation -> IO ()
 inject _ _ = panic "unimplemented"
 
 -- TODO: Un-stub.
-injectVest ::
+payout ::
      T
   -> AccessControl.Auth.Claims
-  -> Tezos.SignedOperation
-  -> IO Tezos.OperationHash
-injectVest _ _ _ = panic "unimplemented"
+  -> HashMap Tezos.Address (FixedQty XTZ)
+  -> IO ()
+payout _ _ _ = panic "unimplemented"
 
 instance Service T where
   type RpcSpec T = InjectEndpoint
-                   :<|> InjectVestEndpoint
+                   :<|> PayoutEndpoint
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
@@ -35,7 +35,7 @@ instance Service T where
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       f $ T {dbPool, amqp, redis, webSocket, accessControlClient}
-  rpcHandlers t = inject t :<|> injectVest t
+  rpcHandlers t = inject t :<|> payout t
   valuesPublished _ = ()
   eventProducers _ = ()
   eventConsumers _ = ()

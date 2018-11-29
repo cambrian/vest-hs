@@ -1,5 +1,5 @@
-module TezosStats.Internal
-  ( module TezosStats.Internal
+module TezosPlatformStats.Internal
+  ( module TezosPlatformStats.Internal
   ) where
 
 import Vest
@@ -13,7 +13,7 @@ data T = T
   }
 
 instance HasNamespace T where
-  type Namespace T = "tezos-stats"
+  type Namespace T = "tezos-platform-stats"
 
 instance Has WebSocket.T T where
   get = webSocket

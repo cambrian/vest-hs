@@ -1,4 +1,4 @@
-import TezosStats
+import TezosPlatformStats
 import Vest
 
 main :: IO Void

@@ -1,25 +1,25 @@
 -- Currently intended as an executable for mocked testing data.
-module TezosStats
-  ( module TezosStats
+module TezosPlatformStats
+  ( module TezosPlatformStats
   ) where
 
 import qualified Data.HashMap.Strict as HashMap
 import qualified Tezos
-import TezosStats.Api as TezosStats
-import TezosStats.Internal as TezosStats
+import TezosPlatformStats.Api as TezosPlatformStats
+import TezosPlatformStats.Internal as TezosPlatformStats
 import Vest
 
-overview :: T -> () -> IO TezosStats.OverviewResponse
+overview :: T -> () -> IO TezosPlatformStats.OverviewResponse
 overview T {rawStubData} _ = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   return $ overviewResponse stubData
 
-bakersFn :: T -> () -> IO TezosStats.BakersResponse
+bakersFn :: T -> () -> IO TezosPlatformStats.BakersResponse
 bakersFn T {rawStubData} _ = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   return $ bakersResponse stubData
 
-implicit :: T -> Tezos.ImplicitAddress -> IO TezosStats.ImplicitResponse
+implicit :: T -> Tezos.ImplicitAddress -> IO TezosPlatformStats.ImplicitResponse
 implicit T {rawStubData} implicitPkh = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   case HashMap.lookup implicitPkh (implicitResponse stubData) of
@@ -29,7 +29,7 @@ implicit T {rawStubData} implicitPkh = do
 operation ::
      T
   -> Tezos.OperationHash
-  -> IO (Stream ValueBuffer TezosStats.OperationResponse)
+  -> IO (Stream ValueBuffer TezosPlatformStats.OperationResponse)
 operation T {rawStubData, streamDelayMillis} opHash = do
   stubData <- deserializeUnsafe @'JSON rawStubData
   case HashMap.lookup opHash (operationResponses stubData) of
@@ -60,7 +60,7 @@ instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  summary = "tezos-stats v0.1.0"
+  summary = "tezos-platform-stats v0.1.0"
   description = "Front-end stats server for Tezos."
   init configPaths f = do
     (RawStubData rawStubData) <- load configPaths

@@ -9,7 +9,7 @@ import Vest
 data T
   = InvalidateAuthTokens
   | IssuePayout
-  | InjectOperation
+  | ForgeOperation
   | B
   deriving (Eq, Ord, Enum, Read, Show, Generic, Hashable, ToJSON, FromJSON)
 
@@ -20,8 +20,8 @@ instance Is 'InvalidateAuthTokens where
 instance Is 'IssuePayout where
   runtimeRep = IssuePayout
 
-instance Is 'InjectOperation where
-  runtimeRep = InjectOperation
+instance Is 'ForgeOperation where
+  runtimeRep = ForgeOperation
 
 instance Is 'B where
   runtimeRep = B

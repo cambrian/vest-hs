@@ -88,7 +88,7 @@ library:
   - tezos-delegation-core/src
   - tezos-hot-wallet/src
   - tezos-injector/src
-  - tezos-stats/src
+  - tezos-platform-stats/src
 
 executables:
   access-control:
@@ -121,9 +121,9 @@ executables:
     source-dirs:          tezos-injector/bin
     dependencies:
     - services
-  tezos-stats:
+  tezos-platform-stats:
     main:                 Main.hs
-    source-dirs:          tezos-stats/bin
+    source-dirs:          tezos-platform-stats/bin
     dependencies:
     - services
 
@@ -188,9 +188,9 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  tezos-stats-test:
+  tezos-platform-stats-test:
     main:                       Spec.hs
-    source-dirs:                tezos-stats/test
+    source-dirs:                tezos-platform-stats/test
     ghc-options:
     - -threaded
     - -rtsopts

@@ -1,11 +1,11 @@
-module TezosStats.Api
-  ( module TezosStats.Api
+module TezosPlatformStats.Api
+  ( module TezosPlatformStats.Api
   ) where
 
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
 import qualified Tezos
-import qualified TezosStats.Internal as TezosStats
+import qualified TezosPlatformStats.Internal as TezosPlatformStats
 import Vest
 import qualified WebSocket
 
@@ -43,7 +43,7 @@ data OverviewResponse = OverviewResponse
 $(deriveTypeScript defaultOptions ''OverviewResponse)
 
 type OverviewEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "overview" () ('Direct OverviewResponse)
+   = EndpointJson 'NoAuth TezosPlatformStats.T WebSocket.T "overview" () ('Direct OverviewResponse)
 
 data Baker = Baker
   { name :: Text
@@ -68,7 +68,7 @@ data BakersResponse = BakersResponse
 $(deriveTypeScript defaultOptions ''BakersResponse)
 
 type BakersEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
+   = EndpointJson 'NoAuth TezosPlatformStats.T WebSocket.T "bakers" () ('Direct BakersResponse)
 
 data DelegateInfo = DelegateInfo
   { hash :: Tezos.ImplicitAddress
@@ -114,7 +114,7 @@ data ImplicitResponse = ImplicitResponse
 $(deriveTypeScript defaultOptions ''ImplicitResponse)
 
 type ImplicitEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "implicit" Tezos.ImplicitAddress ('Direct ImplicitResponse)
+   = EndpointJson 'NoAuth TezosPlatformStats.T WebSocket.T "implicit" Tezos.ImplicitAddress ('Direct ImplicitResponse)
 
 data OperationResponse = OperationResponse
   { baked :: Bool
@@ -127,7 +127,7 @@ data OperationResponse = OperationResponse
 $(deriveTypeScript defaultOptions ''OperationResponse)
 
 type OperationEndpoint
-   = EndpointJson 'NoAuth TezosStats.T WebSocket.T "operation" Tezos.OperationHash ('Streaming OperationResponse)
+   = EndpointJson 'NoAuth TezosPlatformStats.T WebSocket.T "operation" Tezos.OperationHash ('Streaming OperationResponse)
 
 data StubData = StubData
   { overviewResponse :: OverviewResponse
