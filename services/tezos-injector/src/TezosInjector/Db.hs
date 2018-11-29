@@ -4,40 +4,14 @@ module TezosInjector.Db
 
 import Postgres
 import qualified Tezos
-import qualified Tezos.Rpc as Tezos
 import Vest hiding (from, hash, to)
 
-data BlockT f = Block
-  { blockNumber :: C f Word64
-  , blockTime :: C f Time
-  , blockCreatedAt :: C f Time
-  } deriving (Generic, Beamable)
-
-type Block = BlockT Identity
-
-deriving instance Eq Block
-
-deriving instance Read Block
-
-deriving instance Show Block
-
-instance Table BlockT where
-  data PrimaryKey BlockT f = BlockNumber (C f Word64)
-                             deriving (Generic, Beamable)
-  primaryKey Block {blockNumber} = BlockNumber blockNumber
-
-deriving instance Eq (PrimaryKey BlockT (Nullable Identity))
-
-deriving instance Read (PrimaryKey BlockT (Nullable Identity))
-
-deriving instance Show (PrimaryKey BlockT (Nullable Identity))
-
--- removing the "Contents" suffix made these names really gross... I want to un-prefix the record
--- fields but will wait on an ok.. lmk via comment if it is
 data OperationT f = Operation
-  { operationOperation :: C f Tezos.SignedOperation
-  , operationBlockNumber :: PrimaryKey BlockT (Nullable f)
+  { operationSignedBytes :: C f Tezos.SignedOperation
+  , operationObject :: C f Tezos.OperationObject
+  , operationHash :: C f (Maybe Tezos.OperationHash)
   , operationCreatedAt :: C f Time
+  , operationUpdatedAt :: C f (Maybe Time)
   } deriving (Generic, Beamable)
 
 type Operation = OperationT Identity
@@ -49,11 +23,11 @@ deriving instance Read Operation
 deriving instance Show Operation
 
 instance Table OperationT where
-  data PrimaryKey OperationT f = OperationOperation (C f
-                                                     Tezos.SignedOperation)
+  data PrimaryKey OperationT f = OperationSignedBytes (C f
+                                                       Tezos.SignedOperation)
                                  deriving (Generic, Beamable)
-  primaryKey Operation {operationOperation} =
-    OperationOperation operationOperation
+  primaryKey Operation {operationSignedBytes} =
+    OperationSignedBytes operationSignedBytes
 
 deriving instance Eq (PrimaryKey OperationT Identity)
 
@@ -61,9 +35,34 @@ deriving instance Read (PrimaryKey OperationT Identity)
 
 deriving instance Show (PrimaryKey OperationT Identity)
 
+data ConstantT f = Constant
+  { key :: C f Text
+  , value :: C f Text
+  , createdAt :: C f Time
+  } deriving (Generic, Beamable)
+
+type Constant = ConstantT Identity
+
+deriving instance Eq Constant
+
+deriving instance Read Constant
+
+deriving instance Show Constant
+
+instance Table ConstantT where
+  data PrimaryKey ConstantT f = ConstantKey (C f Text)
+                                deriving (Generic, Beamable)
+  primaryKey Constant {key} = ConstantKey key
+
+deriving instance Eq (PrimaryKey ConstantT Identity)
+
+deriving instance Read (PrimaryKey ConstantT Identity)
+
+deriving instance Show (PrimaryKey ConstantT Identity)
+
 data Schema f = Schema
-  { blocks :: f (TableEntity BlockT)
-  , operations :: f (TableEntity OperationT)
+  { operations :: f (TableEntity OperationT)
+  , constants :: f (TableEntity ConstantT)
   } deriving (Generic)
 
 instance Database Postgres Schema
@@ -73,13 +72,3 @@ checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
 
 schema :: DatabaseSettings Postgres Schema
 schema = unCheckDatabase checkedSchema
-
-selectNextBlockNumber :: Pg Word64
-selectNextBlockNumber = do
-  m <-
-    runSelectReturningOne $
-    select $ aggregate_ max_ $ blockNumber <$> all_ (blocks schema)
-  return $
-    case m of
-      Just (Just num) -> num + 1
-      _ -> fromIntegral Tezos.firstReadableBlockNumber

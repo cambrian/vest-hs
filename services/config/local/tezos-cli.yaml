@@ -1,0 +1,4 @@
+eztzExe: ~/.vest-hs/eztz-simple
+tezosNodeUri: https://rpc.tezrpc.me
+# No secret in the general case.
+timeoutSeconds: 5

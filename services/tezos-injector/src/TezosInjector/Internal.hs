@@ -5,6 +5,8 @@ module TezosInjector.Internal
 import qualified AccessControl.Client
 import qualified Amqp
 import qualified Postgres
+import qualified Tezos.Cli
+import qualified Tezos.Rpc
 import Vest
 import qualified WebSocket
 
@@ -13,6 +15,8 @@ data T = T
   , amqp :: Amqp.T
   , webSocket :: WebSocket.T
   , redis :: RedisConnection
+  , tezosRpc :: Tezos.Rpc.T
+  , tezosCli :: Tezos.Cli.T
   , accessControlClient :: AccessControl.Client.T
   }
 

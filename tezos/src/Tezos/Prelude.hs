@@ -20,6 +20,8 @@ type AddressSecret = Text' "TzAddressSecret"
 
 type SignedOperation = Text' "TzSignedOperation"
 
+type OperationObject = Text' "TzSerializedOperationObject"
+
 data DelegationInfo = DelegationInfo
   { delegator :: OriginatedAddress
   , size :: FixedQty XTZ

@@ -30,11 +30,22 @@ instance Service T where
   summary = "tezos-injector v0.1.0"
   description = "Injects Tezos operations and makes sure they go through."
   init configPaths f = do
-    (accessControlPublicKey :<|> seed) <- load configPaths
-    withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> webSocket) -> do
+    (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths
+    withLoadable configPaths $ \(dbPool :<|> amqp :<|> webSocket :<|> redis :<|> tezosRpc) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
-      f $ T {dbPool, amqp, redis, webSocket, accessControlClient}
+      -- TODO: Initialize DB counter if it does not exist.
+      -- TODO: Spawn locked processor thread for retrying.
+      f $
+        T
+          { dbPool
+          , amqp
+          , webSocket
+          , redis
+          , tezosRpc
+          , tezosCli
+          , accessControlClient
+          }
   rpcHandlers t = inject t :<|> payout t
   valuesPublished _ = ()
   eventProducers _ = ()

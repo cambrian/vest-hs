@@ -18,10 +18,14 @@ data CliRecoverableException =
   CliRecoverableException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
+data MissingKeyException =
+  MissingKeyException
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
 data T = T
   { eztzExe :: FilePath -- Can be as short as eztz-simple if it's in your path.
   , tezosNodeUri :: Text
-  , addressSecret :: AddressSecret
+  , addressSecret :: Maybe AddressSecret -- Only necessary for authenticated commands.
   , timeoutSeconds :: Int
   } deriving (Eq, Show, Read, Generic, FromJSON, ToJSON)
 
@@ -37,7 +41,8 @@ lastLineUnsafe output =
 
 extractAddress :: T -> IO Address
 -- ^ Should throw if addressSecret is incorrect.
-extractAddress T {eztzExe, tezosNodeUri, addressSecret = Tagged addressSecret} = do
+extractAddress T {eztzExe, tezosNodeUri, addressSecret = addressSecretMaybe} = do
+  Tagged addressSecret <- fromJustUnsafe MissingKeyException addressSecretMaybe
   let node = makeOption "node" tezosNodeUri
       secret = makeOption "secret" addressSecret
   (exitCode, output, _) <- readProcess (proc eztzExe ["extract", node, secret])
@@ -72,9 +77,10 @@ forgeBatchTransaction ::
      T -> HashMap Address (FixedQty XTZ) -> FixedQty XTZ -> IO SignedOperation
 forgeBatchTransaction T { eztzExe
                         , tezosNodeUri
-                        , addressSecret = Tagged addressSecret
+                        , addressSecret = addressSecretMaybe
                         , timeoutSeconds
                         } recipientMap fee = do
+  Tagged addressSecret <- fromJustUnsafe MissingKeyException addressSecretMaybe
   let node = makeOption "node" tezosNodeUri
       from = makeOption "fromSK" addressSecret
       recipients =
