@@ -171,6 +171,7 @@ instance Service T where
                    :<|> MonitorOperationEndpoint
   type ValueSpec T = FinalizedHeightValue
                      :<|> OperationFeeValue
+                     :<|> ProvisionalBlockHashValue
   type EventsProduced T = FinalizedBlockEvents
   type EventsConsumed T = ()
   summary = "Tezos Chain Watcher v0.1.0"
@@ -187,6 +188,10 @@ instance Service T where
       writeStream operationFeeWriter 0
       (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos finalizationLag
+      (provisionalBlockHashWriter, provisionalBlockHashStream) <- newStream
+      tapStream_
+        (\Tezos.BlockEvent {hash} -> writeStream provisionalBlockHashWriter hash)
+        provisionalBlockEventStream
       f $
         T
           { dbPool
@@ -198,9 +203,12 @@ instance Service T where
           , provisionalBlockEventStream
           , finalizedHeightStream
           , operationFeeStream
+          , provisionalBlockHashStream
           }
   rpcHandlers t = rewardInfo t :<|> monitorOperation t
-  valuesPublished t = finalizedHeightStream t :<|> operationFeeStream t
+  valuesPublished t =
+    finalizedHeightStream t :<|> operationFeeStream t :<|>
+    provisionalBlockHashStream t
   eventProducers t =
     (return $ finalizedBlockEventStream t, materializeBlockEvent t)
   eventConsumers _ = ()

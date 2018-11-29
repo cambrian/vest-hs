@@ -63,6 +63,7 @@ data VariableT f = Variable
   { key :: C f Text
   , value :: C f Word64 -- Change to Text and read/show if we ever get more variables.
   , created_at :: C f Time
+  , updated_at :: C f (Maybe Time)
   } deriving (Generic, Beamable)
 
 type Variable = VariableT Identity
@@ -86,6 +87,7 @@ deriving instance Show (PrimaryKey VariableT Identity)
 
 data Schema f = Schema
   { operations :: f (TableEntity OperationT)
+  , payouts :: f (TableEntity PayoutT)
   , variables :: f (TableEntity VariableT)
   } deriving (Generic)
 
@@ -100,10 +102,79 @@ schema = unCheckDatabase checkedSchema
 vestCounterKey :: Text
 vestCounterKey = "vestCounter"
 
-trySetVestCounter :: Time -> Word64 -> Pg ()
-trySetVestCounter createdAt vestCounterValue =
+selectPendingOperations :: Pg [(Tezos.SignedOperation, Tezos.OperationObject)]
+selectPendingOperations =
+  runSelectReturningList
+    (select $
+     fmap
+       (\Operation {signed_bytes, object} -> (signed_bytes, object))
+       (filter_ (\Operation {hash} -> hash ==. val_ Nothing) $
+        all_ (operations schema)))
+
+tryInsertVestCounter :: Time -> Word64 -> Pg ()
+tryInsertVestCounter createdAt vestCounterValue =
   runInsert $
   insert
     (variables schema)
-    (insertValues [Variable vestCounterKey vestCounterValue createdAt]) $
+    (insertValues [Variable vestCounterKey vestCounterValue createdAt Nothing]) $
   onConflict anyConflict onConflictDoNothing
+
+getVestCounter :: Pg (Maybe Word64)
+getVestCounter =
+  runSelectReturningOne
+    (select $
+     value <$>
+     filter_
+       (\Variable {key} -> key ==. val_ vestCounterKey)
+       (all_ (variables schema)))
+
+-- Written as a get/set to ensure that the counter variable exists.
+setVestCounterTx :: Time -> Word64 -> Pg Bool
+setVestCounterTx updatedAt vestCounterValue = do
+  variableMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\Variable {key} -> key ==. val_ vestCounterKey) $
+    all_ (variables schema)
+  case variableMaybe of
+    Nothing -> return False
+    Just variable -> do
+      runUpdate $
+        save
+          (variables schema)
+          (variable {value = vestCounterValue, updated_at = Just updatedAt})
+      return True
+
+insertOperationTx ::
+     Time -> Tezos.SignedOperation -> Tezos.OperationObject -> [UUID] -> Pg ()
+insertOperationTx createdAt opSignedBytes object payoutIds = do
+  runInsert $
+    insert
+      (operations schema)
+      (insertValues [Operation opSignedBytes object Nothing createdAt Nothing])
+      onConflictDefault
+  runInsert $
+    insert
+      (payouts schema)
+      (insertValues $
+       fmap
+         (\id -> Payout id (OperationSignedBytes opSignedBytes) createdAt)
+         payoutIds)
+      onConflictDefault
+
+confirmOperationTx ::
+     Time -> Tezos.SignedOperation -> Tezos.OperationHash -> Pg Bool
+confirmOperationTx updatedAt opSignedBytes opHash = do
+  operationMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_ (\Operation {signed_bytes} -> signed_bytes ==. val_ opSignedBytes) $
+    all_ (operations schema)
+  case operationMaybe of
+    Nothing -> return False
+    Just operation -> do
+      runUpdate $
+        save
+          (operations schema)
+          (operation {hash = Just opHash, updated_at = Just updatedAt})
+      return True

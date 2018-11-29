@@ -22,4 +22,7 @@ type FinalizedHeightValue = ValueTopic T Amqp.T "finalizedHeight" Word64
 
 type OperationFeeValue = ValueTopic T Amqp.T "operationFee" (FixedQty XTZ)
 
+type ProvisionalBlockHashValue
+   = ValueTopic T Amqp.T "provisionalBlockHash" Tezos.BlockHash
+
 type FinalizedBlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
