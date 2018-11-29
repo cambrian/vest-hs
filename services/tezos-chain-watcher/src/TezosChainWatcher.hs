@@ -125,9 +125,9 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
          log Debug "persisting block event" number
          Pg.runLoggedTransaction
            dbPool
-           (do finalized <- finalizeProvisionalBlockEvent updatedAt hash
+           (do finalized <- finalizeProvisionalBlockEventTx updatedAt hash
                unless finalized $ liftIO $ throw BugException
-               deleteOldProvisionalBlockEvents deletedAt number)
+               deleteOldProvisionalBlockEventsTx deletedAt number)
          -- ^ Promote a provisional event to a finalized event (a provisional event must exist with
          -- the desired hash, or something is wrong with our DB state).
          writeStream finalizedHeightWriter number
@@ -143,7 +143,7 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
          log Debug "persisting provisional block event" (number, hash)
          Pg.runLoggedTransaction
            dbPool
-           (insertProvisionalBlockEvent createdAt event)
+           (insertProvisionalBlockEventTx createdAt event)
          provisionalHeight <- readTVarIO provisionalHeightVar
          when (number > provisionalHeight) $
            atomically $ writeTVar provisionalHeightVar number
@@ -161,7 +161,7 @@ streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
        log Debug "invalidating provisional block events" hashes
        Pg.runLoggedTransaction
          dbPool
-         (deleteProvisionalBlockEventsByHash deletedAt hashes)
+         (deleteProvisionalBlockEventsByHashTx deletedAt hashes)
        log Debug "invalidated provisional block events" hashes)
     invalidatedHashesStream
   return (finalizedEventStream, provisionalEventStream, finalizedHeightStream)
