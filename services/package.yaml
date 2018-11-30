@@ -86,8 +86,8 @@ library:
   - access-control/src
   - dummy-manager/src
   - tezos-chain-watcher/src
-  - tezos-platform-core/src
   - tezos-injector/src
+  - tezos-platform-core/src
   - tezos-platform-stats/src
 
 executables:
@@ -106,14 +106,14 @@ executables:
     source-dirs:          tezos-chain-watcher/bin
     dependencies:
     - services
-  tezos-platform-core:
-    main:                 Main.hs
-    source-dirs:          tezos-platform-core/bin
-    dependencies:
-    - services
   tezos-injector:
     main:                 Main.hs
     source-dirs:          tezos-injector/bin
+    dependencies:
+    - services
+  tezos-platform-core:
+    main:                 Main.hs
+    source-dirs:          tezos-platform-core/bin
     dependencies:
     - services
   tezos-platform-stats:
@@ -153,9 +153,9 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  tezos-platform-core-test:
+  tezos-injector-test:
     main:                       Spec.hs
-    source-dirs:                tezos-platform-core/test
+    source-dirs:                tezos-injector/test
     ghc-options:
     - -threaded
     - -rtsopts
@@ -163,9 +163,9 @@ tests:
     - -fprint-potential-instances
     dependencies:
     - services
-  tezos-injector-test:
+  tezos-platform-core-test:
     main:                       Spec.hs
-    source-dirs:                tezos-injector/test
+    source-dirs:                tezos-platform-core/test
     ghc-options:
     - -threaded
     - -rtsopts

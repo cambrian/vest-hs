@@ -23,6 +23,7 @@ data T = T
   , provisionalBlockEventStream :: Stream QueueBuffer Tezos.BlockEvent
   , finalizedHeightStream :: Stream ValueBuffer Word64
   , operationFeeStream :: Stream ValueBuffer (FixedQty XTZ)
+  , provisionalBlockHashStream :: Stream ValueBuffer Tezos.BlockHash
   }
 
 instance Loadable TezosFinalizationLag where

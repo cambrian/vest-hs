@@ -10,10 +10,12 @@ import qualified TezosInjector.Internal as TezosInjector
 import Vest
 import qualified WebSocket
 
+type OperationWithMetadata = (Tezos.SignedOperation, Tezos.OperationObject)
+
 -- | Public operation injection endpoint for browsers to hit. Returns when operation has been
 -- received and persisted.
 type InjectEndpoint
-   = EndpointJson 'NoAuth TezosInjector.T WebSocket.T "inject" Tezos.SignedOperation ('Direct ())
+   = EndpointJson 'NoAuth TezosInjector.T WebSocket.T "inject" OperationWithMetadata ('Direct ())
 
 data Payout = Payout
   { id :: UUID

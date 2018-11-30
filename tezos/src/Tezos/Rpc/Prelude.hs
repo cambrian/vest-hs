@@ -256,9 +256,11 @@ type GetBlockLevel
 type GetBlockSnapshotIndices
    = WithChainBlock ("context" :> "raw" :> "json" :> "rolls" :> "owner" :> "snapshot" :> Capture "cycle" Int :> Direct [Int])
 
-type GetContractManager = WithChainBlockContract ("manager" :> Direct Text)
-
 type GetContractBalance = WithChainBlockContract ("balance" :> Direct Text)
+
+type GetContractCounter = WithChainBlockContract ("counter" :> Direct Int)
+
+type GetContractManager = WithChainBlockContract ("manager" :> Direct Text)
 
 data FrozenBalance = FrozenBalance
   { cycle :: Int
