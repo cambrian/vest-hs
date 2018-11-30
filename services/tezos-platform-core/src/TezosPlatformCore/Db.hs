@@ -66,6 +66,7 @@ instance IndexableTable CycleT where
 
 data DelegateT f = Delegate
   { address :: C f Tezos.ImplicitAddress
+  , dummy_address :: C f Tezos.ImplicitAddress
   , name :: C f Text
   , description :: C f Text
   , first_managed_block :: PrimaryKey BlockT f
@@ -187,30 +188,37 @@ deriving instance Read (PrimaryKey PayoutT (Nullable Identity))
 
 deriving instance Show (PrimaryKey PayoutT (Nullable Identity))
 
--- TODO: use for tracking delegations attributable to vest.
--- Hopefully this won't be necessary
--- data DelegationT f = Delegation
---   { delegator :: C f Tezos.OriginatedAddress
---   , delegate :: PrimaryKey DelegateT f
---   , reward_cycle :: PrimaryKey CycleT f
---   , size :: C f (FixedQty XTZ)
---   , dividend :: PrimaryKey DividendT f
---   , created_at :: C f Time
---   } deriving (Generic, Beamable)
--- type Delegation = DelegationT Identity
--- deriving instance Eq Delegation
--- deriving instance Read Delegation
--- deriving instance Show Delegation
--- instance Table DelegationT where
---   data PrimaryKey DelegationT f = DelegationPKey (C f
---                                                   Tezos.OriginatedAddress)
---                                                (PrimaryKey DelegateT f) (PrimaryKey CycleT f)
---                                   deriving (Generic, Beamable)
---   primaryKey Delegation {delegator, delegate, rewardCycle} =
---     DelegationPKey delegator delegate rewardCycle
--- deriving instance Eq (PrimaryKey DelegationT Identity)
--- deriving instance Read (PrimaryKey DelegationT Identity)
--- deriving instance Show (PrimaryKey DelegationT Identity)
+-- Represents delegations attributable to vest. May also be necessary for tracking
+-- overdelegation...
+data DelegationT f = Delegation
+  { delegate :: PrimaryKey DelegateT f
+  , delegator :: C f Tezos.OriginatedAddress
+  , created_at :: C f Time
+  } deriving (Generic, Beamable)
+
+type Delegation = DelegationT Identity
+
+deriving instance Eq Delegation
+
+deriving instance Read Delegation
+
+deriving instance Show Delegation
+
+instance Table DelegationT where
+  data PrimaryKey DelegationT f = DelegationPKey (PrimaryKey
+                                                  DelegateT
+                                                  f)
+                                               (C f Tezos.OriginatedAddress)
+                                  deriving (Generic, Beamable)
+  primaryKey Delegation {delegate, delegator} =
+    DelegationPKey delegate delegator
+
+deriving instance Eq (PrimaryKey DelegationT Identity)
+
+deriving instance Read (PrimaryKey DelegationT Identity)
+
+deriving instance Show (PrimaryKey DelegationT Identity)
+
 -- | Payments from bakers.
 data PaymentT f = Payment
   { hash :: C f Tezos.OperationHash
@@ -253,7 +261,7 @@ data Schema f = Schema
   , rewards :: f (TableEntity RewardT)
   , payouts :: f (TableEntity PayoutT)
   , dividends :: f (TableEntity DividendT)
-  -- , delegations :: f (TableEntity DelegationT)
+  , delegations :: f (TableEntity DelegationT)
   , payments :: f (TableEntity PaymentT)
   } deriving (Generic)
 
@@ -325,6 +333,14 @@ isPlatformDelegate addr =
   runSelectReturningOne
     (lookup_ (delegates schema) $ DelegateAddress $ Tagged addr)
 
+isPlatformDelegation ::
+     Tezos.ImplicitAddress -> Tezos.OriginatedAddress -> Pg Bool
+isPlatformDelegation delegate delegator =
+  isJust <$>
+  runSelectReturningOne
+    (lookup_ (delegations schema) $
+     DelegationPKey (DelegateAddress delegate) delegator)
+
 getDelegatePriceTiers :: Tezos.ImplicitAddress -> Pg [(FixedQty XTZ, Rational)]
 getDelegatePriceTiers addr = do
   m <- runSelectReturningOne $ lookup_ (delegates schema) $ DelegateAddress addr
@@ -336,3 +352,13 @@ wasPaymentHandled :: Tezos.OperationHash -> Pg Bool
 wasPaymentHandled hash =
   isJust <$>
   runSelectReturningOne (lookup_ (payments schema) $ PaymentHash hash)
+
+delegateOfDummyAddress ::
+     Tezos.ImplicitAddress -> Pg (Maybe Tezos.ImplicitAddress)
+delegateOfDummyAddress addr =
+  runSelectReturningOne $
+  select $
+  address <$>
+  filter_
+    (\Delegate {dummy_address} -> dummy_address ==. val_ addr)
+    (all_ $ delegates schema)

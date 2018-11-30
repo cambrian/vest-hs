@@ -105,6 +105,7 @@ default-extensions:
 - InstanceSigs
 - KindSignatures
 - LambdaCase
+- MonadComprehensions
 - MultiParamTypeClasses
 - MultiWayIf
 - NamedFieldPuns

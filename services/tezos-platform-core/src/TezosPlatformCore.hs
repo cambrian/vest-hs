@@ -34,7 +34,8 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                        then (div, rem)
                        else ( div +
                               rationalOf reward ^*
-                              (rate * ((rem - tierStart) ^/^ stakingBalance))
+                              ((1 - rate) *
+                               ((rem - tierStart) ^/^ stakingBalance))
                             , tierStart))
                   (0, sizeDelegated)
                   priceTiers
@@ -53,7 +54,14 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                                 } -> do
                 priceTiers <-
                   Pg.runLogged dbPool $ getDelegatePriceTiers delegate
+                platformDelegations <-
+                  filterM
+                    (\Tezos.DelegationInfo {delegator} ->
+                       Pg.runLogged dbPool $
+                       isPlatformDelegation delegate delegator) $
+                  delegations
                 let dividends =
+                      filter (\Dividend {size} -> size > 0) $
                       map
                         (\Tezos.DelegationInfo {delegator, size} ->
                            Dividend
@@ -71,7 +79,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                              , payout = PayoutId Nothing
                              , created_at = time
                              })
-                        delegations
+                        platformDelegations
                     totalDividendSize =
                       foldr (\Dividend {size} tot -> tot + size) 0 dividends
                     grossDelegateReward = reward - totalDividendSize
@@ -117,6 +125,26 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
           (dividends schema)
           (Pg.insertValues allDividends)
           Pg.onConflictDefault
+
+handleDelegation :: T -> Tezos.Transaction -> IO ()
+handleDelegation T {dbPool} Tezos.Transaction {from, to} = do
+  time <- now
+  void . runMaybeT $ do
+    delegate <-
+      MaybeT $ Pg.runLogged dbPool $ delegateOfDummyAddress $ Tagged to
+    lift $
+      Pg.runLogged dbPool $
+      Pg.runInsert $
+      Pg.insert
+        (delegations schema)
+        (Pg.insertValues
+           [ Delegation
+               { delegate = DelegateAddress delegate
+               , delegator = Tagged from
+               , created_at = time
+               }
+           ]) $
+      Pg.onConflict Pg.anyConflict Pg.onConflictDoNothing
 
 handlePayment :: T -> Word64 -> Tezos.Transaction -> IO ()
 handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
@@ -229,7 +257,8 @@ blockConsumer t@T {dbPool} =
                ]) $
           Pg.onConflict Pg.anyConflict Pg.onConflictDoNothing
         handleCycle t blockEvent
-        forM_ transactions $ handlePayment t blockNumber
+        forM_ transactions $ \tx ->
+          handleDelegation t tx >> handlePayment t blockNumber tx
         Pg.runLogged dbPool $
           Pg.runUpdate $
           Pg.update
