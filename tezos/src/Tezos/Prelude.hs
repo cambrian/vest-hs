@@ -83,3 +83,6 @@ data OperationStatus
   | Confirmed BlockHash
   | Rejected
   deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
+
+defaultFinalizationLag :: Word8
+defaultFinalizationLag = 60

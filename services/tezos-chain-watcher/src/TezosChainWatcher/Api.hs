@@ -16,7 +16,7 @@ type RewardInfoEndpoint
    = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct [Tezos.RewardInfo])
 
 type MonitorOperationEndpoint
-   = Endpoint 'NoAuth T Amqp.T "monitorOperation" (Tezos.OperationHash, Word8) ('Streaming Tezos.OperationStatus)
+   = Endpoint 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming Tezos.OperationStatus)
 
 type FinalizedHeightValue = ValueTopic T Amqp.T "finalizedHeight" Word64
 

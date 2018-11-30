@@ -2,6 +2,7 @@ module Tezos.Cli
   ( T(..)
   , extractAddress
   , forgeBatchTransaction
+  , injectOperation
   ) where
 
 import Control.Retry
@@ -73,6 +74,7 @@ serializeRecipient :: (Address, FixedQty XTZ) -> Text
 serializeRecipient (Tagged address, size) =
   address <> " " <> show @Integer (fromIntegral size)
 
+-- TODO: Update with opOb.
 forgeBatchTransaction ::
      T -> HashMap Address (FixedQty XTZ) -> FixedQty XTZ -> IO SignedOperation
 forgeBatchTransaction T { eztzExe
@@ -105,3 +107,13 @@ forgeBatchTransaction T { eztzExe
              then throw $ CliRecoverableException "timeout"
              else log Error "batch forge failed" output >> throw BugException
          ExitSuccess -> Tagged <$> lastLineUnsafe output)
+
+-- TODO.
+injectOperation ::
+     T -> SignedOperation -> OperationObject -> IO (Maybe OperationHash)
+injectOperation T {tezosNodeUri, timeoutSeconds} (Tagged signedOpBytes) (Tagged opObject) = do
+  let _ = makeOption "node" tezosNodeUri
+      _ = makeOption "signed" signedOpBytes
+      _ = makeOption "object" opObject
+      _ = makeOption "timeout" $ show timeoutSeconds
+  panic "unimplemented"

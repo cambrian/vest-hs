@@ -19,10 +19,9 @@ rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
 
 -- | Eventually: Draw a nice state machine for ease of understanding.
 monitorOperation ::
-     T
-  -> (Tezos.OperationHash, Word8)
-  -> IO (Stream ValueBuffer Tezos.OperationStatus)
-monitorOperation T {dbPool, provisionalBlockEventStream} (opHash, threshold) = do
+     T -> Tezos.OperationHash -> IO (Stream ValueBuffer Tezos.OperationStatus)
+monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
+  let threshold = Tezos.defaultFinalizationLag
   (statusWriter, statusStream) <- newStream
   lastBlockHashVar <- newEmptyTMVarIO
   opStatusVar <- newEmptyTMVarIO
@@ -100,11 +99,11 @@ materializeBlockEvent t@T {dbPool} blockNumber = do
 streamBlockEvents ::
      Pool (Specific T Pg.Connection)
   -> Tezos.Rpc.T
-  -> TezosFinalizationLag
+  -> Word8
   -> IO ( Stream QueueBuffer Tezos.BlockEvent
         , Stream QueueBuffer Tezos.BlockEvent
         , Stream ValueBuffer Word64)
-streamBlockEvents dbPool tezos (TezosFinalizationLag finalizationLag) = do
+streamBlockEvents dbPool tezos finalizationLag = do
   highestSeenBlockNumber <- Pg.runLogged dbPool (selectMaxBlockNumber Finalized)
   let nextBlockNumber = highestSeenBlockNumber + 1
   provisionalHeightVar <-
@@ -179,7 +178,7 @@ instance Service T where
   summary = "Tezos Chain Watcher v0.1.0"
   description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
-    (accessControlPublicKey :<|> seed :<|> finalizationLag) <- load configPaths
+    (accessControlPublicKey :<|> seed) <- load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
@@ -189,7 +188,7 @@ instance Service T where
       (operationFeeWriter, operationFeeStream) <- newStream
       writeStream operationFeeWriter 0
       (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
-        streamBlockEvents dbPool tezos finalizationLag
+        streamBlockEvents dbPool tezos Tezos.defaultFinalizationLag
       (provisionalBlockHashWriter, provisionalBlockHashStream) <- newStream
       tapStream_
         (\Tezos.BlockEvent {hash} -> writeStream provisionalBlockHashWriter hash)
