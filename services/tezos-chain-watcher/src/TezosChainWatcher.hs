@@ -45,6 +45,7 @@ monitorOperation T {dbPool, provisionalBlockEventStream} (opHash, threshold) = d
               then return $ Tezos.NotIncluded 0
               else if confirmations < threshold
                      then return $ Tezos.Included (blockHash, confirmations)
+
                      else return $ Tezos.Confirmed blockHash
   void . async $
     takeWhileMStream -- Continue until op confirmed or rejected.
@@ -53,6 +54,7 @@ monitorOperation T {dbPool, provisionalBlockEventStream} (opHash, threshold) = d
          atomically $ writeTMVar lastBlockHashVar hash
          -- ^ Update last block hash for next iteration.
          case lastBlockHashMaybe of
+
            Nothing -> return True
            -- ^ Wait for one block to go by so we can ensure the validity of the DB query within
            -- block events we have seen. If the chain subsequently forks, we simply re-run the DB

@@ -26,6 +26,7 @@
   - -XInstanceSigs
   - -XKindSignatures
   - -XLambdaCase
+  - -XMonadComprehensions
   - -XMultiParamTypeClasses
   - -XMultiWayIf
   - -XNamedFieldPuns
