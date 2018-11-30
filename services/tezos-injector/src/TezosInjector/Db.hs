@@ -119,18 +119,10 @@ tryInsertVestCounter createdAt vestCounterValue =
     (insertValues [Variable vestCounterKey vestCounterValue createdAt Nothing]) $
   onConflict anyConflict onConflictDoNothing
 
-getVestCounter :: Pg (Maybe Word64)
-getVestCounter =
-  runSelectReturningOne
-    (select $
-     value <$>
-     filter_
-       (\Variable {key} -> key ==. val_ vestCounterKey)
-       (all_ (variables schema)))
-
--- Written as a get/set to ensure that the counter variable exists.
-setVestCounterTx :: Time -> Word64 -> Pg Bool
-setVestCounterTx updatedAt vestCounterValue = do
+-- Runs an action with the current counter value and returns an (update time, new counter value)
+-- tuple to persist. IMPORTANT: Do not modify the counter in the action.
+withVestCounterTx :: (Word64 -> Pg (Time, Word64)) -> Pg Bool
+withVestCounterTx action = do
   variableMaybe <-
     runSelectReturningOne $
     select $
@@ -138,11 +130,12 @@ setVestCounterTx updatedAt vestCounterValue = do
     all_ (variables schema)
   case variableMaybe of
     Nothing -> return False
-    Just variable -> do
+    Just variable@Variable {value} -> do
+      (updatedAt, newCounterValue) <- action value
       runUpdate $
         save
           (variables schema)
-          (variable {value = vestCounterValue, updated_at = Just updatedAt})
+          (variable {value = newCounterValue, updated_at = Just updatedAt})
       return True
 
 insertOperationTx ::

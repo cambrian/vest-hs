@@ -1,6 +1,7 @@
 module Tezos.Rpc
   ( module Reexports
   , T(..)
+  , getCounter
   , getRewardInfo
   , streamBlockEventsDurable
   , toCycleEventStream
@@ -31,6 +32,10 @@ instance Resource T where
 
 instance Loadable T where
   configFile = [relfile|tezos-rpc.yaml|]
+
+getCounter :: T -> Address -> IO Word64
+getCounter T {httpClient} (Tagged address) =
+  fromIntegral <$> getCounterRaw httpClient address
 
 getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
 getRewardInfo T {httpClient} cycleNumber delegateIds = do

@@ -305,3 +305,13 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
   let invalidatedHashes = fmap (\BlockEvent {hash} -> hash) invalidatedEvents
   return
     (trimmedQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes)
+
+getCounterRaw :: Http.Client -> Text -> IO Int
+getCounterRaw httpClient address =
+  Http.request
+    httpClient
+    (Http.buildRequest
+       (Proxy :: Proxy GetContractCounter)
+       mainChain
+       headBlockHash
+       address)
