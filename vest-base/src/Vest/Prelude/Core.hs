@@ -18,8 +18,6 @@ import Control.Monad.Trans.Maybe as Vest.Prelude.Core
 import Data.Aeson.TypeScript.TH
 import Data.HashMap.Strict as Vest.Prelude.Core (HashMap)
 import Data.HashSet as Vest.Prelude.Core (HashSet)
-import qualified Data.HashTable.IO as HashTable
-import Data.HashTable.IO as Vest.Prelude.Core (CuckooHashTable, LinearHashTable)
 import Data.Hashable as Vest.Prelude.Core (Hashable(..))
 import Data.Proxy as Vest.Prelude.Core
 import Numeric.Natural as Vest.Prelude.Core
@@ -115,8 +113,6 @@ type STM' t a = Tagged t (STM a)
 type Async' t a = Tagged t (Async a)
 
 instance Hashable a => Hashable (Tagged s a)
-
-type HashTable k v = HashTable.BasicHashTable k v
 
 type TMap = TMap.TMap
 

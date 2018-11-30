@@ -9,13 +9,13 @@ module WebSocket
 import Control.Concurrent.STM.TQueue
 import Data.Aeson.TypeScript.TH
 import Data.Aeson.Types
-import qualified Data.HashTable.IO as HashTable
 import Data.Text (breakOn)
 import qualified Network.HTTP.Types as Http
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WS
 import qualified Network.WebSockets as WS
+import qualified TMap
 import Vest
 
 -- WebSockets don't exactly fit into the Vest.Bridge model, since WebSocket connections are per
@@ -59,12 +59,12 @@ newtype NoServerForNamespaceException =
   deriving anyclass (Exception)
 
 data T = T
-  { serverRequestHandlers :: HashTable Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
+  { serverRequestHandlers :: TMap Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -- ^ For a server, requests need to be aggregated by route.
-  , serverResponseHandlers :: HashTable (UUID' "Client") (ResponseMessage -> IO ())
+  , serverResponseHandlers :: TMap (UUID' "Client") (ResponseMessage -> IO ())
   -- ^ For a server, stores each client's response queue.
-  , clientRequestHandlers :: HashTable (Text' "Server") (RequestMessage -> IO ())
-  , clientResponseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
+  , clientRequestHandlers :: TMap (Text' "Server") (RequestMessage -> IO ())
+  , clientResponseHandlers :: TMap (UUID' "Request") (Text' "Response" -> IO ())
   , serverThread :: Async' "ServerThread" ()
   , clientThreads :: [Async' "ClientThread" ()]
   -- ^ Should clean themselves up when canceled
@@ -75,10 +75,10 @@ instance Resource T where
   make :: Config -> IO T
   -- Begins listening on servePort, connects to each server and begins listening for responses.
   make Config {servePort, pingInterval, servers} = do
-    serverRequestHandlers <- HashTable.new
-    serverResponseHandlers <- HashTable.new
-    clientRequestHandlers <- HashTable.new
-    clientResponseHandlers <- HashTable.new
+    serverRequestHandlers <- TMap.newIO
+    serverResponseHandlers <- TMap.newIO
+    clientRequestHandlers <- TMap.newIO
+    clientResponseHandlers <- TMap.newIO
     -- Warp.run blocks forever, so we put it in its own thread.
     serverThread <-
       async' $
@@ -90,7 +90,8 @@ instance Resource T where
     clientThreads <-
       forM servers $ \(namespace, ServerInfo {uri, port, path}) -> do
         requestMVar <- newEmptyMVar
-        HashTable.insert clientRequestHandlers namespace (putMVar requestMVar)
+        atomically $
+          TMap.insert (putMVar requestMVar) namespace clientRequestHandlers
         -- Swallowing client exceptions is fine (usually just ConnectionClosed).
         asyncDetached' $ do
           when (isLocalHost uri) (threadDelay (sec 0.05))
@@ -124,24 +125,25 @@ noHttpApp _ respond =
 
 -- Each wsServe is per client and runs on its own thread.
 wsServe ::
-     HashTable Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
-  -> HashTable (UUID' "Client") (ResponseMessage -> IO ())
+     TMap Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
+  -> TMap (UUID' "Client") (ResponseMessage -> IO ())
   -> Int
   -> WS.ServerApp
 wsServe serverRequestHandlers serverResponseHandlers pingInterval pendingConn = do
   conn <- WS.acceptRequest pendingConn
   clientId <- nextUUID'
-  HashTable.insert
-    serverResponseHandlers
-    clientId
-    (WS.sendTextData conn . serialize @'JSON)
+  atomically $
+    TMap.insert
+      (WS.sendTextData conn . serialize @'JSON)
+      clientId
+      serverResponseHandlers
   WS.forkPingThread conn pingInterval
   finally
     (serveClient serverRequestHandlers clientId conn)
-    (HashTable.delete serverResponseHandlers clientId)
+    (atomically $ TMap.delete clientId serverResponseHandlers)
 
 serveClient ::
-     HashTable Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
+     TMap Route (UUID' "Client" -> RequestMessage -> IO (Async ()))
   -> UUID' "Client"
   -> WS.Connection
   -> IO () -- Can this be IO Void?
@@ -149,18 +151,20 @@ serveClient ::
 serveClient serverRequestHandlers clientId conn =
   forever . runMaybeT $ do
     reqMsg <- MaybeT $ WS.receiveData conn >>- deserialize @'JSON
-    handler <- MaybeT $ HashTable.lookup serverRequestHandlers $ route reqMsg
+    handler <-
+      MaybeT $ atomically $ TMap.lookup (route reqMsg) serverRequestHandlers
     liftIO $ handler clientId reqMsg
 
 wsClientApp ::
-     HashTable (UUID' "Request") (Text' "Response" -> IO ())
+     TMap (UUID' "Request") (Text' "Response" -> IO ())
   -> MVar RequestMessage
   -> WS.ClientApp ()
 wsClientApp clientResponseHandlers requestMVar conn = do
   void . async . forever . runMaybeT $ do
     ResponseMessage {requestId, resText} <-
       MaybeT $ WS.receiveData conn >>- deserialize @'JSON
-    handler <- MaybeT $ HashTable.lookup clientResponseHandlers requestId
+    handler <-
+      MaybeT $ atomically $ TMap.lookup requestId clientResponseHandlers
     liftIO $ handler resText
   forever $ do
     request <- takeMVar requestMVar
@@ -173,13 +177,15 @@ instance RpcTransport T where
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
   serveRaw T {serverRequestHandlers, serverResponseHandlers} route asyncHandler =
-    HashTable.lookup serverRequestHandlers route >>= \case
-      Just _ -> throw $ AlreadyServingException route
-      Nothing -> HashTable.insert serverRequestHandlers route handleMsg
+    atomically $
+    TMap.lookup route serverRequestHandlers >>= \case
+      Just _ -> throwSTM $ AlreadyServingException route
+      Nothing -> TMap.insert handleMsg route serverRequestHandlers
     where
       handleMsg clientId RequestMessage {id = requestId, headers, reqText} =
         async . void . runMaybeT $ do
-          handler <- MaybeT $ HashTable.lookup serverResponseHandlers clientId
+          handler <-
+            MaybeT $ atomically $ TMap.lookup clientId serverResponseHandlers
           lift $
             asyncHandler
               headers
@@ -195,15 +201,16 @@ instance RpcTransport T where
   callRaw T {clientRequestHandlers, clientResponseHandlers} route headers reqText f = do
     let namespace = Tagged $ fst $ breakOn "/" $ untag route
     makeRequest <-
-      HashTable.lookup clientRequestHandlers namespace >>=
+      atomically (TMap.lookup namespace clientRequestHandlers) >>=
       fromJustUnsafe (NoServerForNamespace namespace)
     id <- nextUUID'
     q <- newTQueueIO
-    HashTable.insert clientResponseHandlers id (atomically . writeTQueue q)
+    atomically $
+      TMap.insert (atomically . writeTQueue q) id clientResponseHandlers
     makeRequest $ RequestMessage {id, headers, route, reqText}
     finally
       (f $ atomically $ readTQueue q)
-      (HashTable.delete clientResponseHandlers id)
+      (atomically $ TMap.delete id clientResponseHandlers)
 
 instance Loadable T where
   configFile = [relfile|websocket.yaml|]

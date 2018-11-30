@@ -5,10 +5,10 @@ module Amqp
 
 import Control.Concurrent.STM.TQueue
 import qualified Data.ByteString.Lazy.UTF8 as ByteString.Lazy.UTF8
-import qualified Data.HashTable.IO as HashTable
 import qualified Data.Map as Map
 import qualified Network.AMQP as AMQP
 import qualified Network.AMQP.Types as AMQP.Types
+import qualified TMap
 import Vest
 
 data RequestMessage = RequestMessage
@@ -38,10 +38,9 @@ data T = T
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerChan :: AMQP.Channel
   , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: HashTable Route (AMQP.Channel, AMQP.ConsumerTag)
-  , responseHandlers :: HashTable (UUID' "Request") (Text' "Response" -> IO ())
-  , subscribers :: HashTable (Text' "SubscriberId") ( AMQP.Channel
-                                                    , AMQP.ConsumerTag)
+  , consumedRoutes :: TMap Route (AMQP.Channel, AMQP.ConsumerTag)
+  , responseHandlers :: TMap (UUID' "Request") (Text' "Response" -> IO ())
+  , subscribers :: TMap (Text' "SubscriberId") (AMQP.Channel, AMQP.ConsumerTag)
     -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
@@ -68,7 +67,7 @@ instance Resource T where
     responseConsumerChan <- AMQP.openChannel conn
     queueName <- newQueueName
     AMQP.declareQueue responseConsumerChan AMQP.newQueue {AMQP.queueName}
-    responseHandlers <- HashTable.new
+    responseHandlers <- TMap.newIO
     responseConsumerTag <-
       AMQP.consumeMsgs
         responseConsumerChan
@@ -78,11 +77,12 @@ instance Resource T where
            void . runMaybeT $ do
              ResponseMessage {requestId, resText} <-
                MaybeT $ return $ read $ fromAmqpMsg msg
-             handler <- MaybeT $ HashTable.lookup responseHandlers requestId
+             handler <-
+               MaybeT $ atomically $ TMap.lookup requestId responseHandlers
              liftIO $ handler resText
            AMQP.ackEnv env)
-    consumedRoutes <- HashTable.new
-    subscribers <- HashTable.new
+    consumedRoutes <- TMap.newIO
+    subscribers <- TMap.newIO
     return
       T
         { conn
@@ -105,15 +105,15 @@ instance Resource T where
             , subscribers
             } = do
     AMQP.cancelConsumer responseConsumerChan responseConsumerTag
-    HashTable.mapM_ (uncurry AMQP.cancelConsumer . snd) consumedRoutes
-    HashTable.mapM_ (uncurry unsubscribe) subscribers
+    TMap.parallelMapM_ (uncurry AMQP.cancelConsumer . snd) consumedRoutes
+    TMap.parallelMapM_ (uncurry unsubscribe) subscribers
     void $ AMQP.deleteQueue responseConsumerChan (untag responseQueue)
     -- AMQP.closeConnection is not thread safe, so we choose to leak the connection instead.
     -- AMQP.closeConnection conn -- Also closes chans.
     -- We have to manually close the AMQP channels now
     AMQP.closeChannel responseConsumerChan
-    HashTable.mapM_ (AMQP.closeChannel . fst . snd) consumedRoutes
-    HashTable.mapM_ (AMQP.closeChannel . fst . snd) subscribers
+    TMap.parallelMapM_ (AMQP.closeChannel . fst . snd) consumedRoutes
+    TMap.parallelMapM_ (AMQP.closeChannel . fst . snd) subscribers
 
 instance RpcTransport T where
   serveRaw ::
@@ -123,9 +123,8 @@ instance RpcTransport T where
     -> IO ()
   -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
   serveRaw T {conn, publishChan, consumedRoutes} route asyncHandler = do
-    HashTable.lookup consumedRoutes route >>= \case
-      Nothing -> return ()
-      Just _ -> throw $ AlreadyServingException route
+    atomically (TMap.lookup route consumedRoutes) >>- isJust >>=
+      (`when` throw (AlreadyServingException route))
     let Tagged queueName = route
     consumerChan <- AMQP.openChannel conn
     void $ AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
@@ -147,7 +146,7 @@ instance RpcTransport T where
                      (toAmqpMsg . show $ ResponseMessage {requestId, resText})
              liftIO $ asyncHandler headers reqText respond
            AMQP.ackEnv env)
-    HashTable.insert consumedRoutes route (consumerChan, consumerTag)
+    atomically $ TMap.insert (consumerChan, consumerTag) route consumedRoutes
   callRaw ::
        T
     -> Route
@@ -158,7 +157,7 @@ instance RpcTransport T where
   callRaw T {publishChan, responseQueue, responseHandlers} route headers reqText f = do
     id <- nextUUID'
     q <- newTQueueIO
-    HashTable.insert responseHandlers id (atomically . writeTQueue q)
+    atomically $ TMap.insert (atomically . writeTQueue q) id responseHandlers
     void $
       AMQP.publishMsg
         publishChan
@@ -167,7 +166,7 @@ instance RpcTransport T where
         (toAmqpMsg . show $ RequestMessage {id, headers, responseQueue, reqText})
     finally
       (f $ atomically $ readTQueue q)
-      (HashTable.delete responseHandlers id)
+      (atomically $ TMap.delete id responseHandlers)
 
 declareValueExchange :: AMQP.Channel -> ValueName -> IO ()
 declareValueExchange chan (Tagged exchangeName) =
@@ -209,7 +208,7 @@ subscribe_ T {conn, subscribers} (Tagged exchangeName) push = do
       AMQP.NoAck
       (push . Tagged . fromAmqpMsg . fst)
   let subscriberId = Tagged queueName
-  HashTable.insert subscribers subscriberId (consumerChan, consumerTag)
+  atomically $ TMap.insert (consumerChan, consumerTag) subscriberId subscribers
 
 instance ValueTransport T where
   publishValue t valueName = do
