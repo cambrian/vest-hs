@@ -97,7 +97,7 @@ instance Resource T where
   cleanup :: T -> IO ()
     -- Closes AMQP consumers, closes connection, and deletes response queue.
     -- Unsubscribes from any subscribed topics.
-  cleanup T { conn = _
+  cleanup T { conn
             , responseQueue
             , responseConsumerChan
             , responseConsumerTag
@@ -108,12 +108,7 @@ instance Resource T where
     TMap.parallelMapValuesM_ (uncurry AMQP.cancelConsumer) consumedRoutes
     TMap.parallelMapM_ (uncurry unsubscribe) subscribers
     void $ AMQP.deleteQueue responseConsumerChan (untag responseQueue)
-    -- AMQP.closeConnection is not thread safe, so we choose to leak the connection instead.
-    -- AMQP.closeConnection conn -- Also closes chans.
-    -- We have to manually close the AMQP channels now
-    AMQP.closeChannel responseConsumerChan
-    TMap.parallelMapValuesM_ (AMQP.closeChannel . fst) consumedRoutes
-    TMap.parallelMapValuesM_ (AMQP.closeChannel . fst) subscribers
+    AMQP.closeConnection conn -- Also closes chans.
 
 instance RpcTransport T where
   serveRaw ::
