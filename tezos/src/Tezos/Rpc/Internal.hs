@@ -267,7 +267,7 @@ requestRetryPolicy =
 -- block events, and any invalidated provisional block hashes.
 updateEventQueueWith ::
      Http.Client
-  -> Int
+  -> Word8
   -> [BlockEvent]
   -> BlockEvent
   -> IO ([BlockEvent], [BlockEvent], [BlockEvent], [BlockHash])
@@ -301,7 +301,8 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
                        , invalidatedEvents)
                 -- ^ Stitch (new events to the beginning of the queue).
         stitchOrRewind [newEvent]
-  let (trimmedQueue, finalizedEvents) = splitAt finalizationLag updatedQueue
+  let (trimmedQueue, finalizedEvents) =
+        splitAt (fromIntegral finalizationLag) updatedQueue
   let invalidatedHashes = fmap (\BlockEvent {hash} -> hash) invalidatedEvents
   return
     (trimmedQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes)

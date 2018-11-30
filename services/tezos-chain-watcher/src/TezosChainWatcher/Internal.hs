@@ -9,10 +9,6 @@ import qualified Tezos
 import qualified Tezos.Rpc
 import Vest
 
-newtype TezosFinalizationLag =
-  TezosFinalizationLag Int
-  deriving newtype (FromJSON)
-
 data T = T
   { dbPool :: Pool (Specific T Postgres.Connection)
   , amqp :: Amqp.T
@@ -25,9 +21,6 @@ data T = T
   , operationFeeStream :: Stream ValueBuffer (FixedQty XTZ)
   , provisionalBlockHashStream :: Stream ValueBuffer Tezos.BlockHash
   }
-
-instance Loadable TezosFinalizationLag where
-  configFile = [relfile|tezos-finalization-lag.yaml|]
 
 instance HasNamespace T where
   type Namespace T = "tezos-chain-watcher"

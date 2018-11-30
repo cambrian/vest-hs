@@ -2,14 +2,19 @@ module TezosInjector.Db
   ( module TezosInjector.Db
   ) where
 
+import GHC.Exts (groupWith)
 import Postgres
 import qualified Tezos
 import Vest hiding (from, hash, to)
 
 data OperationT f = Operation
-  { signed_bytes :: C f Tezos.SignedOperation
+  { id :: C f Word64 -- Used for ordering.
+  , counter_address :: C f Tezos.Address
+  , signed_bytes :: C f Tezos.SignedOperation
   , object :: C f Tezos.OperationObject
   , hash :: C f (Maybe Tezos.OperationHash)
+  , is_internal :: C f Bool
+  , is_rejected :: C f Bool
   , created_at :: C f Time
   , updated_at :: C f (Maybe Time)
   } deriving (Generic, Beamable)
@@ -23,10 +28,9 @@ deriving instance Read Operation
 deriving instance Show Operation
 
 instance Table OperationT where
-  data PrimaryKey OperationT f = OperationSignedBytes (C f
-                                                       Tezos.SignedOperation)
+  data PrimaryKey OperationT f = OperationId (C f Word64)
                                  deriving (Generic, Beamable)
-  primaryKey Operation {signed_bytes} = OperationSignedBytes signed_bytes
+  primaryKey Operation {id} = OperationId id
 
 deriving instance Eq (PrimaryKey OperationT Identity)
 
@@ -36,7 +40,7 @@ deriving instance Show (PrimaryKey OperationT Identity)
 
 data PayoutT f = Payout
   { id :: C f UUID
-  , signed_bytes :: PrimaryKey OperationT f
+  , operation_id :: PrimaryKey OperationT f
   , created_at :: C f Time
   } deriving (Generic, Beamable)
 
@@ -102,14 +106,30 @@ schema = unCheckDatabase checkedSchema
 vestCounterKey :: Text
 vestCounterKey = "vestCounter"
 
-selectPendingOperations :: Pg [(Tezos.SignedOperation, Tezos.OperationObject)]
-selectPendingOperations =
-  runSelectReturningList
-    (select $
-     fmap
-       (\Operation {signed_bytes, object} -> (signed_bytes, object))
-       (filter_ (\Operation {hash} -> hash ==. val_ Nothing) $
-        all_ (operations schema)))
+selectNextOperationId :: Pg Word64
+selectNextOperationId = do
+  m <-
+    runSelectReturningOne $
+    select $
+    aggregate_ max_ $ fmap (\Operation {id} -> id) $ all_ (operations schema)
+  return $
+    case m of
+      Just (Just num) -> num + 1
+      _ -> 0
+
+selectNextOperations :: Pg [Operation]
+selectNextOperations = do
+  pendingOperations <-
+    runSelectReturningList
+      (select $
+       filter_
+         (\Operation {hash, is_rejected} ->
+            (hash ==. val_ Nothing) &&. (is_rejected ==. val_ False)) $
+       all_ (operations schema))
+  let pendingByAccount = groupWith (\Operation {id} -> id) pendingOperations
+      nextOperations =
+        fmap (minimumBy $ comparing (\Operation {id} -> id)) pendingByAccount
+  return nextOperations
 
 tryInsertVestCounter :: Time -> Word64 -> Pg ()
 tryInsertVestCounter createdAt vestCounterValue =
@@ -139,29 +159,46 @@ withVestCounterTx action = do
       return True
 
 insertOperationTx ::
-     Time -> Tezos.SignedOperation -> Tezos.OperationObject -> [UUID] -> Pg ()
-insertOperationTx createdAt opSignedBytes object payoutIds = do
+     Time
+  -> Tezos.Address
+  -> Tezos.SignedOperation
+  -> Tezos.OperationObject
+  -> Bool
+  -> [UUID]
+  -> Pg ()
+insertOperationTx createdAt opAddress opSignedBytes opObject opIsInternal payoutIds = do
+  nextOpId <- selectNextOperationId
   runInsert $
     insert
       (operations schema)
-      (insertValues [Operation opSignedBytes object Nothing createdAt Nothing])
+      (insertValues
+         [ Operation
+             nextOpId
+             opAddress
+             opSignedBytes
+             opObject
+             Nothing
+             opIsInternal
+             False
+             createdAt
+             Nothing
+         ])
       onConflictDefault
   runInsert $
     insert
       (payouts schema)
       (insertValues $
-       fmap
-         (\id -> Payout id (OperationSignedBytes opSignedBytes) createdAt)
-         payoutIds)
+       fmap (\id -> Payout id (OperationId nextOpId) createdAt) payoutIds)
       onConflictDefault
 
-confirmOperationTx ::
-     Time -> Tezos.SignedOperation -> Tezos.OperationHash -> Pg Bool
-confirmOperationTx updatedAt opSignedBytes opHash = do
+confirmOperationTx :: Time -> Word64 -> Tezos.OperationHash -> Pg Bool
+confirmOperationTx updatedAt opId opHash = do
   operationMaybe <-
     runSelectReturningOne $
     select $
-    filter_ (\Operation {signed_bytes} -> signed_bytes ==. val_ opSignedBytes) $
+    filter_
+      (\Operation {id, is_rejected} ->
+         (id ==. val_ opId) &&. (is_rejected ==. val_ False)) $
     all_ (operations schema)
   case operationMaybe of
     Nothing -> return False
@@ -170,4 +207,22 @@ confirmOperationTx updatedAt opSignedBytes opHash = do
         save
           (operations schema)
           (operation {hash = Just opHash, updated_at = Just updatedAt})
+      return True
+
+rejectOperationTx :: Time -> Word64 -> Pg Bool
+rejectOperationTx updatedAt opId = do
+  operationMaybe <-
+    runSelectReturningOne $
+    select $
+    filter_
+      (\Operation {id, is_rejected} ->
+         (id ==. val_ opId) &&. (is_rejected ==. val_ False)) $
+    all_ (operations schema)
+  case operationMaybe of
+    Nothing -> return False
+    Just operation -> do
+      runUpdate $
+        save
+          (operations schema)
+          (operation {is_rejected = True, updated_at = Just updatedAt})
       return True

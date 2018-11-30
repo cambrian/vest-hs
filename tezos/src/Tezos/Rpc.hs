@@ -73,7 +73,7 @@ getRewardInfo T {httpClient} cycleNumber delegateIds = do
 -- problem manually.
 streamBlockEventsDurable ::
      T
-  -> Int
+  -> Word8
   -> IndexOf BlockEvent
   -> IO ( Stream QueueBuffer BlockEvent
         , Stream QueueBuffer BlockEvent

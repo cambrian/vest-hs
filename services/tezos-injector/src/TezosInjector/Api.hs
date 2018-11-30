@@ -5,17 +5,25 @@ module TezosInjector.Api
 import qualified AccessControl.Auth
 import qualified AccessControl.Permission as Permission
 import qualified Amqp
+import Data.Aeson.TypeScript.TH
+import Data.Aeson.Types
 import qualified Tezos
 import qualified TezosInjector.Internal as TezosInjector
 import Vest
 import qualified WebSocket
 
-type OperationWithMetadata = (Tezos.SignedOperation, Tezos.OperationObject)
+data Injection = Injection
+  { counterAddress :: Tezos.Address
+  , signedOpBytes :: Tezos.SignedOperation
+  , opObject :: Tezos.OperationObject
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
+$(deriveTypeScript defaultOptions ''Injection)
 
 -- | Public operation injection endpoint for browsers to hit. Returns when operation has been
 -- received and persisted.
 type InjectEndpoint
-   = EndpointJson 'NoAuth TezosInjector.T WebSocket.T "inject" OperationWithMetadata ('Direct ())
+   = EndpointJson 'NoAuth TezosInjector.T WebSocket.T "inject" [Injection] ('Direct ())
 
 data Payout = Payout
   { id :: UUID
