@@ -36,3 +36,6 @@ TESTREPORT
 
 # Phoityne junk
 .vscode/tasks.json
+
+# Spacemacs scratch files
+.#*
