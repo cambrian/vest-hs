@@ -9,6 +9,13 @@ import qualified Tezos
 import qualified Tezos.Rpc
 import Vest
 
+newtype DefaultOperationFee = DefaultOperationFee
+  { mutez :: Integer
+  } deriving (Eq, Show, Generic) deriving anyclass (FromJSON)
+
+instance Loadable DefaultOperationFee where
+  configFile = [relfile|default-operation-fee.yaml|]
+
 data T = T
   { dbPool :: Pool (Specific T Postgres.Connection)
   , amqp :: Amqp.T

@@ -1,0 +1,5 @@
+mutez: 1500
+# defaultOperationFee = (minimal_fees + minimal_nanotez_per_byte * size + minimal_nanotez_per_gas_unit * gas)
+# where minimal_* are defined in
+# https://www.reddit.com/r/tezos/comments/a01jdp/important_please_update_your_nodebaker_as_soon_as/
+# and size / gas are ~300 / ~10k , respectively

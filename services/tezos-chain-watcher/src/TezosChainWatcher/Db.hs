@@ -15,7 +15,6 @@ data BlockT f = Block
   , hash :: C f Tezos.BlockHash
   , predecessor :: C f Tezos.BlockHash
   , cycle_number :: C f Word64
-  , fee :: C f (FixedQty XTZ)
   , time :: C f Time
   , is_provisional :: C f Bool
   , is_deleted :: C f Bool
@@ -215,7 +214,7 @@ selectTezosTransactionsByOpHash opHash =
      all_ (transactions schema))
 
 toBlockEvent :: Block -> Pg Tezos.BlockEvent
-toBlockEvent (Block number hash predecessor cycleNumber fee time _ _ _ _) = do
+toBlockEvent (Block number hash predecessor cycleNumber time _ _ _ _) = do
   operations <- selectTezosOperationsByBlockHash hash
   originations <- concatMapM selectTezosOriginationsByOpHash operations
   transactions <- concatMapM selectTezosTransactionsByOpHash operations
@@ -225,7 +224,6 @@ toBlockEvent (Block number hash predecessor cycleNumber fee time _ _ _ _) = do
       , hash
       , predecessor
       , cycleNumber
-      , fee
       , time
       , operations
       , originations
@@ -297,7 +295,6 @@ insertProvisionalBlockEventTx createdAt blockEvent = do
                        , hash
                        , predecessor
                        , cycleNumber
-                       , fee
                        , time
                        , operations
                        , originations
@@ -323,7 +320,6 @@ insertProvisionalBlockEventTx createdAt blockEvent = do
                  hash
                  predecessor
                  cycleNumber
-                 fee
                  time
                  True
                  False
