@@ -17,10 +17,12 @@ module Vest.Prelude.Loadable
   ( Loadable(..)
   , LoadableData(..)
   , LoadableResource(..)
+  , Specific(..)
   ) where
 
 import Data.Pool
 import Vest.Prelude.Core
+import Vest.Prelude.Namespace
 import Vest.Prelude.Resource
 import Vest.Prelude.Time
 import Vest.Prelude.TypeLevel
@@ -97,3 +99,18 @@ instance (LoadableResource a, LoadableResource b) =>
     bThread <- asyncDetached $ makeLoadable @b paths
     (a, b) <- waitBoth aThread bThread
     return $ a :<|> b
+
+-- | If you have a Loadable T, you also have a Loadable (Specific svc T)
+-- where @load will look for servicedir/config-file.yaml instead of just config-file.yaml
+newtype Specific s a = Specific
+  { base :: a
+  }
+
+instance (HasNamespace s, Resource a) => Resource (Specific s a) where
+  type ResourceConfig (Specific s a) = ResourceConfig a
+  makeLogged cfg = Specific <$> makeLogged cfg
+  cleanupLogged = cleanupLogged . base
+  resourceName = namespace @s <> "-" <> resourceName @a
+
+instance (HasNamespace s, Loadable a) => Loadable (Specific s a) where
+  configFile = namespaceDir @s </> configFile @a

@@ -80,17 +80,3 @@ class ( HasNamespace a
     Args {configDir} <- cmdArgs $ args @a
     paths <- configPaths @a configDir
     run @a paths
-
--- | TODO: move (and rename?)
-newtype Specific s a = Specific
-  { base :: a
-  }
-
-instance (HasNamespace s, Resource a) => Resource (Specific s a) where
-  type ResourceConfig (Specific s a) = ResourceConfig a
-  makeLogged cfg = Specific <$> makeLogged cfg
-  cleanupLogged = cleanupLogged . base
-  resourceName = namespace @s <> "-" <> resourceName @a
-
-instance (HasNamespace s, Loadable a) => Loadable (Specific s a) where
-  configFile = namespaceDir @s </> configFile @a
