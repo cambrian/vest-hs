@@ -142,7 +142,7 @@ instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  summary = "tezos-injector v0.1.0"
+  summary = "Tezos Injector v0.1.0"
   description = "Injects Tezos operations and makes sure they go through."
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> tezosCli) <- load configPaths

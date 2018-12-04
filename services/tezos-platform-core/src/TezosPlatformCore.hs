@@ -272,7 +272,7 @@ instance Service T where
   type EventsProduced T = ()
   type EventsConsumed T = FinalizedBlockEvents
   type RpcSpec T = ()
-  summary = "Vest Platform Core for Tezos v0.1.0"
+  summary = "Tezos Platform Core v0.1.0"
   description =
     "Tracks how much delegates owe their delegators for each reward event, and issues payouts on behalf of delegates."
   init configPaths f = do

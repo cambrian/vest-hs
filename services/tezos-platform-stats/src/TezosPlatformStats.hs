@@ -60,7 +60,7 @@ instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  summary = "tezos-platform-stats v0.1.0"
+  summary = "Tezos Platform Stats v0.1.0"
   description = "Front-end stats server for Tezos."
   init configPaths f = do
     (RawStubData rawStubData) <- load configPaths
