@@ -47,7 +47,7 @@ instance Service T where
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
-  summary = "dummy-manager v0.1.0"
+  summary = "Dummy Manager v0.1.0"
   description = "Dummy manager service."
   init configPaths f =
     withLoadable configPaths $ \(webSocket :<|> redis) ->
