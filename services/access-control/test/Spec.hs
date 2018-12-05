@@ -125,7 +125,7 @@ generateDataFiles =
     [ generateTestPublicKey
     , generateSubjects
     , generatePublicKey "local"
-    , generatePublicKey "prod"
+    -- , generatePublicKey "prod"
     ]
 
 tests :: TestTree
