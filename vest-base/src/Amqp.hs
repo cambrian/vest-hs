@@ -38,7 +38,7 @@ data T = T
   , responseQueue :: Text' "ResponseQueue"
   , responseConsumerChan :: AMQP.Channel
   , responseConsumerTag :: AMQP.ConsumerTag
-  , consumedRoutes :: TMap Route (AMQP.Channel, AMQP.ConsumerTag)
+  , servedRoutes :: TMap Route (AMQP.Channel, AMQP.ConsumerTag)
   , responseHandlers :: TMap (UUID' "Request") (Text' "Response" -> IO ())
   , subscribers :: TMap (Text' "SubscriberId") (AMQP.Channel, AMQP.ConsumerTag)
     -- ^ Key: subscriberId to Value: (consumerTag, close)
@@ -81,7 +81,7 @@ instance Resource T where
                MaybeT $ atomically $ TMap.lookup requestId responseHandlers
              liftIO $ handler resText
            AMQP.ackEnv env)
-    consumedRoutes <- TMap.newIO
+    servedRoutes <- TMap.newIO
     subscribers <- TMap.newIO
     return
       T
@@ -90,7 +90,7 @@ instance Resource T where
         , responseQueue = Tagged queueName
         , responseConsumerChan
         , responseConsumerTag
-        , consumedRoutes
+        , servedRoutes
         , responseHandlers
         , subscribers
         }
@@ -101,12 +101,12 @@ instance Resource T where
             , responseQueue
             , responseConsumerChan
             , responseConsumerTag
-            , consumedRoutes
+            , servedRoutes
             , subscribers
             } = do
     AMQP.cancelConsumer responseConsumerChan responseConsumerTag
-    TMap.parallelMapValuesM_ (uncurry AMQP.cancelConsumer) consumedRoutes
-    TMap.parallelMapM_ (uncurry unsubscribe) subscribers
+    TMap.parallelMapM_ (uncurry cancelConsumer) servedRoutes
+    TMap.parallelMapM_ (uncurry cancelConsumer) subscribers
     void $ AMQP.deleteQueue responseConsumerChan (untag responseQueue)
     AMQP.closeConnection conn -- Also closes chans.
 
@@ -116,9 +116,9 @@ instance RpcTransport T where
     -> Route
     -> (Headers -> Text' "Request" -> (Text' "Response" -> IO ()) -> IO (Async ()))
     -> IO ()
-  -- ^ This function SHOULD lock the consumedRoutes table but it's highly unlikely to be a problem.
-  serveRaw T {conn, publishChan, consumedRoutes} route asyncHandler = do
-    atomically (TMap.lookup route consumedRoutes) >>- isJust >>=
+  -- ^ This function SHOULD lock the servedRoutes table but it's highly unlikely to be a problem.
+  serveRaw T {conn, publishChan, servedRoutes} route asyncHandler = do
+    atomically (TMap.lookup route servedRoutes) >>- isJust >>=
       (`when` throw (AlreadyServingException route))
     let Tagged queueName = route
     consumerChan <- AMQP.openChannel conn
@@ -141,7 +141,7 @@ instance RpcTransport T where
                      (toAmqpMsg . show $ ResponseMessage {requestId, resText})
              liftIO $ asyncHandler headers reqText respond
            AMQP.ackEnv env)
-    atomically $ TMap.insert (consumerChan, consumerTag) route consumedRoutes
+    atomically $ TMap.insert (consumerChan, consumerTag) route servedRoutes
   callRaw ::
        T
     -> Route
@@ -181,10 +181,11 @@ declareEventExchange chan (Tagged exchangeName) =
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
 
-unsubscribe :: Text' "SubscriberId" -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
-unsubscribe subscriberId (consumerChan, consumerTag) = do
+cancelConsumer :: Text' t -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
+-- ^ Also cleans up queue
+cancelConsumer (Tagged queue) (consumerChan, consumerTag) = do
   AMQP.cancelConsumer consumerChan consumerTag
-  AMQP.deleteQueue consumerChan (untag subscriberId) & void
+  void $ AMQP.deleteQueue consumerChan queue
 
 publish_ :: T -> Text' t -> Text' "a" -> IO ()
 publish_ T {publishChan} (Tagged exchangeName) =
