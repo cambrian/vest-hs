@@ -69,12 +69,13 @@ class ( HasNamespace a
   run paths =
     init @a paths $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
-      void . async . withDistributedLock a (Tagged (namespace @a) <> "-events") $ do
+      log_ Debug $ "rpc handlers initialised"
+      withDistributedLock a (Tagged (namespace @a) <> "-events") $ do
         publish a (Proxy :: Proxy (ValueSpec a)) $ valuesPublished a
         produce a (Proxy :: Proxy (EventsProduced a)) $ eventProducers a
         consume a (Proxy :: Proxy (EventsConsumed a)) $ eventConsumers a
-      log_ Debug "service setup completed, now running forever"
-      blockForever
+        log_ Debug "service setup completed, now running forever"
+        blockForever
   start :: IO Void
   start = do
     Args {configDir} <- cmdArgs $ args @a
