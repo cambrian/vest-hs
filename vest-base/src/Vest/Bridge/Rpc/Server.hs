@@ -97,16 +97,16 @@ serve_ sender t handler = serveRaw (get @transport t) rawRoute asyncHandle
             sender (sendToClient . Right) (handler claims req))
         [ Handler $ \(x :: AuthException) -> do
             sendToClient $ Left $ RpcClientException $ show x
-            log Warn "Handler exception" x
+            log Warn "handler exception" x
         , Handler $ \(x :: InvalidCallException) -> do
             sendToClient $ Left $ RpcClientException $ show x
-            log Warn "Handler exception" x
+            log Warn "handler exception" x
         , Handler $ \(x :: DeserializeException fmt) -> do
             sendToClient $ Left $ RpcClientException $ show x
-            log Warn "Handler exception" x
+            log Warn "handler exception" x
         , Handler $ \(x :: SomeException) -> do
             sendToClient $ Left RpcServerException
-            log Error "Handler server exception" x
+            log Error "handler server exception" x
         ]
       where
         sendToClient = respond . serialize' @fmt

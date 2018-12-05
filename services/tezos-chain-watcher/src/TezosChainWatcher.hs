@@ -90,9 +90,8 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
 
 -- | This DB materializer waits on persistence of the desired event to occur.
 materializeBlockEvent :: T -> IndexOf Tezos.BlockEvent -> IO Tezos.BlockEvent
-materializeBlockEvent t@T {dbPool} blockNumber = do
-  finalizedHeightStream <- subscribe t (Proxy :: Proxy FinalizedHeightValue)
-  takeWhileMStream (return . (blockNumber >)) finalizedHeightStream >>=
+materializeBlockEvent T {dbPool, finalizedHeightStreamSubscribed} blockNumber = do
+  takeWhileMStream (return . (blockNumber >)) finalizedHeightStreamSubscribed >>=
     waitStream
   Pg.runLogged dbPool (selectFinalizedBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
@@ -192,6 +191,8 @@ instance Service T where
       tapStream_
         (\Tezos.BlockEvent {hash} -> writeStream provisionalBlockHashWriter hash)
         provisionalBlockEventStream
+      finalizedHeightStreamSubscribed <-
+        subscribe amqp (Proxy :: Proxy FinalizedHeightValue)
       f $
         T
           { dbPool
@@ -202,6 +203,7 @@ instance Service T where
           , finalizedBlockEventStream
           , provisionalBlockEventStream
           , finalizedHeightStream
+          , finalizedHeightStreamSubscribed
           , operationFeeStream
           , provisionalBlockHashStream
           }
