@@ -106,13 +106,13 @@ executables:
     source-dirs:          tezos-chain-watcher/bin
     dependencies:
     - services
-  tezos-monitor-op:
-    main:                 Monitor.hs
-    source-dirs:          tezos-chain-watcher/bin
-    ghc-options:
-    - -main-is Monitor
-    dependencies:
-    - services
+  # tezos-monitor-op:
+  #   main:                 Monitor.hs
+  #   source-dirs:          tezos-chain-watcher/bin
+  #   ghc-options:
+  #   - -main-is Monitor
+  #   dependencies:
+  #   - services
   tezos-injector:
     main:                 Main.hs
     source-dirs:          tezos-injector/bin

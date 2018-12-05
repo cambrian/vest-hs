@@ -33,6 +33,7 @@ import Protolude as Vest.Prelude.Core hiding
   , catchJust
   , catches
   , finally
+  , fmap
   , get
   , getSum
   , handle
