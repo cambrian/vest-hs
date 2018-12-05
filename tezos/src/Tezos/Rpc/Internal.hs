@@ -48,9 +48,6 @@ frozenCycles = 5
 snapshotLag :: Int
 snapshotLag = 7
 
-opFee :: FixedQty "XTZ"
-opFee = 0
-
 firstBlockNumberInCycle :: Int -> Int
 firstBlockNumberInCycle cycleNumber =
   firstBlockNumber + cycleNumber * blocksPerCycle
@@ -227,7 +224,6 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
       , hash = Tagged hash
       , predecessor = Tagged predecessor
       , cycleNumber = fromIntegral cycleNumber
-      , fee = opFee
       , time = timestamp
       , operations
       , originations

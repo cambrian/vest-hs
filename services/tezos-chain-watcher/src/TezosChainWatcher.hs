@@ -44,7 +44,6 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
               then return $ Tezos.NotIncluded 0
               else if confirmations < threshold
                      then return $ Tezos.Included (blockHash, confirmations)
-
                      else return $ Tezos.Confirmed blockHash
   void . async $
     takeWhileMStream -- Continue until op confirmed or rejected.
@@ -53,7 +52,6 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
          atomically $ writeTMVar lastBlockHashVar hash
          -- ^ Update last block hash for next iteration.
          case lastBlockHashMaybe of
-
            Nothing -> return True
            -- ^ Wait for one block to go by so we can ensure the validity of the DB query within
            -- block events we have seen. If the chain subsequently forks, we simply re-run the DB
@@ -178,15 +176,13 @@ instance Service T where
   summary = "Tezos Chain Watcher v0.1.0"
   description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
-    (accessControlPublicKey :<|> seed) <- load configPaths
+    (accessControlPublicKey :<|> seed :<|> DefaultOperationFee fee) <-
+      load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      -- TODO: Make this actually report something useful.
-      -- Good starter task for newcomers to the codebase.
-      (operationFeeWriter, operationFeeStream) <- newStream
-      writeStream operationFeeWriter 0
+      operationFeeStream <- streamFromList [fromIntegral fee]
       (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos Tezos.defaultFinalizationLag
       (provisionalBlockHashWriter, provisionalBlockHashStream) <- newStream
