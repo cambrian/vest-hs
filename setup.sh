@@ -30,7 +30,7 @@ echo "Installing external dependencies."
 brew install git-crypt node diffutils redis rabbitmq libpq postgres \
   > ~/.vest-hs/brew-install.log 2>&1
 echo "Creating initial Postgres cluster."
-pg_ctl init -D /usr/local/var/postgres > ~/vest-hs/postgres-init.log 2>&1
+pg_ctl init -D /usr/local/var/postgres > ~/.vest-hs/postgres-init.log 2>&1
 echo "Configuring local Redis to use keyspace events."
 sed -i -e 's/notify-keyspace-events ""/notify-keyspace-events "Kg"/g' /usr/local/etc/redis.conf
 echo -e "${CYAN}Please follow the remaining instructions in SETUP.${NC}"
