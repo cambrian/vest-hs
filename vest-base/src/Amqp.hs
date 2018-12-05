@@ -105,8 +105,8 @@ instance Resource T where
             , subscribers
             } = do
     AMQP.cancelConsumer responseConsumerChan responseConsumerTag
-    TMap.parallelMapM_ (uncurry cancelConsumer) servedRoutes
-    TMap.parallelMapM_ (uncurry cancelConsumer) subscribers
+    TMap.parallelMapValuesM_ (uncurry AMQP.cancelConsumer) servedRoutes
+    TMap.parallelMapM_ (uncurry cancelConsumerDeleteQueue) subscribers
     void $ AMQP.deleteQueue responseConsumerChan (untag responseQueue)
     AMQP.closeConnection conn -- Also closes chans.
 
@@ -181,9 +181,10 @@ declareEventExchange chan (Tagged exchangeName) =
     chan
     AMQP.newExchange {AMQP.exchangeName, AMQP.exchangeType = "fanout"}
 
-cancelConsumer :: Text' t -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
+cancelConsumerDeleteQueue ::
+     Text' t -> (AMQP.Channel, AMQP.ConsumerTag) -> IO ()
 -- ^ Also cleans up queue
-cancelConsumer (Tagged queue) (consumerChan, consumerTag) = do
+cancelConsumerDeleteQueue (Tagged queue) (consumerChan, consumerTag) = do
   AMQP.cancelConsumer consumerChan consumerTag
   void $ AMQP.deleteQueue consumerChan queue
 
