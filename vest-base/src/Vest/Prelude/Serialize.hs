@@ -122,7 +122,7 @@ instance {-# OVERLAPPING #-} Serializable 'Pretty a =>
 
 instance {-# OVERLAPPING #-} Deserializable 'Pretty a =>
                              Deserializable 'Pretty (Tagged s a) where
-  deserialize x = deserialize @'Pretty x >>- Tagged
+  deserialize x = Tagged <$> deserialize @'Pretty x
 
 instance {-# OVERLAPPING #-} KnownSymbol a =>
                              Serializable 'Pretty (Proxy a) where

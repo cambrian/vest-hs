@@ -191,7 +191,7 @@ toTezosTransaction Transaction { hash = OperationHash opHash
 
 selectTezosOperationsByBlockHash :: Tezos.BlockHash -> Pg [Tezos.OperationHash]
 selectTezosOperationsByBlockHash blockHash =
-  fmap (\Operation {hash} -> hash) <$>
+  map (\Operation {hash} -> hash) <$>
   runSelectReturningList
     (select $
      filter_ (\op -> block_hash op ==. val_ (BlockHash blockHash)) $
@@ -199,7 +199,7 @@ selectTezosOperationsByBlockHash blockHash =
 
 selectTezosOriginationsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Origination]
 selectTezosOriginationsByOpHash opHash =
-  fmap toTezosOrigination <$>
+  map toTezosOrigination <$>
   runSelectReturningList
     (select $
      filter_ (\Origination {hash} -> hash ==. val_ (OperationHash opHash)) $
@@ -207,7 +207,7 @@ selectTezosOriginationsByOpHash opHash =
 
 selectTezosTransactionsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Transaction]
 selectTezosTransactionsByOpHash opHash =
-  fmap toTezosTransaction <$>
+  map toTezosTransaction <$>
   runSelectReturningList
     (select $
      filter_ (\Transaction {hash} -> hash ==. val_ (OperationHash opHash)) $
@@ -260,9 +260,7 @@ insertTezosOpHashes blockHash createdAt tezosOpHashes =
   insert
     (operations schema)
     (insertValues $
-     fmap
-       (\hash -> Operation hash (BlockHash blockHash) createdAt)
-       tezosOpHashes)
+     map (\hash -> Operation hash (BlockHash blockHash) createdAt) tezosOpHashes)
     onConflictDefault
 
 insertTezosOriginations :: Time -> [Tezos.Origination] -> Pg ()
@@ -271,7 +269,7 @@ insertTezosOriginations createdAt tezosOriginations =
   insert
     (originations schema)
     (insertValues $
-     fmap
+     map
        (\Tezos.Origination {hash, originator, originated} ->
           Origination (OperationHash hash) originator originated createdAt)
        tezosOriginations)
@@ -283,7 +281,7 @@ insertTezosTransactions createdAt tezosTransactions =
   insert
     (transactions schema)
     (insertValues $
-     fmap
+     map
        (\Tezos.Transaction {hash, from, to, fee, size} ->
           Transaction (OperationHash hash) from to fee size createdAt)
        tezosTransactions)
@@ -337,15 +335,18 @@ finalizeProvisionalBlockEventTx updatedAt blockHash = do
     runSelectReturningOne $
     select $
     filter_ (\Block {hash} -> hash ==. val_ blockHash) $
-    filterBlocksByState Provisional $ all_ (blocks schema)
+    filterBlocksByState NotDeleted $ all_ (blocks schema)
+  -- Finalization trivially succeeds for finalized events.
   case blockMaybe of
     Nothing -> return False
-    Just block -> do
-      runUpdate $
-        save
-          (blocks schema)
-          (block {is_provisional = False, updated_at = Just updatedAt})
-      return True
+    Just block@Block {is_provisional}
+      | is_provisional -> do
+        runUpdate $
+          save
+            (blocks schema)
+            (block {is_provisional = False, updated_at = Just updatedAt})
+        return True
+    Just _ -> return True
 
 -- | Soft delete by setting a boolean. TODO: Batch this.
 deleteProvisionalBlockEventsByHashTx :: Time -> [Tezos.BlockHash] -> Pg ()
@@ -353,7 +354,7 @@ deleteProvisionalBlockEventsByHashTx deletedAt blockHashes = do
   blocksToDelete <-
     runSelectReturningList $
     select $
-    filter_ (\Block {hash} -> hash `in_` fmap val_ blockHashes) $
+    filter_ (\Block {hash} -> hash `in_` map val_ blockHashes) $
     filterBlocksByState Provisional $ all_ (blocks schema)
   mapM_
     (\block ->

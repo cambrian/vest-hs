@@ -10,7 +10,8 @@ import qualified TMap
 import qualified Tezos
 import qualified Tezos.Cli
 import qualified Tezos.Rpc
-import qualified TezosChainWatcher
+import qualified TezosChainWatcher.Api as TezosChainWatcher
+import TezosChainWatcher.Api (withMonitor)
 import TezosInjector.Api as TezosInjector
 import TezosInjector.Db
 import TezosInjector.Internal as TezosInjector
@@ -67,10 +68,6 @@ processLocked ::
   -> IO ()
 processLocked redis amqp dbPool tezosCli = do
   let lockId = Tagged $ namespace @T <> "/processor"
-      withMonitor =
-        makeClient
-          amqp
-          (Proxy :: Proxy TezosChainWatcher.MonitorOperationEndpoint)
   -- Manually lock so processing is limited to one injector replica.
   void $
     async $
@@ -121,12 +118,12 @@ processLocked redis amqp dbPool tezosCli = do
                       Nothing -> reject
                       Just opHash ->
                         withMonitor
+                          amqp
                           opHash
-                          (consumeStream
-                             (\case
-                                Tezos.Confirmed _ -> confirm opHash
-                                Tezos.Rejected -> reject
-                                _ -> return ()))
+                          (\case
+                             Tezos.Confirmed _ -> confirm opHash
+                             Tezos.Rejected -> reject
+                             _ -> return ())
                 -- Outer thread waits for the monitor thread to finish and then deletes it
                 -- from the TMap. This way, we avoid a (not dangerous, but still undesirable)
                 -- race condition where the monitor thread tries to delete itself from the TMap

@@ -228,7 +228,7 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
         Pg.insert
           (rewards schema)
           (Pg.insertValues $
-           fmap
+           map
              (\reward -> reward {payment = PaymentHash $ Just hash})
              rewardsPaid) $
         Pg.onConflict (Pg.conflictingFields Pg.primaryKey) Pg.onConflictSetAll
