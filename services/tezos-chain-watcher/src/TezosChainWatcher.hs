@@ -176,15 +176,13 @@ instance Service T where
   summary = "Tezos Chain Watcher v0.1.0"
   description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
-    (accessControlPublicKey :<|> seed) <- load configPaths
+    (accessControlPublicKey :<|> seed :<|> DefaultOperationFee fee) <-
+      load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      -- TODO: Make this actually report something useful.
-      -- Good starter task for newcomers to the codebase.
-      (operationFeeWriter, operationFeeStream) <- newStream
-      writeStream operationFeeWriter 0
+      operationFeeStream <- streamFromList [fromIntegral fee]
       (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos Tezos.defaultFinalizationLag
       (provisionalBlockHashWriter, provisionalBlockHashStream) <- newStream
