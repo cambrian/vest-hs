@@ -17,8 +17,8 @@ main =
       -- Compare with https://api1.tzscan.io/v2/rewards_split
       -- tz1RCFbB9GpALpsZtu6J58sb74dm8qe6XBzv?cycle=20&p=0
     (blockEventStream, _, _) <- streamBlockEventsDurable connection 0 2
-    cycleEventStream <- toCycleEventStream blockEventStream 42
+    -- cycleEventStream <- toCycleEventStream blockEventStream 42
     tapStream_ print blockEventStream
-    tapStream_ print cycleEventStream
+    -- tapStream_ print cycleEventStream
     waitStream blockEventStream
-    waitStream cycleEventStream
+    -- waitStream cycleEventStream

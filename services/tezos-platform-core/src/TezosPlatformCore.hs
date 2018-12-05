@@ -12,7 +12,7 @@ import TezosPlatformCore.Internal as TezosPlatformCore
 import Vest
 
 newtype PlatformFee =
-  PlatformFee Rational
+  PlatformFee Double
   deriving newtype (Show, FromJSON)
 
 instance Loadable PlatformFee where
@@ -149,12 +149,12 @@ handleDelegation T {dbPool} Tezos.Transaction {from, to} = do
 handlePayment :: T -> Word64 -> Tezos.Transaction -> IO ()
 handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
                                                                        , from
-                                                                       , to
+                                                                       , to = _
                                                                        , size
                                                                        } = do
   alreadyHandled <- Pg.runLogged dbPool $ wasPaymentHandled hash
   fromPlatformDelegate <- Pg.runLogged dbPool $ isPlatformDelegate from
-  toVest <- return $ to == panic "TODO"
+  toVest <- return False -- TODO
   when (toVest && fromPlatformDelegate && not alreadyHandled) $ do
     let issuePayouts =
           makeClient t (Proxy :: Proxy TezosInjector.PayoutEndpoint)
@@ -284,7 +284,14 @@ instance Service T where
       operationFee <- subscribe amqp (Proxy :: Proxy OperationFeeValue)
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
       f $
-        T {dbPool, amqp, redis, accessControlClient, operationFee, platformFee}
+        T
+          { dbPool
+          , amqp
+          , redis
+          , accessControlClient
+          , operationFee
+          , platformFee = toRational platformFee
+          }
   rpcHandlers _ = ()
   valuesPublished _ = ()
   eventProducers _ = ()
