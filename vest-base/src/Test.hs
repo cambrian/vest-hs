@@ -21,11 +21,11 @@ diffCmd :: FilePath -> FilePath -> [String]
 diffCmd ref new = ["diff", "-u", "--color", ref, new]
 
 testCase :: String -> FilePath -> IO Text -> TestTree
-testCase name path = testCaseRaw name path . fmap convertString
+testCase name path = testCaseRaw name path . map convertString
 
 testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
 testCaseRaw name path =
-  goldenVsStringDiff name diffCmd path . fmap convertString
+  goldenVsStringDiff name diffCmd path . map convertString
 
 newtype TestService a = TestService
   { serviceThread :: Async Void

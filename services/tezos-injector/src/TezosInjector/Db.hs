@@ -111,7 +111,7 @@ selectNextOperationId = do
   m <-
     runSelectReturningOne $
     select $
-    aggregate_ max_ $ fmap (\Operation {id} -> id) $ all_ (operations schema)
+    aggregate_ max_ $ map (\Operation {id} -> id) $ all_ (operations schema)
   return $
     case m of
       Just (Just num) -> num + 1
@@ -128,7 +128,7 @@ selectNextOperations = do
        all_ (operations schema))
   let pendingByAccount = groupWith (\Operation {id} -> id) pendingOperations
       nextOperations =
-        fmap (minimumBy $ comparing (\Operation {id} -> id)) pendingByAccount
+        map (minimumBy $ comparing (\Operation {id} -> id)) pendingByAccount
   return nextOperations
 
 tryInsertVestCounter :: Time -> Word64 -> Pg ()
@@ -188,7 +188,7 @@ insertOperationTx createdAt opAddress opSignedBytes opObject opIsInternal payout
     insert
       (payouts schema)
       (insertValues $
-       fmap (\id -> Payout id (OperationId nextOpId) createdAt) payoutIds)
+       map (\id -> Payout id (OperationId nextOpId) createdAt) payoutIds)
       onConflictDefault
 
 confirmOperationTx :: Time -> Word64 -> Tezos.OperationHash -> Pg Bool

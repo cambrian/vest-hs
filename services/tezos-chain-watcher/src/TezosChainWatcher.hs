@@ -27,7 +27,7 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
   opStatusVar <- newEmptyTMVarIO
   -- Save a new op status.
   let saveOpStatus newOpStatus = do
-        void $ atomically $ swapTMVar opStatusVar newOpStatus
+        void $ atomically $ writeTMVar opStatusVar newOpStatus
         writeStream statusWriter newOpStatus
   -- See if a block event contains the op hash being monitored.
   let opContainedIn Tezos.BlockEvent {operations} = opHash `elem` operations
@@ -37,15 +37,18 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
         case blockInfoMaybe of
           Nothing -> return $ Tezos.NotIncluded 0
           Just (blockHash, blockNumber) -> do
-            let confirmations = fromIntegral $ currentBlockNumber - blockNumber
+            let (confirmations :: Int) =
+                  fromIntegral currentBlockNumber - fromIntegral blockNumber
             -- ^ If confirmations is negative, it means we had a forked chain whose head we are
             -- still catching up to. A block that is yet to be streamed contains our operation.
             if confirmations < 0
               then return $ Tezos.NotIncluded 0
-              else if confirmations < threshold
-                     then return $ Tezos.Included (blockHash, confirmations)
+              else if confirmations < fromIntegral threshold
+                     then return $
+                          Tezos.Included (blockHash, fromIntegral confirmations)
                      else return $ Tezos.Confirmed blockHash
-  void . async $
+  async $
+    consumeStream (void . return) =<<
     takeWhileMStream -- Continue until op confirmed or rejected.
       (\event@Tezos.BlockEvent {hash, number, predecessor} -> do
          lastBlockHashMaybe <- atomically $ tryReadTMVar lastBlockHashVar
@@ -79,8 +82,8 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
              -- ^ Generate a new op status.
              void $ saveOpStatus opStatus
              case opStatus of
-               Tezos.Confirmed _ -> return False
-               Tezos.Rejected -> return False
+               Tezos.Confirmed _ -> closeStream statusWriter >> return False
+               Tezos.Rejected -> closeStream statusWriter >> return False
                _ -> return True)
       provisionalBlockEventStream
   return statusStream
@@ -176,15 +179,13 @@ instance Service T where
   summary = "Tezos Chain Watcher v0.1.0"
   description = "Tezos chain watcher and blockchain cache."
   init configPaths f = do
-    (accessControlPublicKey :<|> seed) <- load configPaths
+    (accessControlPublicKey :<|> seed :<|> DefaultOperationFee fee) <-
+      load configPaths
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
-      -- TODO: Make this actually report something useful.
-      -- Good starter task for newcomers to the codebase.
-      (operationFeeWriter, operationFeeStream) <- newStream
-      writeStream operationFeeWriter 0
+      operationFeeStream <- streamFromList [fromIntegral fee]
       (finalizedBlockEventStream, provisionalBlockEventStream, finalizedHeightStream) <-
         streamBlockEvents dbPool tezos Tezos.defaultFinalizationLag
       (provisionalBlockHashWriter, provisionalBlockHashStream) <- newStream

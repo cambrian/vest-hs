@@ -16,7 +16,7 @@ type RewardInfoEndpoint
    = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct [Tezos.RewardInfo])
 
 type MonitorOperationEndpoint
-   = Endpoint 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming Tezos.OperationStatus)
+   = Endpoint_ 90 'Haskell 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming Tezos.OperationStatus)
 
 type FinalizedHeightValue = ValueTopic T Amqp.T "finalizedHeight" Word64
 
@@ -26,3 +26,9 @@ type ProvisionalBlockHashValue
    = ValueTopic T Amqp.T "provisionalBlockHash" Tezos.BlockHash
 
 type FinalizedBlockEvents = Event T Amqp.T "blocks" Tezos.BlockEvent
+
+withMonitor ::
+     Amqp.T -> Tezos.OperationHash -> (Tezos.OperationStatus -> IO ()) -> IO ()
+withMonitor amqp opHash =
+  let monitorClient = makeClient amqp (Proxy :: Proxy MonitorOperationEndpoint)
+   in ($) monitorClient opHash . consumeStream

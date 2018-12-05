@@ -21,7 +21,7 @@ toList :: TMap k v -> STM [(k, v)]
 toList = foldl' (:) []
 
 values :: TMap k v -> STM [v]
-values t = fmap snd <$> toList t
+values t = map snd <$> toList t
 
 parallelFilterM ::
      (Eq k, Hashable k) => ((k, v) -> IO Bool) -> TMap k v -> IO ()

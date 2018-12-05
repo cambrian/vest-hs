@@ -105,7 +105,7 @@ extractAddress T {eztzExe, tezosNodeUri, addressSecret = addressSecretMaybe} = d
   Tagged addressSecret <- fromJustUnsafe MissingKeyException addressSecretMaybe
   let node = makeOption "node" tezosNodeUri
       secret = makeOption "secret" addressSecret
-  runCli eztzExe "extract" [node, secret] (fmap Tagged . lastLineUnsafe) False
+  runCli eztzExe "extract" [node, secret] (map Tagged . lastLineUnsafe) False
 
 serializeRecipient :: (Address, FixedQty XTZ) -> Text
 serializeRecipient (Tagged address, size) =
@@ -151,6 +151,6 @@ injectOperation T {eztzExe, tezosNodeUri, timeoutSeconds} (Tagged signedOpBytes)
        eztzExe
        "inject"
        [node, signed, object, timeout]
-       (fmap Tagged . lastLineUnsafe)
+       (map Tagged . lastLineUnsafe)
        True)
     (\(_ :: CliFatalException) -> return Nothing)

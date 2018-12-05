@@ -63,7 +63,6 @@ data BlockEvent = BlockEvent
   , hash :: BlockHash
   , predecessor :: BlockHash
   , cycleNumber :: Word64
-  , fee :: FixedQty XTZ
   , time :: Time
   , operations :: [OperationHash]
   , originations :: [Origination]

@@ -25,7 +25,7 @@ data UnexpectedResultException =
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 toFixedQtyUnsafe :: Text -> IO (FixedQty XTZ)
-toFixedQtyUnsafe x = readUnsafe @Integer x >>- fromInteger
+toFixedQtyUnsafe x = fromInteger <$> readUnsafe @Integer x
 
 -- If Tezos ever hard-forks, our hard-coded constants might break. For now, they make this library
 -- significantly easier to implement.
@@ -47,9 +47,6 @@ frozenCycles = 5
 
 snapshotLag :: Int
 snapshotLag = 7
-
-opFee :: FixedQty "XTZ"
-opFee = 0
 
 firstBlockNumberInCycle :: Int -> Int
 firstBlockNumberInCycle cycleNumber =
@@ -168,13 +165,14 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
       , delegations
       }
 
+-- TODO: Should this use manager public key instead of source?
 extractOriginations :: Text -> Rpc.Operation -> [Origination]
 extractOriginations hash nodeOp =
   case nodeOp of
     Rpc.OriginationOp Rpc.Origination { source
                                       , metadata = OriginationMetadata {operation_result = OriginationResult {originated_contracts}}
                                       } ->
-      fmap
+      map
         (\originated ->
            Origination
              { hash = Tagged hash
@@ -210,7 +208,7 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
   let BlockHeader {level = number, predecessor, timestamp} = header
       BlockMetadata {level = LevelInfo {cycle = cycleNumber}} = metadata
       operationGroups = concat operationsRaw
-      operations = fmap (\OperationGroup {hash} -> Tagged hash) operationGroups
+      operations = map (\OperationGroup {hash} -> Tagged hash) operationGroups
       originations =
         concatMap
           (\OperationGroup {hash, contents = operations} ->
@@ -227,7 +225,6 @@ toBlockEvent Block {hash, header, metadata, operations = operationsRaw} = do
       , hash = Tagged hash
       , predecessor = Tagged predecessor
       , cycleNumber = fromIntegral cycleNumber
-      , fee = opFee
       , time = timestamp
       , operations
       , originations
@@ -272,7 +269,7 @@ updateEventQueueWith ::
   -> BlockEvent
   -> IO ([BlockEvent], [BlockEvent], [BlockEvent], [BlockHash])
 updateEventQueueWith httpClient finalizationLag queue newEvent = do
-  let minNumberInQueue = minimum $ fmap (\BlockEvent {number} -> number) queue
+  let minNumberInQueue = minimum $ map (\BlockEvent {number} -> number) queue
   (updatedQueue, addedProvisionalEvents, invalidatedEvents) <-
     if null queue
       then return ([newEvent], [newEvent], [])
@@ -303,7 +300,7 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
         stitchOrRewind [newEvent]
   let (trimmedQueue, finalizedEvents) =
         splitAt (fromIntegral finalizationLag) updatedQueue
-  let invalidatedHashes = fmap (\BlockEvent {hash} -> hash) invalidatedEvents
+  let invalidatedHashes = map (\BlockEvent {hash} -> hash) invalidatedEvents
   return
     (trimmedQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes)
 
