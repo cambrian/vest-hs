@@ -8,7 +8,7 @@ import TezosChainWatcher.Internal
 import Vest
 
 data RewardInfoRequest = RewardInfoRequest
-  { cycleNumber :: Int
+  { cycleNumber :: Word64
   , delegates :: [Tezos.ImplicitAddress]
   } deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
