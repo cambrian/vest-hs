@@ -36,13 +36,14 @@ module Vest.Prelude.Stream
   , filterStream
   , mapMStream
   , mapStream
+  , tapWhileStream_
   , tapStream
   , tapStream_
-  , tapFoldStream
   , takeWhileMStream
   , takeStream
   , streamNext
   , waitStream
+  , foldWhileMStream
   , foldMStream
   , foldStream
   , consumeStream
@@ -282,23 +283,43 @@ class Bufferable buf a =>
   mapMStream f = downstream $ \write a -> f a >>= write
   mapStream :: Bufferable buf b => (a -> b) -> Stream buf a -> IO (Stream buf b)
   mapStream f = filterMapStream $ Just . f
+  tapWhileStream_ :: (a -> IO Bool) -> Stream buf a -> IO ()
+  tapWhileStream_ f Stream {addDownstream} =
+    addDownstream $ contraM (\_ a -> f a) mempty
   tapStream_ :: (a -> IO ()) -> Stream buf a -> IO ()
-  tapStream_ f Stream {addDownstream} =
-    addDownstream $ contraM (\_ a -> f a >> return True) mempty
+  tapStream_ f = tapWhileStream_ (\a -> void (f a) >> return True)
   tapStream :: (a -> IO ()) -> Stream buf a -> IO (Stream buf a)
   tapStream f stream = do
     tapStream_ f stream
     return stream
-  tapFoldStream ::
-       (a -> accum -> IO accum) -> accum -> Stream buf a -> IO (STM accum)
-  tapFoldStream f accum0 stream = do
+  foldMStream :: (a -> accum -> IO accum) -> accum -> Stream buf a -> IO accum
+  foldMStream f accum0 stream = do
     accumVar <- newTVarIO accum0
     let fold a = do
           accum <- readTVarIO accumVar
           accum' <- f a accum
           atomically $ writeTVar accumVar accum'
-    tapStream_ fold stream
-    return $ readTVar accumVar
+    consumeStream fold stream
+    readTVarIO accumVar
+  foldWhileMStream ::
+       (a -> accum -> IO (Maybe accum)) -> accum -> Stream buf a -> IO accum
+  foldWhileMStream f accum0 stream = do
+    accumVar <- newTVarIO accum0
+    doneVar <- newTVarIO False
+    let fold a = do
+          accum <- readTVarIO accumVar
+          f a accum >>= \case
+            Nothing -> do
+              atomically $ writeTVar doneVar True
+              return False
+            Just accum' -> do
+              atomically $ writeTVar accumVar accum'
+              return True
+    tapWhileStream_ fold stream
+    atomically $ do
+      done <- readTVar doneVar
+      check done
+    readTVarIO accumVar
   takeWhileMStream :: (a -> IO Bool) -> Stream buf a -> IO (Stream buf a)
   -- ^ Removes itself from the parent's downstreams after f returns False.
   takeWhileMStream f Stream {addDownstream} = do
@@ -350,11 +371,6 @@ class Bufferable buf a =>
   -- ^ Wait for this stream to closeStream and empty, and for immediate taps to finish.
   -- Downstream taps may still be running.
   waitStream Stream {isFinishedStream} = atomically $ isFinishedStream >>= check
-  foldMStream :: (a -> accum -> IO accum) -> accum -> Stream buf a -> IO accum
-  foldMStream f accum0 stream = do
-    read <- tapFoldStream f accum0 stream
-    waitStream stream
-    atomically read
   foldStream :: (a -> accum -> accum) -> accum -> Stream buf a -> IO accum
   foldStream f = foldMStream (\a accum -> return $ f a accum)
   listFromStream :: Stream buf a -> IO [a]
