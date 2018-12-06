@@ -27,6 +27,9 @@ stack build hlint > ~/.vest-hs/hlint-build.log 2>&1
 stack install phoityne-vscode haskell-dap > ~/.vest-hs/phoityne-install.log 2>&1
 stack install hindent > ~/.vest-hs/hindent-install.log 2>&1
 stack install ghcid > ~/.vest-hs/ghcid-install.log 2>&1
+echo "Installing pre-commit hook."
+cp pre-commit.sh .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
 echo "Installing external dependencies."
 brew install git-crypt node diffutils redis rabbitmq libpq postgres \
   > ~/.vest-hs/brew-install.log 2>&1
@@ -35,6 +38,3 @@ pg_ctl init -D /usr/local/var/postgres > ~/.vest-hs/postgres-init.log 2>&1
 echo "Configuring local Redis to use keyspace events."
 sed -i -e 's/notify-keyspace-events ""/notify-keyspace-events "Kg"/g' /usr/local/etc/redis.conf
 echo -e "${CYAN}Please follow the remaining instructions in SETUP.${NC}"
-
-cp pre-commit.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
