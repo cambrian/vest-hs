@@ -1,4 +1,6 @@
 #!/bin/bash
+chmod +x .git/hooks/pre-commit
+
 rm -f rabbit.log
 
 # Run Redis server.
