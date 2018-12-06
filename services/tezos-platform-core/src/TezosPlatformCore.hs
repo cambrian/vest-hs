@@ -24,6 +24,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                                                        } = do
   alreadyHandled <-
     Pg.runLogged dbPool $ Pg.wasHandled (cycles schema) newCycleNumber
+  time <- now
   when (not alreadyHandled && newCycleNumber > 0) $ do
     let cycleNumber = fromIntegral newCycleNumber - 1
         getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
@@ -45,7 +46,6 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
     rewardInfos <-
       getRewardInfo (RewardInfoRequest cycleNumber delegates) >>=
       fromRightUnsafe
-    time <- now
     (allRewards, allDividends) <-
       do rewardsAndDividends <-
            mapM
@@ -128,6 +128,19 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
           (dividends schema)
           (Pg.insertValues allDividends)
           Pg.onConflictDefault
+  when (not alreadyHandled && newCycleNumber == 0) $
+    Pg.runLogged dbPool $
+    Pg.runInsert $
+    Pg.insert
+      (cycles schema)
+      (Pg.insertValues
+         [ Cycle
+             { number = newCycleNumber
+             , first_block = BlockNumber blockNumber
+             , created_at = time
+             }
+         ])
+      Pg.onConflictDefault
 
 handleDelegation :: T -> Tezos.Transaction -> IO ()
 handleDelegation T {dbPool} Tezos.Transaction {from, to} = do
