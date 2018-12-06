@@ -115,7 +115,6 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                  { number = newCycleNumber
                  , first_block = BlockNumber blockNumber
                  , created_at = time
-                 , handled = False
                  }
              ])
           Pg.onConflictDefault
