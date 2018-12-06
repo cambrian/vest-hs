@@ -71,16 +71,17 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
                    | predecessor /= lastBlockHash -> materializeOpStatus number
                  -- ^ Cases for the start of monitoring and chain forking.
                  Just (Tezos.NotIncluded c) ->
+                   return $
                    if c < threshold
-                     then return $
-                          if opContainedIn event
+                     then if opContainedIn event
                             then Tezos.Included (hash, 0)
                             else Tezos.NotIncluded (c + 1)
-                     else return Tezos.Rejected
+                     else Tezos.Rejected
                  Just (Tezos.Included (b, c)) ->
+                   return $
                    if c < threshold
-                     then return $ Tezos.Included (b, c + 1)
-                     else return $ Tezos.Confirmed b
+                     then Tezos.Included (b, c + 1)
+                     else Tezos.Confirmed b
                  _ -> throw BugException
              -- ^ Generate a new op status.
              void $ saveOpStatus opStatus
