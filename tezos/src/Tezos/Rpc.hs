@@ -4,7 +4,6 @@ module Tezos.Rpc
   , getCounter
   , getRewardInfo
   , streamBlockEventsDurable
-  , toCycleEventStream
   ) where
 
 import Control.Retry
@@ -37,18 +36,35 @@ getCounter :: T -> Address -> IO Word64
 getCounter T {httpClient} (Tagged address) =
   fromIntegral <$> getCounterRaw httpClient address
 
-getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
+getRewardInfo ::
+     T
+  -> IndexOf CycleEvent
+  -> [ImplicitAddress]
+  -> IO (Either InvalidCycleException [RewardInfo])
 getRewardInfo T {httpClient} cycleNumber delegateIds = do
-  let rewardBlockCycle = bakingCycle (fromIntegral cycleNumber)
+  let rewardBlockCycle = fromIntegral cycleNumber
       snapshotBlockCycle = snapshotCycle (fromIntegral cycleNumber)
-  when (snapshotBlockCycle < 0) $ throw UnexpectedResultException
-  rewardBlockHash <- getLastBlockHash httpClient rewardBlockCycle
-  snapshotBlockHash <-
-    getSnapshotBlockHash httpClient rewardBlockCycle snapshotBlockCycle
-  mapM
-    (getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash .
-     untag . untag)
-    delegateIds
+  -- Reward info fails for cycles in the future, cycles where any delegate did not bake, and cycles
+  -- that are currently incomplete.
+  if snapshotBlockCycle < 0
+    then return $ Right []
+    else catch
+           (do rewardBlockHash <- getLastBlockHash httpClient rewardBlockCycle
+               snapshotBlockHash <-
+                 getSnapshotBlockHash
+                   httpClient
+                   rewardBlockCycle
+                   snapshotBlockCycle
+               Right <$>
+                 mapM
+                   (getRewardInfoSingle
+                      httpClient
+                      rewardBlockHash
+                      snapshotBlockHash .
+                    untag . untag)
+                   delegateIds)
+           (\(_ :: UnexpectedResultException) ->
+              return $ Left InvalidCycleException)
 
 -- | This function polls every minute for the next sequential block and auto-retries when HTTP
 -- requests fail. (It is worth noting that Tezos has its own monitoring API, but it is based on
@@ -111,22 +127,3 @@ streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
         streamQueuedFrom newEventQueue (blockNumber + 1)
   async $ streamQueuedFrom [] startBlockNumber
   return (finalizedStream, provisionalStream, invalidationStream)
-
-toCycleEventStream ::
-     Stream QueueBuffer BlockEvent
-  -> IndexOf CycleEvent
-  -> IO (Stream QueueBuffer CycleEvent)
-toCycleEventStream blockEventStream startLastSeen = do
-  lastSeenVar <- newTVarIO startLastSeen
-  filterMapMStream
-    (\BlockEvent {cycleNumber, time} -> do
-       let lastCycleNumber = cycleNumber - 1
-       lastSeen <- readTVarIO lastSeenVar
-       if lastCycleNumber <= lastSeen
-         then return Nothing
-         else do
-           when (lastCycleNumber /= lastSeen + 1) $
-             throw UnexpectedResultException
-           atomically $ swapTVar lastSeenVar lastCycleNumber
-           return $ Just $ CycleEvent {number = lastCycleNumber, time})
-    blockEventStream

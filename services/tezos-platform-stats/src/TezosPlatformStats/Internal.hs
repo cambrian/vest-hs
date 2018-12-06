@@ -4,6 +4,7 @@ module TezosPlatformStats.Internal
 
 import qualified Amqp
 import qualified Postgres
+import qualified Tezos
 import qualified TezosChainWatcher.Internal as TezosChainWatcher
 import qualified TezosPlatformCore.Internal as TezosPlatformCore
 import Vest
@@ -16,6 +17,16 @@ data T = T
   , chainWatcherDb :: Pool (Specific TezosChainWatcher.T Postgres.Connection)
   , redis :: RedisConnection
   }
+
+data TimeBond = TimeBond
+  { timestamp :: Time
+  , totalMutez :: Integer
+  } deriving (Eq, Show, Generic, ToJSON, FromJSON)
+
+data DelegateBond = DelegateBond
+  { delegate :: Tezos.ImplicitAddress
+  , mutez :: Integer
+  } deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 instance HasNamespace T where
   type Namespace T = "tezos-platform-stats"
