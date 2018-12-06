@@ -41,7 +41,6 @@ data T = T
   , servedRoutes :: TMap Route (AMQP.Channel, AMQP.ConsumerTag)
   , responseHandlers :: TMap (UUID' "Request") (Text' "Response" -> IO ())
   , subscribers :: TMap (Text' "SubscriberId") (AMQP.Channel, AMQP.ConsumerTag)
-    -- ^ Key: subscriberId to Value: (consumerTag, close)
   }
 
 newQueueName :: IO Text

@@ -26,7 +26,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
     Pg.runLogged dbPool $ Pg.wasHandled (cycles schema) newCycleNumber
   time <- now
   when (not alreadyHandled && newCycleNumber > 0) $ do
-    let cycleNumber = fromIntegral newCycleNumber - 1
+    let cycleNumber = newCycleNumber - 1
         getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
         dividendSize reward stakingBalance priceTiers sizeDelegated =
           let (rationalSize, _) =
@@ -70,7 +70,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                            Dividend
                              { reward =
                                  RewardPKey
-                                   (CycleNumber $ fromIntegral cycleNumber)
+                                   (CycleNumber cycleNumber)
                                    (DelegateAddress delegate)
                              , delegator
                              , size =
@@ -92,7 +92,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                     payment_owed = totalDividendSize + platformCharge
                     reward_ =
                       Reward
-                        { cycle = CycleNumber $ fromIntegral cycleNumber
+                        { cycle = CycleNumber cycleNumber
                         , delegate = DelegateAddress delegate
                         , size = reward
                         , staking_balance = stakingBalance
