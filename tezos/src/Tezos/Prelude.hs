@@ -35,15 +35,6 @@ data RewardInfo = RewardInfo
   , delegations :: [DelegationInfo]
   } deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
-data CycleEvent = CycleEvent
-  { number :: Word64
-  , time :: Time
-  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
-
-instance Indexable CycleEvent where
-  type IndexOf CycleEvent = Word64
-  index = number
-
 data Origination = Origination
   { hash :: OperationHash
   , originator :: ImplicitAddress

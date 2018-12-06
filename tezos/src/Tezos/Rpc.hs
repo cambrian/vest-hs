@@ -38,12 +38,11 @@ getCounter T {httpClient} (Tagged address) =
 
 getRewardInfo ::
      T
-  -> IndexOf CycleEvent
+  -> Int
   -> [ImplicitAddress]
   -> IO (Either InvalidCycleException [RewardInfo])
-getRewardInfo T {httpClient} cycleNumber delegateIds = do
-  let rewardBlockCycle = fromIntegral cycleNumber
-      snapshotBlockCycle = snapshotCycle (fromIntegral cycleNumber)
+getRewardInfo T {httpClient} rewardBlockCycle delegateIds = do
+  let snapshotBlockCycle = snapshotCycle rewardBlockCycle
   -- Reward info fails for cycles in the future, cycles where any delegate did not bake, and cycles
   -- that are currently incomplete.
   if snapshotBlockCycle < 0
