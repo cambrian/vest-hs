@@ -42,7 +42,9 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                   priceTiers
            in fixedOf Floor rationalSize
     delegates <- Pg.runLogged dbPool $ delegatesTrackedAtBlock blockNumber
-    rewardInfos <- getRewardInfo $ RewardInfoRequest cycleNumber delegates
+    rewardInfos <-
+      getRewardInfo (RewardInfoRequest cycleNumber delegates) >>=
+      fromRightUnsafe
     time <- now
     (allRewards, allDividends) <-
       do rewardsAndDividends <-
@@ -68,7 +70,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                            Dividend
                              { reward =
                                  RewardPKey
-                                   (CycleNumber cycleNumber)
+                                   (CycleNumber $ fromIntegral cycleNumber)
                                    (DelegateAddress delegate)
                              , delegator
                              , size =
@@ -90,7 +92,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                     payment_owed = totalDividendSize + platformCharge
                     reward_ =
                       Reward
-                        { cycle = CycleNumber cycleNumber
+                        { cycle = CycleNumber $ fromIntegral cycleNumber
                         , delegate = DelegateAddress delegate
                         , size = reward
                         , staking_balance = stakingBalance
@@ -110,7 +112,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
           (cycles schema)
           (Pg.insertValues
              [ Cycle
-                 { number = cycleNumber
+                 { number = newCycleNumber
                  , first_block = BlockNumber blockNumber
                  , created_at = time
                  }
