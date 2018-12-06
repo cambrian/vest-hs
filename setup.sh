@@ -26,6 +26,7 @@ echo "Installing IDE-related modules."
 stack build hlint > ~/.vest-hs/hlint-build.log 2>&1
 stack install phoityne-vscode haskell-dap > ~/.vest-hs/phoityne-install.log 2>&1
 stack install hindent > ~/.vest-hs/hindent-install.log 2>&1
+stack install ghcid > ~/.vest-hs/ghcid-install.log 2>&1
 echo "Installing external dependencies."
 brew install git-crypt node diffutils redis rabbitmq libpq postgres \
   > ~/.vest-hs/brew-install.log 2>&1
