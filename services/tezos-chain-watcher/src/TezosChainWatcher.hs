@@ -21,6 +21,13 @@ rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 
 -- | Eventually: Draw a nice state machine for ease of understanding.
+-- Review: the code for this service should be reworked. Summary of changes to be made:
+-- - Only the master service (the one holding the service lock) should be computing the finalized
+--   event stream.
+-- - The provisional block height should just be a mapStream of the provisional block events.
+-- - Monitor operation can be simplified by use of a fold instead of T(M)Vars
+-- - Completing these changes will allow you to remove several mostly-redundant fields on the type
+--   T.
 monitorOperation ::
      T -> Tezos.OperationHash -> IO (Stream ValueBuffer Tezos.OperationStatus)
 monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
