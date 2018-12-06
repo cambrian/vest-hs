@@ -57,8 +57,6 @@ instance Service T where
     echoThriceAuth :<|>
     unit :<|>
     unitStream
-  valuesPublished _ = ()
-  eventProducers _ = ()
-  eventConsumers _ = ()
+  masterInstance _ = return ((), (), ())
 
 type PublicApi = RpcSpec T

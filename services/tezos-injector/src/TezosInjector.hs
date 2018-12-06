@@ -163,8 +163,6 @@ instance Service T where
           , accessControlClient
           }
   rpcHandlers t = inject t :<|> payout t
-  valuesPublished _ = ()
-  eventProducers _ = ()
-  eventConsumers _ = ()
+  masterInstance _ = return ((), (), ())
 
 type PublicApi = InjectEndpoint

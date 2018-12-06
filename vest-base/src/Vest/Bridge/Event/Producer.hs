@@ -29,7 +29,7 @@ type UniqueEventNames spec = EventNames spec ~ NubEventNames spec
 -- This means binding a producer constructor from within a locked context.
 type family Producers spec where
   Producers () = ()
-  Producers (Event_ _ _ _ _ a) = (IO (Stream QueueBuffer a), IndexOf a -> IO a)
+  Producers (Event_ _ _ _ _ a) = (Stream QueueBuffer a, IndexOf a -> IO a)
   Producers (a
              :<|> b) = (Producers a
                         :<|> Producers b)
@@ -59,7 +59,7 @@ instance ( Server t (EventMaterializeEndpoint (Event_ fmt t transport name a))
          , KnownEventName name
          ) =>
          Producer t (Event_ fmt t transport name a) where
-  produce t _ (makeEvents, materializer) = do
+  produce t _ (eventStream, materializer) = do
     serve
       t
       (Proxy :: Proxy (EventMaterializeEndpoint (Event_ fmt t transport name a)))
@@ -69,4 +69,4 @@ instance ( Server t (EventMaterializeEndpoint (Event_ fmt t transport name a))
           lockId = retag $ eventName <> "/producer"
       withDistributedLock t lockId $ do
         send <- publishEvents (get @transport t) eventName
-        makeEvents >>= consumeStream (send . serialize' @fmt)
+        consumeStream (send . serialize' @fmt) eventStream

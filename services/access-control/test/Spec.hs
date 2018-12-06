@@ -61,9 +61,7 @@ instance Service TestServer where
         AccessControl.Client.make amqp accessControlPublicKey "testServerSeed"
       f $ TestServer {amqp, accessControlClient, redis}
   rpcHandlers _ = const return :<|> const return
-  valuesPublished _ = ()
-  eventProducers _ = ()
-  eventConsumers _ = ()
+  masterInstance _ = return ((), (), ())
 
 generateTestPublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file

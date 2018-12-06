@@ -309,6 +309,4 @@ instance Service T where
           , platformFee = toRational platformFee
           }
   rpcHandlers _ = ()
-  valuesPublished _ = ()
-  eventProducers _ = ()
-  eventConsumers = blockConsumer
+  masterInstance t = return ((), (), blockConsumer t)

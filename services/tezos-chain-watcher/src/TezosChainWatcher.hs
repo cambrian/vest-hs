@@ -219,11 +219,11 @@ instance Service T where
           , provisionalBlockHashStream
           }
   rpcHandlers t = rewardInfo t :<|> monitorOperation t
-  valuesPublished t =
-    finalizedHeightStream t :<|> operationFeeStream t :<|>
-    provisionalBlockHashStream t
-  eventProducers t =
-    (return $ finalizedBlockEventStream t, materializeBlockEvent t)
-  eventConsumers _ = ()
+  masterInstance t =
+    return
+      ( finalizedHeightStream t :<|> operationFeeStream t :<|>
+        provisionalBlockHashStream t
+      , (finalizedBlockEventStream t, materializeBlockEvent t)
+      , ())
 
 type PublicApi = RpcSpec T

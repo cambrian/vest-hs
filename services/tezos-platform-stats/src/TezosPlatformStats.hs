@@ -91,9 +91,7 @@ instance Service T where
     --         originations <- originationsByImplicitAddress s "0xdummyaddr"
     --   f $ T {webSocket, amqp, coreDb, chainWatcherDb, redis}
   rpcHandlers t = originationsByImplicitAddress t
-  valuesPublished _ = ()
-  eventProducers _ = ()
-  eventConsumers _ = ()
+  masterInstance _ = return ((), (), ())
 
 type PublicApi = ()
 

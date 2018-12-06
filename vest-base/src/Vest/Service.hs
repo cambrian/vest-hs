@@ -21,13 +21,12 @@ configPaths configDir = do
 -- | All services take only the config directory; any service-specific configuration can be done via
 -- config files. A service will look in configDir/namespace/ first, then configDir/ for its configs.
 -- Configs containing privileged info should be git-crypted.
--- TODO: add service-wide lock for consuming/publishing
 data Args = Args -- This must be a data and not a newtype for cmdargs &= annotations to work.
   { configDir :: FilePath
   } deriving (Data)
 
--- | We tried an implementation where we wouldn't require redisconnection for services that only
--- serve RPCs, but decided that the additional complexity isn't worth it.
+-- | We tried an implementation that wouldn't require RedisConnection for services that only serve
+-- RPCs, but we decided that the additional complexity wasn't worth it.
 class ( HasNamespace a
       , Server a (RpcSpec a)
       , Publisher a (ValueSpec a)
@@ -50,9 +49,11 @@ class ( HasNamespace a
   -- ^ Displayed when user passes --help.
   init :: [Path Abs Dir] -> (a -> IO b) -> IO b
   rpcHandlers :: a -> Handlers (RpcSpec a)
-  valuesPublished :: a -> Values (ValueSpec a)
-  eventProducers :: a -> Producers (EventsProduced a)
-  eventConsumers :: a -> Consumers (EventsConsumed a)
+  masterInstance ::
+       a
+    -> IO ( Values (ValueSpec a)
+          , Producers (EventsProduced a)
+          , Consumers (EventsConsumed a))
   args :: Args
   args =
     Args
@@ -69,11 +70,12 @@ class ( HasNamespace a
   run paths =
     init @a paths $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
-      log_ Debug $ "rpc handlers initialised"
+      log_ Debug "rpc handlers initialized"
       withDistributedLock a (Tagged (namespace @a) <> "-events") $ do
-        publish a (Proxy :: Proxy (ValueSpec a)) $ valuesPublished a
-        produce a (Proxy :: Proxy (EventsProduced a)) $ eventProducers a
-        consume a (Proxy :: Proxy (EventsConsumed a)) $ eventConsumers a
+        (values, producers, consumers) <- masterInstance a
+        publish a (Proxy :: Proxy (ValueSpec a)) values
+        produce a (Proxy :: Proxy (EventsProduced a)) producers
+        consume a (Proxy :: Proxy (EventsConsumed a)) consumers
         log_ Debug "service setup completed, now running forever"
         blockForever
   start :: IO Void
