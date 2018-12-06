@@ -113,6 +113,13 @@ executables:
   #   - -main-is Monitor
   #   dependencies:
   #   - services
+  tezos-stats-endpoint-test:
+    main:                 EndpointTest.hs
+    source-dirs:          tezos-platform-stats/bin
+    ghc-options:
+    - -main-is EndpointTest
+    dependencies:
+    - services
   tezos-injector:
     main:                 Main.hs
     source-dirs:          tezos-injector/bin
