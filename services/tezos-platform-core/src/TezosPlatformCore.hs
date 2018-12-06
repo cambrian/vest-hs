@@ -249,11 +249,12 @@ handlePayment t@T {dbPool, operationFee} blockNumber Tezos.Transaction { hash
              rewardsPaid) $
         Pg.onConflict (Pg.conflictingFields Pg.primaryKey) Pg.onConflictSetAll
 
-blockConsumer :: T -> Consumers FinalizedBlockEvents
+blockConsumer :: T -> IO (Consumers FinalizedBlockEvents)
 -- ^ On each cycle, bill each delegate and update dividends for each delegator.
 -- Does not issue dividends; the relevant dividends are paid out when a delegator pays its bill.
 -- This happens in the payment consumer.
-blockConsumer t@T {dbPool} =
+blockConsumer t@T {dbPool} = do
+  nextUnhandledBlock <- Pg.runLogged dbPool selectNextUnhandledBlock
   let handleBlock blockEvent@Tezos.BlockEvent { number = blockNumber
                                               , time = blockTime
                                               , transactions
@@ -281,7 +282,7 @@ blockConsumer t@T {dbPool} =
             (blocks schema)
             (\Block {handled} -> [handled Pg.<-. Pg.val_ True])
             (\Block {number} -> number Pg.==. Pg.val_ blockNumber)
-   in (Pg.runLogged dbPool selectNextUnhandledBlock, handleBlock)
+  return (nextUnhandledBlock, handleBlock)
 
 instance Service T where
   type ValueSpec T = ()
@@ -309,4 +310,6 @@ instance Service T where
           , platformFee = toRational platformFee
           }
   rpcHandlers _ = ()
-  masterInstance t = return ((), (), blockConsumer t)
+  masterInstance t = do
+    blockConsumer <- blockConsumer t
+    return ((), (), blockConsumer)

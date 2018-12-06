@@ -12,7 +12,7 @@ import Vest.Redis
 -- | Consumption begins from the provided index (inclusive).
 type family Consumers spec where
   Consumers () = ()
-  Consumers (Event_ _ _ _ _ a) = (IO (IndexOf a), a -> IO ())
+  Consumers (Event_ _ _ _ _ a) = (IndexOf a, a -> IO ())
   Consumers (a
              :<|> b) = (Consumers a
                         :<|> Consumers b)
@@ -42,7 +42,7 @@ instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name 
          , Indexable a
          ) =>
          Consumer t (Event_ fmt server transport name a) where
-  consume t _ (getStartIndex, f) = do
+  consume t _ (startIndex, f) = do
     let eventName = symbolText' (Proxy :: Proxy (PrefixedEventName name))
         lockId = Tagged $ untag eventName <> "/consumer/" <> namespace @t
     void . async $
@@ -56,5 +56,4 @@ instance ( Client t (EventMaterializeEndpoint (Event_ fmt server transport name 
           (get @transport t)
           eventName
           (writeStream writer <=< deserializeUnsafe' @fmt)
-        startIndex <- getStartIndex
         gapFilledStream materialize startIndex stream >>= consumeStream f
