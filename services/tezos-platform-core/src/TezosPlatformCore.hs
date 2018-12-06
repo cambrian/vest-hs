@@ -20,12 +20,13 @@ instance Loadable PlatformFee where
 
 handleCycle :: T -> Tezos.BlockEvent -> IO ()
 handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
-                                                       , cycleNumber
+                                                       , cycleNumber = newCycleNumber
                                                        } = do
   alreadyHandled <-
-    Pg.runLogged dbPool $ Pg.wasHandled (cycles schema) cycleNumber
+    Pg.runLogged dbPool $ Pg.wasHandled (cycles schema) newCycleNumber
   unless alreadyHandled $ do
-    let getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
+    let cycleNumber = fromIntegral newCycleNumber - 1
+        getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
         dividendSize reward stakingBalance priceTiers sizeDelegated =
           let (rationalSize, _) =
                 foldl'

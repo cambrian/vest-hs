@@ -62,6 +62,7 @@ callDirect ::
   => t
   -> req
   -> IO res
+-- ^ TODO: improve logging for received exceptions
 callDirect t req = do
   (headersWithSignature, reqText) <-
     packRequest @fmt (get @(AuthSigner auth) t) req
