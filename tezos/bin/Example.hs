@@ -1,6 +1,4 @@
 import qualified Http
-
--- import Test (ignoreIO)
 import Tezos.Rpc
 import Vest
 
