@@ -24,7 +24,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                                                        } = do
   alreadyHandled <-
     Pg.runLogged dbPool $ Pg.wasHandled (cycles schema) newCycleNumber
-  unless alreadyHandled $ do
+  when (not alreadyHandled && newCycleNumber > 0) $ do
     let cycleNumber = fromIntegral newCycleNumber - 1
         getRewardInfo = makeClient t (Proxy :: Proxy RewardInfoEndpoint)
         dividendSize reward stakingBalance priceTiers sizeDelegated =
@@ -115,6 +115,7 @@ handleCycle t@T {dbPool, platformFee} Tezos.BlockEvent { number = blockNumber
                  { number = newCycleNumber
                  , first_block = BlockNumber blockNumber
                  , created_at = time
+                 , handled = False
                  }
              ])
           Pg.onConflictDefault

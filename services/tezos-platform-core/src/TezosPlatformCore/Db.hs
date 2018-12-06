@@ -40,6 +40,7 @@ data CycleT f = Cycle
   { number :: C f Word64
   , first_block :: PrimaryKey BlockT f
   , created_at :: C f Time
+  , handled :: C f Bool
   } deriving (Generic, Beamable)
 
 type Cycle = CycleT Identity
