@@ -83,5 +83,9 @@ data OperationStatus
   | Rejected
   deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
+data InvalidCycleException =
+  InvalidCycleException
+  deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
+
 defaultFinalizationLag :: Word8
 defaultFinalizationLag = 60

@@ -13,7 +13,10 @@ import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
 import Vest hiding (hash)
 
-rewardInfo :: T -> RewardInfoRequest -> IO [Tezos.RewardInfo]
+rewardInfo ::
+     T
+  -> RewardInfoRequest
+  -> IO (Either Tezos.InvalidCycleException [Tezos.RewardInfo])
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 

@@ -59,13 +59,9 @@ lastBlockNumberInCycle cycleNumber =
 snapshotOffset :: Int -> Int
 snapshotOffset snapshotIndex = (snapshotIndex + 1) * blocksPerSnapshot - 1
 
--- | Baking cycle for rewards unfrozen in the given cycle.
-bakingCycle :: Int -> Int
-bakingCycle cycleNumber = cycleNumber - 1 - frozenCycles
-
 -- | Snapshot cycle for rewards unfrozen in the given cycle.
 snapshotCycle :: Int -> Int
-snapshotCycle cycleNumber = bakingCycle cycleNumber - snapshotLag
+snapshotCycle = subtract snapshotLag
 
 getBlock :: Http.Client -> Text -> IO Block
 getBlock httpClient hash =

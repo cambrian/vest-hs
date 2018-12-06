@@ -36,20 +36,35 @@ getCounter :: T -> Address -> IO Word64
 getCounter T {httpClient} (Tagged address) =
   fromIntegral <$> getCounterRaw httpClient address
 
-getRewardInfo :: T -> IndexOf CycleEvent -> [ImplicitAddress] -> IO [RewardInfo]
+getRewardInfo ::
+     T
+  -> IndexOf CycleEvent
+  -> [ImplicitAddress]
+  -> IO (Either InvalidCycleException [RewardInfo])
 getRewardInfo T {httpClient} cycleNumber delegateIds = do
-  let rewardBlockCycle = bakingCycle (fromIntegral cycleNumber)
+  let rewardBlockCycle = fromIntegral cycleNumber
       snapshotBlockCycle = snapshotCycle (fromIntegral cycleNumber)
+  -- Reward info fails for cycles in the future, cycles where any delegate did not bake, and cycles
+  -- that are currently incomplete.
   if snapshotBlockCycle < 0
-    then return []
-    else do
-      rewardBlockHash <- getLastBlockHash httpClient rewardBlockCycle
-      snapshotBlockHash <-
-        getSnapshotBlockHash httpClient rewardBlockCycle snapshotBlockCycle
-      mapM
-        (getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash .
-         untag . untag)
-        delegateIds
+    then return $ Right []
+    else catch
+           (do rewardBlockHash <- getLastBlockHash httpClient rewardBlockCycle
+               snapshotBlockHash <-
+                 getSnapshotBlockHash
+                   httpClient
+                   rewardBlockCycle
+                   snapshotBlockCycle
+               Right <$>
+                 mapM
+                   (getRewardInfoSingle
+                      httpClient
+                      rewardBlockHash
+                      snapshotBlockHash .
+                    untag . untag)
+                   delegateIds)
+           (\(_ :: UnexpectedResultException) ->
+              return $ Left InvalidCycleException)
 
 -- | This function polls every minute for the next sequential block and auto-retries when HTTP
 -- requests fail. (It is worth noting that Tezos has its own monitoring API, but it is based on

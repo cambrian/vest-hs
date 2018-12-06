@@ -13,7 +13,7 @@ data RewardInfoRequest = RewardInfoRequest
   } deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
 type RewardInfoEndpoint
-   = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct [Tezos.RewardInfo])
+   = Endpoint 'NoAuth T Amqp.T "rewardInfo" RewardInfoRequest ('Direct (Either Tezos.InvalidCycleException [Tezos.RewardInfo]))
 
 type MonitorOperationEndpoint
    = Endpoint_ 90 'Haskell 'NoAuth T Amqp.T "monitorOperation" Tezos.OperationHash ('Streaming Tezos.OperationStatus)
