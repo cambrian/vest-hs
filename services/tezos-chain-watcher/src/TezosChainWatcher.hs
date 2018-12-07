@@ -21,25 +21,11 @@ rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 
 -- | Eventually: Draw a nice state machine for ease of understanding.
--- Review: the code for this service should be reworked. Summary of changes to be made:
--- - The provisional block height should just be a mapStream of the provisional block events.
--- - Monitor operation can be simplified by use of a fold instead of T(M)Vars
--- - Completing these changes will allow you to remove several mostly-redundant fields on the type
---   T.
 monitorOperation ::
      T -> Tezos.OperationHash -> IO (Stream ValueBuffer Tezos.OperationStatus)
 monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
   let threshold = Tezos.defaultFinalizationLag
   (statusWriter, statusStream) <- newStream
-  lastBlockHashVar <- newEmptyTMVarIO
-  opStatusVar <- newEmptyTMVarIO
-  -- Save a new op status.
-  let saveOpStatus newOpStatus = do
-        void $ atomically $ writeTMVar opStatusVar newOpStatus
-        writeStream statusWriter newOpStatus
-  -- See if a block event contains the op hash being monitored.
-  let opContainedIn Tezos.BlockEvent {operations} = opHash `elem` operations
-  -- Query the DB for an op status.
   let materializeOpStatus currentBlockNumber = do
         blockInfoMaybe <- Pg.runLogged dbPool $ selectBlockInfoForOpHash opHash
         case blockInfoMaybe of
@@ -56,19 +42,14 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
                           Tezos.Included (blockHash, fromIntegral confirmations)
                      else return $ Tezos.Confirmed blockHash
   async $
-    consumeStream (void . return) =<<
-    takeWhileMStream -- Continue until op confirmed or rejected.
-      (\event@Tezos.BlockEvent {hash, number, predecessor} -> do
-         lastBlockHashMaybe <- atomically $ tryReadTMVar lastBlockHashVar
-         atomically $ writeTMVar lastBlockHashVar hash
-         -- ^ Update last block hash for next iteration.
+    foldWhileMStream -- Continue monitoring until the op is confirmed or rejected.
+      (\Tezos.BlockEvent {hash, number, predecessor, operations} (lastBlockHashMaybe, opStatusMaybe) ->
          case lastBlockHashMaybe of
-           Nothing -> return True
+           Nothing -> return $ Just (Just hash, Nothing)
            -- ^ Wait for one block to go by so we can ensure the validity of the DB query within
            -- block events we have seen. If the chain subsequently forks, we simply re-run the DB
            -- query to restore validity.
            Just lastBlockHash -> do
-             opStatusMaybe <- atomically (tryReadTMVar opStatusVar)
              opStatus <-
                case opStatusMaybe of
                  Nothing -> materializeOpStatus number
@@ -78,7 +59,7 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
                  Just (Tezos.NotIncluded c) ->
                    return $
                    if c < threshold
-                     then if opContainedIn event
+                     then if opHash `elem` operations
                             then Tezos.Included (hash, 0)
                             else Tezos.NotIncluded (c + 1)
                      else Tezos.Rejected
@@ -89,11 +70,12 @@ monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
                      else Tezos.Confirmed b
                  _ -> throw BugException
              -- ^ Generate a new op status.
-             void $ saveOpStatus opStatus
+             writeStream statusWriter opStatus
              case opStatus of
-               Tezos.Confirmed _ -> closeStream statusWriter >> return False
-               Tezos.Rejected -> closeStream statusWriter >> return False
-               _ -> return True)
+               Tezos.Confirmed _ -> closeStream statusWriter >> return Nothing
+               Tezos.Rejected -> closeStream statusWriter >> return Nothing
+               _ -> return $ Just (Just hash, Just opStatus))
+      (Nothing, Nothing)
       provisionalBlockEventStream
   return statusStream
 
@@ -155,7 +137,7 @@ streamProvisionalHeight T {provisionalBlockEventStream} = do
              writeStream provisionalHeightWriter number
              return number
            else return height)
-      (fromIntegral $ min (Tezos.firstReadableBlockNumber - 1) 0)
+      (fromIntegral $ max (Tezos.firstReadableBlockNumber - 1) 0)
       provisionalBlockEventStream
   return provisionalHeightStream
 
@@ -167,7 +149,10 @@ streamFinalizedBlockEvents T {dbPool} provisionalHeightStream = do
     (\height -> do
        updatedAt <- now
        let maxBlockNumberToFinalize =
-             height - fromIntegral Tezos.defaultFinalizationLag
+             fromIntegral $
+             max
+               (fromIntegral height - fromIntegral Tezos.defaultFinalizationLag)
+               (0 :: Int)
        log Debug "finalizing to block level" maxBlockNumberToFinalize
        events <-
          Pg.runLoggedTransaction dbPool $

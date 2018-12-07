@@ -71,7 +71,7 @@ class ( HasNamespace a
     init @a paths $ \a -> do
       serve a (Proxy :: Proxy (RpcSpec a)) $ rpcHandlers a
       log_ Debug "rpc handlers initialized"
-      withDistributedLock a (Tagged (namespace @a) <> "-events") $ do
+      withDistributedLock a (Tagged (namespace @a) <> "-master") $ do
         (values, producers, consumers) <- masterInstance a
         publish a (Proxy :: Proxy (ValueSpec a)) values
         produce a (Proxy :: Proxy (EventsProduced a)) producers
