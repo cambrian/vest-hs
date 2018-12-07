@@ -72,10 +72,8 @@ processLocked redis amqp dbPool tezosCli = do
   void $
     async $
     withDistributedLock redis lockId $ do
-      eventHashStream <-
-        subscribe
-          amqp
-          (Proxy :: Proxy TezosChainWatcher.ProvisionalBlockHashValue)
+      pollStream <-
+        subscribe amqp (Proxy :: Proxy TezosChainWatcher.ProvisionalHeightValue)
       monitorThreads <- TMap.newIO
       consumeStream
         (\_ -> do
@@ -131,7 +129,7 @@ processLocked redis amqp dbPool tezosCli = do
                 atomically $ TMap.insert monitorThread id monitorThreads
                 wait monitorThread >> atomically (TMap.delete id monitorThreads))
              newNextOperations)
-        eventHashStream
+        pollStream
 
 instance Service T where
   type RpcSpec T = InjectEndpoint

@@ -329,48 +329,31 @@ insertProvisionalBlockEventTx createdAt blockEvent = do
       insertTezosOriginations createdAt originations
       insertTezosTransactions createdAt transactions
 
-finalizeProvisionalBlockEventTx :: Time -> Tezos.BlockHash -> Pg Bool
-finalizeProvisionalBlockEventTx updatedAt blockHash = do
-  blockMaybe <-
-    runSelectReturningOne $
+finalizeProvisionalBlockEventsTx :: Time -> Word64 -> Pg [Tezos.BlockEvent]
+finalizeProvisionalBlockEventsTx updatedAt maxBlockNumberToFinalize = do
+  blocks_ <-
+    runSelectReturningList $
     select $
-    filter_ (\Block {hash} -> hash ==. val_ blockHash) $
-    filterBlocksByState NotDeleted $ all_ (blocks schema)
-  -- Finalization trivially succeeds for finalized events.
-  case blockMaybe of
-    Nothing -> return False
-    Just block@Block {is_provisional}
-      | is_provisional -> do
-        runUpdate $
-          save
-            (blocks schema)
-            (block {is_provisional = False, updated_at = Just updatedAt})
-        return True
-    Just _ -> return True
+    filter_ (\Block {number} -> number <=. val_ maxBlockNumberToFinalize) $
+    filterBlocksByState Provisional $ all_ (blocks schema)
+  finalizedBlockEvents <-
+    mapM
+      (\block -> do
+         runUpdate $
+           save
+             (blocks schema)
+             (block {is_provisional = False, updated_at = Just updatedAt})
+         toBlockEvent block)
+      blocks_
+  return $ sortOn (\Tezos.BlockEvent {number} -> number) finalizedBlockEvents
 
 -- | Soft delete by setting a boolean. TODO: Batch this.
-deleteProvisionalBlockEventsByHashTx :: Time -> [Tezos.BlockHash] -> Pg ()
-deleteProvisionalBlockEventsByHashTx deletedAt blockHashes = do
+deleteProvisionalBlockEventsTx :: Time -> [Tezos.BlockHash] -> Pg ()
+deleteProvisionalBlockEventsTx deletedAt blockHashes = do
   blocksToDelete <-
     runSelectReturningList $
     select $
     filter_ (\Block {hash} -> hash `in_` map val_ blockHashes) $
-    filterBlocksByState Provisional $ all_ (blocks schema)
-  mapM_
-    (\block ->
-       runUpdate $
-       save
-         (blocks schema)
-         (block {is_deleted = True, updated_at = Just deletedAt}))
-    blocksToDelete
-
--- | Soft delete by setting deletedAt. TODO: Batch this.
-deleteOldProvisionalBlockEventsTx :: Time -> Word64 -> Pg ()
-deleteOldProvisionalBlockEventsTx deletedAt maxBlockNumberToDelete = do
-  blocksToDelete <-
-    runSelectReturningList $
-    select $
-    filter_ (\block -> number block <=. val_ maxBlockNumberToDelete) $
     filterBlocksByState Provisional $ all_ (blocks schema)
   mapM_
     (\block ->

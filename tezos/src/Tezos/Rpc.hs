@@ -3,7 +3,7 @@ module Tezos.Rpc
   , T(..)
   , getCounter
   , getRewardInfo
-  , streamBlockEventsDurable
+  , streamProvisionalBlockEvents
   ) where
 
 import Control.Retry
@@ -73,57 +73,51 @@ getRewardInfo T {httpClient} rewardBlockCycle_ delegateIds = do
 -- This function also handles, within some notion of finality, the possibility of a chain forking.
 --
 -- Consider a queue of block hashes E, D, C, B, A and a desired finalization lag of 5. When the next
--- block F comes in, we will normally stream block A and edit the queue to be F, E, D, C, B.
+-- block F comes in, we will normally finalize block A and edit the queue to be F, E, D, C, B.
 --
 -- If the next block we see is F, but it claims its predecessor is some block X, we will rewind over
 -- predecessors until we see a block in our queue (B for instance). We edit the queue accordingly to
 -- reflect the re-organization, so it might look like F, X, Y, B, A.
 --
 -- Note that the next block to write (A) has not reached 5 confirmations after the chain re-org, so
--- we write no events out.
+-- we finalize no events.
 --
 -- Note also that Blocks E, D, and C are now invalidated, so we stream them in a separate variable.
 --
 -- If the predecessors of F do not terminate in our block queue within the 5 block lag, a larger
 -- re-organization than we can handle has occurred. We can only error in this instance and fix the
 -- problem manually.
-streamBlockEventsDurable ::
+streamProvisionalBlockEvents ::
      T
   -> Word8
   -> IndexOf BlockEvent
-  -> IO ( Stream QueueBuffer BlockEvent
-        , Stream QueueBuffer BlockEvent
-        , Stream QueueBuffer [BlockHash])
-streamBlockEventsDurable T {httpClient} finalizationLag startBlockNumber = do
+  -> IO (Stream QueueBuffer BlockEvent, Stream QueueBuffer [BlockHash])
+streamProvisionalBlockEvents T {httpClient} finalizationLag startBlockNumber = do
   let updateEventQueue = updateEventQueueWith httpClient finalizationLag
-  (finalizedWriter, finalizedStream) <- newStream
-  (provisionalWriter, provisionalStream) <- newStream
-  (invalidationWriter, invalidationStream) <- newStream
+  (provisionalEventWriter, provisionalEventStream) <- newStream
+  (invalidatedHashesWriter, invalidatedHashesStream) <- newStream
   let streamQueuedFrom eventQueue blockNumber = do
-        provisionalEvent <-
+        newEvent <-
           recovering
             requestRetryPolicy
             recoveryCases
             (const $ materializeBlockEvent httpClient (fromIntegral blockNumber))
-        -- ^ TODO: Modify retry between materializing/streaming states.
-        (newEventQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes) <-
-          updateEventQueue eventQueue provisionalEvent
+        -- ^ TODO: Modify retry between the materializing and streaming states.
+        (newEventQueue, newProvisionalEvents, invalidatedProvisionalHashes) <-
+          updateEventQueue eventQueue newEvent
         -- ^ Recovers and retries internally if its HTTP requests fail.
         mapM_
           (\event -> do
-             writeStream finalizedWriter event
-             let BlockEvent {number, hash} = event
-             log Debug "pushed finalized block event" (number, hash))
-          finalizedEvents
-        mapM_
-          (\event -> do
-             writeStream provisionalWriter event
+             writeStream provisionalEventWriter event
              let BlockEvent {number, hash} = event
              log Debug "pushed provisional block event" (number, hash))
-          addedProvisionalEvents
-        unless (null invalidatedHashes) $ do
-          writeStream invalidationWriter invalidatedHashes
-          log Debug "pushed invalidated block hashes" invalidatedHashes
+          newProvisionalEvents
+        unless (null invalidatedProvisionalHashes) $ do
+          writeStream invalidatedHashesWriter invalidatedProvisionalHashes
+          log
+            Debug
+            "pushed invalidated block hashes"
+            invalidatedProvisionalHashes
         streamQueuedFrom newEventQueue (blockNumber + 1)
   async $ streamQueuedFrom [] startBlockNumber
-  return (finalizedStream, provisionalStream, invalidationStream)
+  return (provisionalEventStream, invalidatedHashesStream)

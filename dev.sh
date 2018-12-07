@@ -20,8 +20,12 @@ pg_ctl -D /usr/local/var/postgres -l ~/.vest-hs/postgres-run.log start > ~/.vest
 # Enable recent history for RabbitMQ.
 /usr/local/sbin/rabbitmq-plugins enable rabbitmq_recent_history_exchange
 
-ghcid
-# (export ___TEST_MODE_DO_NOT_SET=true && stack test --fast --file-watch --no-rerun-tests)
+if [ -n "$1" ] && [ "$1" == "old" ]
+  then
+    (export ___TEST_MODE_DO_NOT_SET=true && stack test --fast --file-watch --no-rerun-tests)
+else
+  ghcid
+fi
 
 # Append this for hspec only:
 # --test-arguments '--rerun --failure-report=TESTREPORT --rerun-all-on-success'

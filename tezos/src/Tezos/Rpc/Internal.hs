@@ -21,7 +21,7 @@ import qualified Tezos.Rpc.Prelude as Rpc
 import Vest hiding (hash)
 
 data UnexpectedResultException =
-  UnexpectedResultException
+  UnexpectedResultException Text
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
 toFixedQtyUnsafe :: Text -> IO (FixedQty XTZ)
@@ -79,7 +79,10 @@ getBlockHash httpClient targetBlockNumber = do
   let Block {hash = latestBlockHash} = latestBlock
       BlockHeader {level = latestBlockNumber} = header latestBlock
       offset = latestBlockNumber - targetBlockNumber
-  when (offset < 0) $ throw UnexpectedResultException
+  when (offset < 0) $
+    throw $
+    UnexpectedResultException $
+    "block number " <> show targetBlockNumber <> " is in the future"
   Http.request httpClient $
     Http.buildRequest
       (Proxy :: Proxy GetBlockHash)
@@ -103,8 +106,11 @@ getSnapshotBlockHash httpClient bakingCycleNumber snapshotCycleNumber = do
       mainChain
       blockHashInBakingCycle
       bakingCycleNumber
-  when (length indices /= 1) $ throw UnexpectedResultException
-  snapshotIndex <- fromJustUnsafe UnexpectedResultException (head indices)
+  when (length indices /= 1) $
+    throw $
+    UnexpectedResultException $
+    "ambiguous snapshot for baking cycle " <> show bakingCycleNumber
+  snapshotIndex <- fromJustUnsafe BugException (head indices)
   -- ^ Baking cycle should only have one valid snapshot if it is complete.
   let snapshotBlockNumber =
         firstBlockNumberInCycle snapshotCycleNumber +
@@ -124,7 +130,10 @@ getRewardInfoSingle httpClient rewardBlockHash snapshotBlockHash delegateId = do
       rewardBlockHash
       delegateId
   frozenBalance <-
-    fromJustUnsafe UnexpectedResultException (last frozenBalanceCycles)
+    fromJustUnsafe
+      (UnexpectedResultException
+         "no frozen balances for delegate and reward block")
+      (last frozenBalanceCycles)
   reward <-
     (+) <$> toFixedQtyUnsafe (rewards frozenBalance) <*>
     toFixedQtyUnsafe (fees frozenBalance)
@@ -232,7 +241,10 @@ materializeBlockEvent httpClient blockNumber = do
   blockHash <- getBlockHash httpClient blockNumber
   block <- getBlock httpClient blockHash
   let Block {header = BlockHeader {level}} = block
-  when (level /= blockNumber) $ throw UnexpectedResultException
+  when (level /= blockNumber) $
+    throw $
+    UnexpectedResultException
+      "block number received does not match block number requested"
   -- ^ Sometimes the genesis block 0 randomly pops out of a query...
   toBlockEvent block
 
@@ -256,17 +268,17 @@ requestRetryPolicy :: RetryPolicy
 requestRetryPolicy =
   capDelay (30 * secMicros) $ exponentialBackoff (50 * milliMicros)
 
--- | Returns the updated event queue, any finalized block events to stream, any new provisional
--- block events, and any invalidated provisional block hashes.
+-- | Given a new event to add to the queue, returns (1) the updated event queue, (2) any new block
+-- events from rewinding after a chain fork, and (3) any invalidated block hashes.
 updateEventQueueWith ::
      Http.Client
   -> Word8
   -> [BlockEvent]
   -> BlockEvent
-  -> IO ([BlockEvent], [BlockEvent], [BlockEvent], [BlockHash])
+  -> IO ([BlockEvent], [BlockEvent], [BlockHash])
 updateEventQueueWith httpClient finalizationLag queue newEvent = do
   let minNumberInQueue = minimum $ map (\BlockEvent {number} -> number) queue
-  (updatedQueue, addedProvisionalEvents, invalidatedEvents) <-
+  (updatedQueue, newEvents, invalidatedEvents) <-
     if null queue
       then return ([newEvent], [newEvent], [])
       else do
@@ -274,7 +286,8 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
               BlockEvent {number, predecessor} <-
                 fromJustUnsafe BugException $ last newEvents
               when (number <= minNumberInQueue) $
-                throw UnexpectedResultException
+                throw $
+                UnexpectedResultException "chain fork too long to handle"
               let (invalidatedEvents, remainingQueue) =
                     span (\BlockEvent {hash} -> predecessor /= hash) queue
               if null remainingQueue
@@ -294,11 +307,9 @@ updateEventQueueWith httpClient finalizationLag queue newEvent = do
                        , invalidatedEvents)
                 -- ^ Stitch (new events to the beginning of the queue).
         stitchOrRewind [newEvent]
-  let (trimmedQueue, finalizedEvents) =
-        splitAt (fromIntegral finalizationLag) updatedQueue
+  let (trimmedQueue, _) = splitAt (fromIntegral finalizationLag) updatedQueue
   let invalidatedHashes = map (\BlockEvent {hash} -> hash) invalidatedEvents
-  return
-    (trimmedQueue, finalizedEvents, addedProvisionalEvents, invalidatedHashes)
+  return (trimmedQueue, newEvents, invalidatedHashes)
 
 getCounterRaw :: Http.Client -> Text -> IO Int
 getCounterRaw httpClient address =
