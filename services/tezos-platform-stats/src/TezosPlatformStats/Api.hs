@@ -10,15 +10,26 @@ import qualified WebSocket
 type OriginationsByImplicitAddressEndpoint
    = EndpointJson 'NoAuth T WebSocket.T "originationsByImplicitAddress" Tezos.ImplicitAddress ('Direct [Tezos.OriginatedAddress])
 
-testEndpoint :: WebSocket.T -> IO [Tezos.OriginatedAddress]
-testEndpoint websocket = do
-  let binding =
+type BakerCountEndpoint
+   = EndpointJson 'NoAuth T WebSocket.T "bakerCount" () ('Direct Int)
+
+testOriginationsByImplicitAddressEndpoint ::
+     WebSocket.T -> IO [Tezos.OriginatedAddress]
+testOriginationsByImplicitAddressEndpoint websocket = do
+  let bindings =
         makeClient
           websocket
           (Proxy :: Proxy OriginationsByImplicitAddressEndpoint)
-  res <- binding (Tagged $ Tagged "tz1Wit2PqodvPeuRRhdQXmkrtU8e8bRYZecd")
+  res <- bindings (Tagged $ Tagged "tz1Wit2PqodvPeuRRhdQXmkrtU8e8bRYZecd")
   log
     Debug
     "originations for implicit address: tz1Wit2PqodvPeuRRhdQXmkrtU8e8bRYZecd"
     res
+  return res
+
+testBakerCountEndpoint :: WebSocket.T -> IO Int
+testBakerCountEndpoint websocket = do
+  let bindings = makeClient websocket (Proxy :: Proxy BakerCountEndpoint)
+  res <- bindings ()
+  log Debug "number of registered bakers" res
   return res

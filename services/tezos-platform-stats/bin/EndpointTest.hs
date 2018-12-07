@@ -20,5 +20,8 @@ webSocketConfig =
 
 main :: IO ()
 main = do
-  with webSocketConfig $ \websocket -> testEndpoint websocket
+  with webSocketConfig $ \websocket -> do
+    _ <- testOriginationsByImplicitAddressEndpoint websocket
+    _ <- testBakerCountEndpoint websocket
+    return ()
   return ()

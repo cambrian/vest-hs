@@ -47,12 +47,6 @@ totalRewards T {coreDb} () = do
       (Pg.all_ (TezosPlatformCore.Db.rewards TezosPlatformCore.Db.schema))
   fromMaybe 0 <$> fromJustUnsafe BugException x
   -- SELECT SUM(size) FROM rewards
-  -- Pg.select $
-  -- TezosPlatformCore.Db.rewards $
-  -- (\TezosPlatformCore.Db.Reward {cycle, staking_balance, delegated_balance} ->
-  --    (cycle, (staking_balance - delegate_balance)))
-  --   (Pg.all_ (TezosPlatformCore.Db.rewards TezosPlatformCore.Db.schema))
-  -- SELECT cycle, SUM (staking_balance - delegated_balance) FROM rewards GROUPBY cycle
 
 -- bondsOverTime :: T -> () -> IO [TimeBond]
 -- bondsOverTime T {coreDb} ()
@@ -64,10 +58,17 @@ totalRewards T {coreDb} () = do
 --     -- pure (cycles table, staking_balance table, delegated_balance table)
 --     --pure (CycleT cycles, FixedQty XTZ staking_balance, FixedQty XTZ delegated_balance)
 --   pure records
+-- SELECT cycle, SUM (staking_balance - delegated_balance) FROM rewards GROUPBY cycle
 -- delegateBonds :: T -> () -> IO [DelegateBond]
 -- delegateBonds T {coreDb} () = do
+--   x <-
+--     Pg.runLogged coreDb $
+--     Pg.runSelectReturningList $
+--     Pg.select $
+--     Pg.all_ (TezosPlatformCore.Db.delegates TezosPlatformCore.Db.schema)
 instance Service T where
   type RpcSpec T = OriginationsByImplicitAddressEndpoint
+                   :<|> BakerCountEndpoint
   type ValueSpec T = ()
   type EventsProduced T = ()
   type EventsConsumed T = ()
@@ -90,7 +91,7 @@ instance Service T where
     --       do
     --         originations <- originationsByImplicitAddress s "0xdummyaddr"
     --   f $ T {webSocket, amqp, coreDb, chainWatcherDb, redis}
-  rpcHandlers t = originationsByImplicitAddress t
+  rpcHandlers t = originationsByImplicitAddress t :<|> bakerCount t
   valuesPublished _ = ()
   eventProducers _ = ()
   eventConsumers _ = ()
