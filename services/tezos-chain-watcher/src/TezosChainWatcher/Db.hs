@@ -149,12 +149,13 @@ data BlockState
   deriving (Eq)
 
 -- This type signature is gnarly.
+isProvisional Block {is_provisional, is_deleted} =
+  (is_provisional ==. val_ True) &&. (is_deleted ==. val_ False)
+
+-- This type signature is gnarly.
 filterBlocksByState NotDeleted =
   filter_ (\Block {is_deleted} -> is_deleted ==. val_ False)
-filterBlocksByState Provisional =
-  filter_
-    (\Block {is_provisional, is_deleted} ->
-       (is_provisional ==. val_ True) &&. (is_deleted ==. val_ False))
+filterBlocksByState Provisional = filter_ isProvisional
 filterBlocksByState Finalized =
   filter_
     (\Block {is_provisional, is_deleted} ->
@@ -331,36 +332,36 @@ insertProvisionalBlockEventTx createdAt blockEvent = do
       insertTezosOriginations createdAt originations
       insertTezosTransactions createdAt transactions
 
+-- Finalizes blocks less than or equal to the max number to finalize. Queries the given blocks to be
+-- returned as block events (prior to actually performing the update).
 finalizeProvisionalBlockEventsTx :: Time -> Word64 -> Pg [Tezos.BlockEvent]
 finalizeProvisionalBlockEventsTx updatedAt maxBlockNumberToFinalize = do
-  blocks_ <-
+  blocksAffected <-
     runSelectReturningList $
     select $
     filter_ (\Block {number} -> number <=. val_ maxBlockNumberToFinalize) $
     filterBlocksByState Provisional $ all_ (blocks schema)
-  finalizedBlockEvents <-
-    mapM
-      (\block -> do
-         runUpdate $
-           save
-             (blocks schema)
-             (block {is_provisional = False, updated_at = Just updatedAt})
-         toBlockEvent block)
-      blocks_
-  return $ sortOn (\Tezos.BlockEvent {number} -> number) finalizedBlockEvents
+  runUpdate $
+    update
+      (blocks schema)
+      (\block ->
+         [ is_provisional block <-. val_ False
+         , updated_at block <-. val_ (Just updatedAt)
+         ])
+      (\block@Block {number} ->
+         number <=. val_ maxBlockNumberToFinalize &&. isProvisional block)
+  blockEvents <- mapM toBlockEvent blocksAffected
+  return $ sortOn (\Tezos.BlockEvent {number} -> number) blockEvents
 
--- | Soft delete by setting a boolean. TODO: Batch this.
+-- | Soft delete by setting a boolean.
 deleteProvisionalBlockEventsTx :: Time -> [Tezos.BlockHash] -> Pg ()
-deleteProvisionalBlockEventsTx deletedAt blockHashes = do
-  blocksToDelete <-
-    runSelectReturningList $
-    select $
-    filter_ (\Block {hash} -> hash `in_` map val_ blockHashes) $
-    filterBlocksByState Provisional $ all_ (blocks schema)
-  mapM_
+deleteProvisionalBlockEventsTx deletedAt blockHashes =
+  runUpdate $
+  update
+    (blocks schema)
     (\block ->
-       runUpdate $
-       save
-         (blocks schema)
-         (block {is_deleted = True, updated_at = Just deletedAt}))
-    blocksToDelete
+       [ is_deleted block <-. val_ True
+       , updated_at block <-. val_ (Just deletedAt)
+       ])
+    (\block@Block {hash} ->
+       (hash `in_` map val_ blockHashes) &&. isProvisional block)
