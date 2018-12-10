@@ -7,23 +7,22 @@ module Vest.Prelude.Log
   , log_
   ) where
 
+import Control.Concurrent.Lock (Lock)
+import qualified Control.Concurrent.Lock as Lock
 import Data.IORef
 import System.IO.Unsafe
 import Vest.Prelude.Core
 import Vest.Prelude.Time
 
 -- DO NOT DO THIS ON YOUR OWN!
-logLockRef :: IORef (TMVar ())
+logLockRef :: IORef Lock
 {-# NOINLINE logLockRef #-}
-logLockRef = unsafePerformIO (newEmptyTMVarIO >>= newIORef)
+logLockRef = unsafePerformIO (Lock.new >>= newIORef)
 
 withLogLock :: IO a -> IO a
 withLogLock action = do
   logLock <- readIORef logLockRef
-  atomically $ putTMVar logLock ()
-  result <- action
-  void . atomically $ takeTMVar logLock
-  return result
+  Lock.with logLock action
 
 getTestMode :: IO Bool
 getTestMode = isJust <$> lookupEnv "___TEST_MODE_DO_NOT_SET"
