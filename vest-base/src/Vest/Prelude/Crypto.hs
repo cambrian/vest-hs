@@ -41,8 +41,10 @@ newtype Seed = Seed
   { raw :: ByteString
   } deriving newtype (Eq, Read, Show, IsString, FromJSON, ToJSON)
 
-instance Loadable Seed where
-  configFile = [relfile|seed.yaml|]
+instance SimpleLoadable Seed where
+  file = [relfile|seed.yaml|]
+
+instance Loadable Seed
 
 seedKeyPair :: Seed -> (PublicKey, SecretKey)
 seedKeyPair =

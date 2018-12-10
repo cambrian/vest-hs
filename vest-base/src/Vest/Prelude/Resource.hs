@@ -54,18 +54,26 @@ make "use `with resourceConfig $ resource -> ...` if you can, otherwise use `mak
 cleanup "use `with resourceConfig $ resource -> ...` if you can, otherwise use `cleanupLogged`"
  #-}
 
-data PoolConfig a = PoolConfig
+data PoolConfig = PoolConfig
   { numResources :: Word
-  -- ^ numResources is technically per-stripe, but we just use 1 stripe.
+    -- ^ numResources is technically per-stripe, but we just use 1 stripe.
   , idleTime :: Duration
+  } deriving (Eq, Show, Read, Generic, ToJSON, FromJSON)
+
+data ResourcePoolConfig a = ResourcePoolConfig
+  { poolConfig :: PoolConfig
   , resourceConfig :: ResourceConfig a
   }
 
 -- | Get a resource from a pool with @withResource.
 instance Resource a => Resource (Pool a) where
-  type ResourceConfig (Pool a) = PoolConfig a
-  resourceName = "Pool " <> resourceName @a
-  makeLogged PoolConfig {idleTime, numResources, resourceConfig} =
+  type ResourceConfig (Pool a) = ResourcePoolConfig a
+  resourceName = "Pool-" <> resourceName @a
+  makeLogged ResourcePoolConfig { poolConfig = PoolConfig { idleTime
+                                                          , numResources
+                                                          }
+                                , resourceConfig
+                                } =
     createPool
       (makeLogged resourceConfig)
       cleanupLogged

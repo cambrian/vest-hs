@@ -14,9 +14,10 @@ configPaths ::
   => FilePath
   -> IO [Path Abs Dir]
 -- ^ Will throw if configDir is not well formed.
+-- For configDir/, returns paths [configDir/namespaceDir/private, configDir/namespaceDir, configDir/]
 configPaths configDir = do
   d <- resolveDir' configDir
-  return [d </> namespaceDir @a, d]
+  return [d </> namespaceDir @a </> [reldir|private|], d </> namespaceDir @a, d]
 
 -- | All services take only the config directory; any service-specific configuration can be done via
 -- config files. A service will look in configDir/namespace/ first, then configDir/ for its configs.
