@@ -93,3 +93,6 @@ type family TypeName a :: Symbol where
 type family ModuleName a :: Symbol where
   ModuleName (M1 D ('MetaData _ module_ _ _) f ()) = module_ -- module is a reserved symbol
   ModuleName a = ModuleName (Rep a ())
+
+type FullTypeName a
+   = AppendSymbol (ModuleName a) (AppendSymbol "." (TypeName a))

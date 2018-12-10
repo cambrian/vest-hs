@@ -17,8 +17,12 @@ import Vest.Prelude.TypeLevel
 -- TODO: How to allow construction with @with, without making make/cleanup super ugly?
 -- an idea: a global table of resource handles (weak pointers), and implement make/cleanup in terms
 -- of @with
-class Resource a where
+class KnownSymbol (ResourceName a) =>
+      Resource a
+  where
   type ResourceConfig a
+  type ResourceName a :: Symbol
+  -- ^ For logging purposes.
   make :: ResourceConfig a -> IO a
   make = makeLogged
   cleanup :: a -> IO ()
@@ -38,10 +42,7 @@ class Resource a where
   -- ^ defining @makeLogged and @cleanupLogged allows you to change the default logging behavior.
   -- Used below to skip logging where it would be cluttery.
   resourceName :: Text
-  -- ^ For logging purposes
-  default resourceName :: Typeable a =>
-    Text
-  resourceName = moduleName @a <> "." <> constructorName @a
+  resourceName = symbolText (Proxy :: Proxy (ResourceName a))
   with :: ResourceConfig a -> (a -> IO b) -> IO b
   with config = bracket (makeLogged config) cleanupLogged -- ^ TODO: Retry on exception?
 
@@ -62,9 +63,10 @@ data PoolConfig a = PoolConfig
   }
 
 -- | Get a resource from a pool with @withResource.
-instance Resource a => Resource (Pool a) where
+instance (Resource a, KnownSymbol (ResourceName (Pool a))) =>
+         Resource (Pool a) where
   type ResourceConfig (Pool a) = PoolConfig a
-  resourceName = "Pool " <> resourceName @a
+  type ResourceName (Pool a) = AppendSymbol "Pool-" (ResourceName a)
   makeLogged PoolConfig {idleTime, numResources, resourceConfig} =
     createPool
       (makeLogged resourceConfig)
@@ -74,13 +76,18 @@ instance Resource a => Resource (Pool a) where
       (fromIntegral numResources)
   cleanupLogged = destroyAllResources
 
-instance (Resource a, Resource b) =>
+instance ( Resource a
+         , Resource b
+         , KnownSymbol (ResourceName (a
+                                      :<|> b))
+         ) =>
          Resource (a
                    :<|> b) where
   type ResourceConfig (a
                        :<|> b) = (ResourceConfig a
                                   :<|> ResourceConfig b)
-  resourceName = resourceName @a <> " :<|> " <> resourceName @b
+  type ResourceName (a
+                     :<|> b) = AppendSymbol (ResourceName a) (AppendSymbol " :<|> " (ResourceName b))
   makeLogged (aConfig :<|> bConfig) = do
     aThread <- asyncDetached $ makeLogged aConfig
     bThread <- asyncDetached $ makeLogged bConfig
