@@ -99,7 +99,8 @@ deriving instance Read (PrimaryKey OriginationT Identity)
 deriving instance Show (PrimaryKey OriginationT Identity)
 
 data TransactionT f = Transaction
-  { hash :: PrimaryKey OperationT f
+  { id :: C f UUID
+  , hash :: PrimaryKey OperationT f
   , from :: C f Tezos.Address
   , to :: C f Tezos.Address
   , fee :: C f (FixedQty XTZ)
@@ -116,11 +117,9 @@ deriving instance Read Transaction
 deriving instance Show Transaction
 
 instance Table TransactionT where
-  data PrimaryKey TransactionT f = TransactionHash (PrimaryKey
-                                                    OperationT
-                                                    f)
+  data PrimaryKey TransactionT f = TransactionId (C f UUID)
                                    deriving (Generic, Beamable)
-  primaryKey Transaction {hash} = TransactionHash hash
+  primaryKey Transaction {id} = TransactionId id
 
 deriving instance Eq (PrimaryKey TransactionT Identity)
 
@@ -197,27 +196,31 @@ selectTezosOperationsByBlockHash blockHash =
      filter_ (\op -> block_hash op ==. val_ (BlockHash blockHash)) $
      all_ (operations schema))
 
-selectTezosOriginationsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Origination]
-selectTezosOriginationsByOpHash opHash =
+selectTezosOriginationsByOpHash ::
+     [Tezos.OperationHash] -> Pg [Tezos.Origination]
+selectTezosOriginationsByOpHash opHashes =
   map toTezosOrigination <$>
   runSelectReturningList
     (select $
-     filter_ (\Origination {hash} -> hash ==. val_ (OperationHash opHash)) $
+     filter_
+       (\Origination {hash = OperationHash hash} -> hash `in_` map val_ opHashes) $
      all_ (originations schema))
 
-selectTezosTransactionsByOpHash :: Tezos.OperationHash -> Pg [Tezos.Transaction]
-selectTezosTransactionsByOpHash opHash =
+selectTezosTransactionsByOpHash ::
+     [Tezos.OperationHash] -> Pg [Tezos.Transaction]
+selectTezosTransactionsByOpHash opHashes =
   map toTezosTransaction <$>
   runSelectReturningList
     (select $
-     filter_ (\Transaction {hash} -> hash ==. val_ (OperationHash opHash)) $
+     filter_
+       (\Transaction {hash = OperationHash hash} -> hash `in_` map val_ opHashes) $
      all_ (transactions schema))
 
 toBlockEvent :: Block -> Pg Tezos.BlockEvent
 toBlockEvent (Block number hash predecessor cycleNumber time _ _ _ _) = do
   operations <- selectTezosOperationsByBlockHash hash
-  originations <- concatMapM selectTezosOriginationsByOpHash operations
-  transactions <- concatMapM selectTezosTransactionsByOpHash operations
+  originations <- selectTezosOriginationsByOpHash operations
+  transactions <- selectTezosTransactionsByOpHash operations
   return $
     Tezos.BlockEvent
       { number
@@ -276,16 +279,15 @@ insertTezosOriginations createdAt tezosOriginations =
     onConflictDefault
 
 insertTezosTransactions :: Time -> [Tezos.Transaction] -> Pg ()
-insertTezosTransactions createdAt tezosTransactions =
+insertTezosTransactions createdAt tezosTransactions = do
+  dbTransactions <-
+    mapM
+      (\Tezos.Transaction {hash, from, to, fee, size} -> do
+         id <- liftIO nextUUID
+         return $ Transaction id (OperationHash hash) from to fee size createdAt)
+      tezosTransactions
   runInsert $
-  insert
-    (transactions schema)
-    (insertValues $
-     map
-       (\Tezos.Transaction {hash, from, to, fee, size} ->
-          Transaction (OperationHash hash) from to fee size createdAt)
-       tezosTransactions)
-    onConflictDefault
+    insert (transactions schema) (insertValues dbTransactions) onConflictDefault
 
 insertProvisionalBlockEventTx :: Time -> Tezos.BlockEvent -> Pg ()
 insertProvisionalBlockEventTx createdAt blockEvent = do
