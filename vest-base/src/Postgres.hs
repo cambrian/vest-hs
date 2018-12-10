@@ -34,6 +34,7 @@ import qualified Database.Beam.Postgres as Postgres
 import Database.Beam.Postgres.Full as Reexports
 import qualified Database.Beam.Postgres.Migrate as Postgres (migrationBackend)
 import Database.Beam.Postgres.Syntax as Reexports
+import Database.Beam.Schema.Tables as Reexports
 import Database.PostgreSQL.Simple.FromField as Reexports
 import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
 import Database.PostgreSQL.Simple.Types as Reexports (PGArray)
