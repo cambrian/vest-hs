@@ -66,9 +66,9 @@ instance Service TestServer where
 generateTestPublicKey :: TestTree
 -- ^ somewhat hacky way to generate the public-key.yaml file
 generateTestPublicKey =
-  testCaseRaw
+  testCase'
     "Generate Access Control Public Key - test"
-    "access-control/test/config/access-control-public-key.yaml" $ do
+    [relfile|access-control/test/config/access-control-public-key.yaml|] $ do
     path <- resolveDir' $ testConfigDir <> "/access-control"
     seed <- load [path]
     return $ Yaml.encode $ AccessControl.ACPublicKey $ fst $ seedKeyPair seed
@@ -76,9 +76,9 @@ generateTestPublicKey =
 generateSubjects :: TestTree
 -- ^ somewhat hacky way to generate the subjects.yaml file
 generateSubjects =
-  testCaseRaw
+  testCase'
     "Generate Access Control Subjects"
-    "access-control/test/config/access-control/subjects.yaml" $ do
+    [relfile|access-control/test/config/access-control/subjects.yaml|] $ do
     let subjects =
           HashMap.fromList
             [ ( TestClient.pubKey
@@ -89,32 +89,31 @@ generateSubjects =
             ]
     return $ Yaml.encode subjects
 
-generatePublicKey :: Text -> TestTree
+generatePublicKey :: Path Rel Dir -> TestTree
 -- ^ Even hackier way to generate the access-control-public-key.yaml file for prod and local
 -- environments.
 -- TODO: this should be a pre-commit hook
 generatePublicKey env =
-  testCaseRaw
-    ("Generate Access Control Public Key - " <> unpack env)
-    ("config/" <> unpack env <> "/access-control-public-key.yaml") $ do
-    path <- resolveDir' $ "config/" <> unpack env <> "/access-control"
+  testCase'
+    ("Generate Access Control Public Key - " <> pack (toFilePath env))
+    ([reldir|config|] </> env </> [relfile|access-control-public-key.yaml|]) $ do
+    path <- resolveDir' $ "config/" <> toFilePath env <> "/access-control"
     seed <- load [path]
     return $ Yaml.encode $ AccessControl.ACPublicKey $ fst $ seedKeyPair seed
 
 testPermitted :: IO TestClient.T -> TestTree
 testPermitted t =
-  testCase "Permitted" "access-control/test/permitted.gold" $ do
+  testCase "Permitted" [relfile|access-control/test/permitted.gold|] $ do
     t <- t
     let call = makeClient t (Proxy :: Proxy PermittedEndpoint)
     show <$> call ()
 
 testForbidden :: IO TestClient.T -> TestTree
 testForbidden t =
-  expectFail $
-  testCase "Forbidden" "access-control/test/forbidden.gold" $ do
+  testCase "Forbidden" [relfile|access-control/test/forbidden.gold|] $ do
     t <- t
     let call = makeClient t (Proxy :: Proxy ForbiddenEndpoint)
-    show <$> call ()
+    (show <$> call ()) `catchAny` (return . show)
 
 generateDataFiles :: TestTree
 generateDataFiles =
@@ -122,7 +121,7 @@ generateDataFiles =
     "Generate data files"
     [ generateTestPublicKey
     , generateSubjects
-    , generatePublicKey "local"
+    , generatePublicKey [reldir|local|]
     -- , generatePublicKey "prod"
     ]
 

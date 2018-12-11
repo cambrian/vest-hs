@@ -1,9 +1,10 @@
 module Test
   ( module Reexports
   , testCase
-  , testCaseRaw
+  , testCase'
   , testWithResource
   , testWithLoadableResource
+  , testWithSeededDb
   , testWithService
   , ignoreIO
   , TestService
@@ -12,20 +13,27 @@ module Test
 import Vest
 
 import GHC.Base (String)
+import Postgres
 import Test.Tasty as Reexports (TestTree, defaultMain, testGroup)
 import qualified Test.Tasty as Tasty
-import Test.Tasty.ExpectedFailure as Reexports (expectFail, ignoreTest)
+import Test.Tasty.ExpectedFailure as Reexports (ignoreTest)
 import Test.Tasty.Golden (goldenVsStringDiff)
 
 diffCmd :: FilePath -> FilePath -> [String]
 diffCmd ref new = ["diff", "-u", "--color", ref, new]
 
-testCase :: String -> FilePath -> IO Text -> TestTree
-testCase name path = testCaseRaw name path . map convertString
+testCase :: Text -> Path Rel File -> IO Text -> TestTree
+testCase = testCase'
 
-testCaseRaw :: String -> FilePath -> IO ByteString -> TestTree
-testCaseRaw name path =
-  goldenVsStringDiff name diffCmd path . map convertString
+testCase' ::
+     ConvertibleStrings s LazyByteString
+  => Text
+  -> Path Rel File
+  -> IO s
+  -> TestTree
+testCase' name path test =
+  goldenVsStringDiff (unpack name) diffCmd (toFilePath path) $
+  (convertString <$> test) `catchAny` (return . convertString . show)
 
 newtype TestService a = TestService
   { serviceThread :: Async Void
@@ -60,6 +68,26 @@ testWithLoadableResource configDir =
     (do path <- resolveDir' configDir
         makeLoadable @a [path])
     (cleanupLogged @a)
+
+data TestNamespace
+
+instance HasNamespace TestNamespace where
+  type Namespace TestNamespace = "test"
+
+testWithSeededDb ::
+     (Pool (Specific TestNamespace Connection) -> IO ())
+  -> FilePath
+  -> TestTree
+  -> TestTree
+-- ^ TODO: would be nice to auto check schema, truncate, seed values, but beam is annoying to work with.
+testWithSeededDb f configPath test =
+  Tasty.withResource
+    (do path <- resolveDir' configPath
+        db <- makeLoadable @(Pool (Specific TestNamespace Connection)) [path]
+        f db
+        return db)
+    (cleanupLogged @(Pool (Specific TestNamespace Connection)))
+    (const test)
 
 testWithService ::
      forall a. Service a

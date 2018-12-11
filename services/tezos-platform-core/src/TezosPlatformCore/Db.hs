@@ -263,9 +263,7 @@ data Schema f = Schema
   , dividends :: f (TableEntity DividendT)
   , delegations :: f (TableEntity DelegationT)
   , payments :: f (TableEntity PaymentT)
-  } deriving (Generic)
-
-instance Database Postgres Schema
+  } deriving (Generic, Database Postgres)
 
 checkedSchema :: CheckedDatabaseSettings Postgres Schema
 checkedSchema = defaultMigratableDbSettings @PgCommandSyntax
