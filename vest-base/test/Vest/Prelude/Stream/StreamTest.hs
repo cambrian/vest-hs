@@ -10,7 +10,7 @@ simpleValue :: TestTree
 -- The reader may skip values; pushing should never block.
 -- readLastValue and readLatestValue should always work.
 simpleValue =
-  testCase "simple-value" "test/Vest/Prelude/Stream/simple-value.gold" $ do
+  testCase "simple-value" [relfile|test/Vest/Prelude/Stream/simple-value.gold|] $ do
     (writer, stream) <- newStream @ValueBuffer @Int
     writeStream writer 1
     writeStream writer 2
@@ -27,7 +27,7 @@ simpleValue =
 
 multiValue :: TestTree
 multiValue =
-  testCase "multi-value" "test/Vest/Prelude/Stream/multi-value.gold" $ do
+  testCase "multi-value" [relfile|test/Vest/Prelude/Stream/multi-value.gold|] $ do
     (writer, stream) <- newStream @ValueBuffer @Int
     writeStream writer 1
     writeStream writer 2
@@ -52,7 +52,7 @@ simpleQueue :: TestTree
 -- Push history should be available to the first consumer.
 -- Pushing should block if the backing queue is full.
 simpleQueue =
-  testCase "simple-queue" "test/Vest/Prelude/Stream/simple-queue.gold" $ do
+  testCase "simple-queue" [relfile|test/Vest/Prelude/Stream/simple-queue.gold|] $ do
     (writer, stream) <- newStream @(QueueBuffer_ 4) @Int
     writeStream writer 1
     writeStream writer 1
@@ -76,7 +76,7 @@ simpleQueue =
 
 multiQueue :: TestTree
 multiQueue =
-  testCase "multi-queue" "test/Vest/Prelude/Stream/multi-queue.gold" $ do
+  testCase "multi-queue" [relfile|test/Vest/Prelude/Stream/multi-queue.gold|] $ do
     (writer, stream) <- newStream @(QueueBuffer_ 4) @Int
     writeStream writer 1
     writeStream writer 1
@@ -102,12 +102,12 @@ multiQueue =
 
 toFromList :: TestTree
 toFromList =
-  testCase "to/from list" "test/Vest/Prelude/Stream/to-from-list.gold" $
+  testCase "to/from list" [relfile|test/Vest/Prelude/Stream/to-from-list.gold|] $
   streamFromList @QueueBuffer @Int [1, 2, 3] >>= listFromStream >>- show
 
 takeStreamTest :: TestTree
 takeStreamTest =
-  testCase "take" "test/Vest/Prelude/Stream/take.gold" $ do
+  testCase "take" [relfile|test/Vest/Prelude/Stream/take.gold|] $ do
     s <- streamFromList @QueueBuffer @Int [1, 2, 3]
     head <- takeStream 1 s >>= listFromStream
     tail <- listFromStream s
@@ -117,7 +117,7 @@ uncaughtExceptionTest :: TestTree
 uncaughtExceptionTest =
   testCase
     "uncaught-exception"
-    "test/Vest/Prelude/Stream/uncaught-exception.gold" $
+    [relfile|test/Vest/Prelude/Stream/uncaught-exception.gold|] $
   catchAsync
     (do badThread <-
           asyncDetached $ do

@@ -12,7 +12,9 @@ testLock redis lockId =
 
 simpleConcurrentTest :: TestTree
 simpleConcurrentTest =
-  testCase "simpleConcurrent" "test/Vest/DistributedLock/simple-concurrent.gold" $
+  testCase
+    "simpleConcurrent"
+    [relfile|test/Vest/DistributedLock/simple-concurrent.gold|] $
   with
     defaultRedisConfig
     (\connection -> do

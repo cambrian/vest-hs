@@ -140,14 +140,14 @@ withSubscribed _ f =
 
 emptyRpcTest :: TestTree
 emptyRpcTest =
-  testCase "RPC" "test/Vest/Bridge/empty-rpc.gold" $ withT $ \t -> do
+  testCase "RPC" [relfile|test/Vest/Bridge/empty-rpc.gold|] $ withT $ \t -> do
     serve t (Proxy :: Proxy ()) ()
     () <- return $ makeClient t (Proxy :: Proxy ())
     return ""
 
 emptyValueTest :: TestTree
 emptyValueTest =
-  testCase "Value" "test/Vest/Bridge/empty-pubsub.gold" $ withT $ \t -> do
+  testCase "Value" [relfile|test/Vest/Bridge/empty-pubsub.gold|] $ withT $ \t -> do
     () <- subscribe t (Proxy :: Proxy ())
     publish t (Proxy :: Proxy ()) ()
     return ""
@@ -156,7 +156,7 @@ singleDirectTest ::
      forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 singleDirectTest =
-  testCase "Single" "test/Vest/Bridge/direct-rpc-single.gold" $
+  testCase "Single" [relfile|test/Vest/Bridge/direct-rpc-single.gold|] $
   withRpcClient @transport (Proxy :: Proxy (EchoIntsDirectEndpoint transport)) $ \call -> do
     result <- call [1, 2, 3]
     return $ show result
@@ -165,7 +165,7 @@ multipleDirectTest ::
      forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 multipleDirectTest =
-  testCase "Multiple" "test/Vest/Bridge/direct-rpc-multiple.gold" $
+  testCase "Multiple" [relfile|test/Vest/Bridge/direct-rpc-multiple.gold|] $
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsDirectEndpoint transport
@@ -178,7 +178,7 @@ timeoutTest ::
      forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 timeoutTest =
-  expectFail $ testCase "Timeout" "test/Vest/Bridge/timeout.gold" $
+  testCase "Timeout" [relfile|test/Vest/Bridge/timeout.gold|] $
   withRpcClient @transport (Proxy :: Proxy (TimeoutEndpoint transport)) $ \call -> do
     call ()
     return ""
@@ -187,7 +187,7 @@ singleStreamingTest ::
      forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 singleStreamingTest =
-  testCase "Single" "test/Vest/Bridge/streaming-rpc-single.gold" $
+  testCase "Single" [relfile|test/Vest/Bridge/streaming-rpc-single.gold|] $
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport)) $ \call -> do
@@ -201,7 +201,7 @@ multipleStreamingTest ::
      forall transport. (RpcTransport transport, Has transport T)
   => TestTree
 multipleStreamingTest =
-  testCase "Multiple" "test/Vest/Bridge/streaming-rpc-multiple.gold" $
+  testCase "Multiple" [relfile|test/Vest/Bridge/streaming-rpc-multiple.gold|] $
   withRpcClient
     @transport
     (Proxy :: Proxy (EchoIntsStreamingEndpoint transport
@@ -229,7 +229,7 @@ valueTest ::
      forall transport. (ValueTransport transport, Has transport T)
   => TestTree
 valueTest =
-  testCase "Value" "test/Vest/Bridge/pubsub-value.gold" $
+  testCase "Value" [relfile|test/Vest/Bridge/pubsub-value.gold|] $
   withSubscribed @transport (Proxy :: Proxy (IncrementValueTopic transport)) $ \stream -> do
     threadDelay $ sec 0.1
     value <- readLatestValue stream
