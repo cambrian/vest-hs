@@ -6,12 +6,18 @@ module TezosChainWatcher
 import qualified AccessControl.Client
 import qualified Postgres as Pg
 import qualified Tezos
-import qualified Tezos.Rpc
 import qualified Tezos.Rpc as Tezos
 import TezosChainWatcher.Api as TezosChainWatcher
 import TezosChainWatcher.Db
 import TezosChainWatcher.Internal as TezosChainWatcher
 import Vest hiding (hash)
+
+mapEventsToValues ::
+     Eq b => (a -> b) -> Stream QueueBuffer a -> IO (Stream ValueBuffer b)
+mapEventsToValues f eventStream = do
+  (valueWriter, valueStream) <- newStream
+  tapStream_ (writeStream valueWriter . f) eventStream
+  return valueStream
 
 rewardInfo ::
      T
@@ -20,63 +26,48 @@ rewardInfo ::
 rewardInfo T {tezos} RewardInfoRequest {cycleNumber, delegates} =
   Tezos.getRewardInfo tezos cycleNumber delegates
 
--- | Eventually: Draw a nice state machine for ease of understanding.
+-- | This implementation of monitor op, while conceptually simple, may drop confirmation values
+-- every now and then. It also requires a DB query per block to materialize op status.
 monitorOperation ::
      T -> Tezos.OperationHash -> IO (Stream ValueBuffer Tezos.OperationStatus)
-monitorOperation T {dbPool, provisionalBlockEventStream} opHash = do
+monitorOperation T {dbPool, provisionalHeightStream} opHash = do
   let threshold = Tezos.defaultFinalizationLag
+  startHeight <-
+    fromJustUnsafe BugException =<< streamNext provisionalHeightStream
   (statusWriter, statusStream) <- newStream
-  let materializeOpStatus currentBlockNumber = do
-        blockInfoMaybe <- Pg.runLogged dbPool $ selectBlockInfoForOpHash opHash
-        case blockInfoMaybe of
-          Nothing -> return $ Tezos.NotIncluded 0
-          Just (blockHash, blockNumber) -> do
+  let materializeOpStatus currentHeight = do
+        let monitorDuration =
+              if currentHeight > startHeight
+                then currentHeight - startHeight
+                else 0
+        -- ^ If the chain forked and we are still catching up, treat the monitored duration as 0.
+        blockInfo <- Pg.runLogged dbPool $ selectBlockInfoForOpHash opHash
+        case blockInfo of
+          Nothing ->
+            if monitorDuration < threshold
+              then return $ Tezos.NotIncluded monitorDuration
+              else return Tezos.Rejected
+            -- ^ Op not seen in valid blocks.
+          Just (blockHash, blockHeight) -> do
             let (confirmations :: Int) =
-                  fromIntegral currentBlockNumber - fromIntegral blockNumber
-            -- ^ If confirmations is negative, it means we had a forked chain whose head we are
-            -- still catching up to. A block that is yet to be streamed contains our operation.
+                  fromIntegral currentHeight - fromIntegral blockHeight
             if confirmations < 0
-              then return $ Tezos.NotIncluded 0
+              then return $ Tezos.NotIncluded monitorDuration
+              -- ^ Op seen, but the chain forked and we are still catching up.
               else if confirmations < fromIntegral threshold
                      then return $
                           Tezos.Included (blockHash, fromIntegral confirmations)
                      else return $ Tezos.Confirmed blockHash
-  async $
-    foldWhileMStream -- Continue monitoring until the op is confirmed or rejected.
-      (\Tezos.BlockEvent {hash, number, predecessor, operations} (lastBlockHashMaybe, opStatusMaybe) ->
-         case lastBlockHashMaybe of
-           Nothing -> return $ Just (Just hash, Nothing)
-           -- ^ Wait for one block to go by so we can ensure the validity of the DB query within
-           -- block events we have seen. If the chain subsequently forks, we simply re-run the DB
-           -- query to restore validity.
-           Just lastBlockHash -> do
-             opStatus <-
-               case opStatusMaybe of
-                 Nothing -> materializeOpStatus number
-                 Just _
-                   | predecessor /= lastBlockHash -> materializeOpStatus number
-                 -- ^ Cases for the start of monitoring and chain forking.
-                 Just (Tezos.NotIncluded c) ->
-                   return $
-                   if c < threshold
-                     then if opHash `elem` operations
-                            then Tezos.Included (hash, 0)
-                            else Tezos.NotIncluded (c + 1)
-                     else Tezos.Rejected
-                 Just (Tezos.Included (b, c)) ->
-                   return $
-                   if c < threshold
-                     then Tezos.Included (b, c + 1)
-                     else Tezos.Confirmed b
-                 _ -> throw BugException
-             -- ^ Generate a new op status.
-             writeStream statusWriter opStatus
-             case opStatus of
-               Tezos.Confirmed _ -> closeStream statusWriter >> return Nothing
-               Tezos.Rejected -> closeStream statusWriter >> return Nothing
-               _ -> return $ Just (Just hash, Just opStatus))
-      (Nothing, Nothing)
-      provisionalBlockEventStream
+  -- Materialize op status every time we get a height value.
+  tapWhileStream_
+    (\height -> do
+       opStatus <- materializeOpStatus height
+       writeStream statusWriter opStatus
+       case opStatus of
+         Tezos.Confirmed _ -> closeStream statusWriter >> return False
+         Tezos.Rejected -> closeStream statusWriter >> return False
+         _ -> return True)
+    provisionalHeightStream
   return statusStream
 
 -- | This DB materializer waits on persistence of the desired event to occur.
@@ -88,13 +79,9 @@ materializeFinalizedBlockEvent T {dbPool, finalizedHeightStream} blockNumber = d
   Pg.runLogged dbPool (selectFinalizedBlockEventByNumber blockNumber) >>=
     fromJustUnsafe BugException
 
--- Run on EVERY service replica.
 streamProvisionalBlockEvents ::
-     Pool (Specific T Pg.Connection)
-  -> Tezos.Rpc.T
-  -> Word8
-  -> IO (Stream QueueBuffer Tezos.BlockEvent)
-streamProvisionalBlockEvents dbPool tezos finalizationLag = do
+     T -> Word64 -> IO (Stream QueueBuffer Tezos.BlockEvent)
+streamProvisionalBlockEvents T {dbPool, tezos} finalizationLag = do
   highestSeenBlockNumber <- Pg.runLogged dbPool (selectMaxBlockNumber Finalized)
   let nextBlockNumber = highestSeenBlockNumber + 1
   (provisionalEventStream_, invalidatedHashesStream) <-
@@ -112,8 +99,6 @@ streamProvisionalBlockEvents dbPool tezos finalizationLag = do
          log Debug "persisted provisional block event" (number, hash)
          return event)
       provisionalEventStream_
-  -- No-op consumer to make sure event writes do not block.
-  tapStream_ (void . return) provisionalEventStream
   -- Invalidate provisional events as necessary.
   tapStream_
     (\hashes -> do
@@ -126,8 +111,9 @@ streamProvisionalBlockEvents dbPool tezos finalizationLag = do
     invalidatedHashesStream
   return provisionalEventStream
 
-streamProvisionalHeight :: T -> IO (Stream ValueBuffer Word64)
-streamProvisionalHeight T {provisionalBlockEventStream} = do
+streamProvisionalHeightEvents ::
+     Stream QueueBuffer Tezos.BlockEvent -> IO (Stream QueueBuffer Word64)
+streamProvisionalHeightEvents provisionalBlockEventStream = do
   (provisionalHeightWriter, provisionalHeightStream) <- newStream
   async $
     foldMStream
@@ -142,17 +128,16 @@ streamProvisionalHeight T {provisionalBlockEventStream} = do
   return provisionalHeightStream
 
 streamFinalizedBlockEvents ::
-     T -> Stream ValueBuffer Word64 -> IO (Stream QueueBuffer Tezos.BlockEvent)
-streamFinalizedBlockEvents T {dbPool} provisionalHeightStream = do
+     T -> Stream QueueBuffer Word64 -> IO (Stream QueueBuffer Tezos.BlockEvent)
+streamFinalizedBlockEvents T {dbPool} provisionalHeightEventStream = do
   (finalizedEventWriter, finalizedEventStream) <- newStream
   tapStream_
     (\height -> do
        updatedAt <- now
        let maxBlockNumberToFinalize =
-             fromIntegral $
-             max
-               (fromIntegral height - fromIntegral Tezos.defaultFinalizationLag)
-               (0 :: Int)
+             if height > Tezos.defaultFinalizationLag
+               then height - Tezos.defaultFinalizationLag
+               else 0
        log Debug "finalizing to block level" maxBlockNumberToFinalize
        events <-
          Pg.runLoggedTransaction dbPool $
@@ -163,7 +148,7 @@ streamFinalizedBlockEvents T {dbPool} provisionalHeightStream = do
             log Debug "streaming block event" (number, hash)
             writeStream finalizedEventWriter event)
          events)
-    provisionalHeightStream
+    provisionalHeightEventStream
   return finalizedEventStream
 
 instance Service T where
@@ -179,14 +164,15 @@ instance Service T where
   init configPaths f = do
     (accessControlPublicKey :<|> seed :<|> DefaultOperationFee fee) <-
       load configPaths
+    let defaultOperationFee = fromIntegral fee
     withLoadable configPaths $ \(dbPool :<|> amqp :<|> redis :<|> tezos) -> do
       accessControlClient <-
         AccessControl.Client.make amqp accessControlPublicKey seed
       Pg.runLogged dbPool $ Pg.ensureSchema checkedSchema
+      provisionalHeightStream <-
+        subscribe amqp (Proxy :: Proxy ProvisionalHeightValue)
       finalizedHeightStream <-
         subscribe amqp (Proxy :: Proxy FinalizedHeightValue)
-      provisionalBlockEventStream <-
-        streamProvisionalBlockEvents dbPool tezos Tezos.defaultFinalizationLag
       f $
         T
           { dbPool
@@ -194,19 +180,24 @@ instance Service T where
           , redis
           , tezos
           , accessControlClient
+          , provisionalHeightStream
           , finalizedHeightStream
-          , provisionalBlockEventStream
-          , defaultOperationFee = fromIntegral fee
+          , defaultOperationFee
           }
   rpcHandlers t = rewardInfo t :<|> monitorOperation t
   masterInstance t@T {defaultOperationFee} = do
-    provisionalHeightStream <- streamProvisionalHeight t
+    provisionalBlockEventStream <-
+      streamProvisionalBlockEvents t Tezos.defaultFinalizationLag
+    provisionalHeightEventStream <-
+      streamProvisionalHeightEvents provisionalBlockEventStream
     finalizedBlockEventStream <-
-      streamFinalizedBlockEvents t provisionalHeightStream
-    (finalizedHeightWriter, finalizedHeightStream) <- newStream
-    tapStream_
-      (\Tezos.BlockEvent {number} -> writeStream finalizedHeightWriter number)
-      finalizedBlockEventStream
+      streamFinalizedBlockEvents t provisionalHeightEventStream
+    provisionalHeightStream <-
+      mapEventsToValues identity provisionalHeightEventStream
+    finalizedHeightStream <-
+      mapEventsToValues
+        (\Tezos.BlockEvent {number} -> number)
+        finalizedBlockEventStream
     operationFeeStream <- streamFromList [defaultOperationFee]
     return
       ( provisionalHeightStream :<|> finalizedHeightStream :<|>

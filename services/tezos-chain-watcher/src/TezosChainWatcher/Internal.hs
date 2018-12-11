@@ -5,7 +5,6 @@ module TezosChainWatcher.Internal
 import qualified AccessControl.Client
 import qualified Amqp
 import qualified Postgres
-import qualified Tezos
 import qualified Tezos.Rpc
 import Vest
 
@@ -22,8 +21,8 @@ data T = T
   , redis :: RedisConnection
   , tezos :: Tezos.Rpc.T
   , accessControlClient :: AccessControl.Client.T
+  , provisionalHeightStream :: Stream ValueBuffer Word64
   , finalizedHeightStream :: Stream ValueBuffer Word64
-  , provisionalBlockEventStream :: Stream QueueBuffer Tezos.BlockEvent
   , defaultOperationFee :: FixedQty XTZ
   }
 

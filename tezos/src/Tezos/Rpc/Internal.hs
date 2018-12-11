@@ -272,7 +272,7 @@ requestRetryPolicy =
 -- events from rewinding after a chain fork, and (3) any invalidated block hashes.
 updateEventQueueWith ::
      Http.Client
-  -> Word8
+  -> Word64
   -> [BlockEvent]
   -> BlockEvent
   -> IO ([BlockEvent], [BlockEvent], [BlockHash])
