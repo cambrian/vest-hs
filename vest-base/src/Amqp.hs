@@ -117,8 +117,8 @@ instance RpcTransport T where
     -> IO ()
   -- ^ This function SHOULD lock the servedRoutes table but it's highly unlikely to be a problem.
   serveRaw T {conn, publishChan, servedRoutes} route asyncHandler = do
-    atomically (TMap.lookup route servedRoutes) >>- isJust >>=
-      (`when` throw (AlreadyServingException route))
+    whenM (atomically $ isJust <$> TMap.lookup route servedRoutes) $
+      throw $ AlreadyServingException route
     let Tagged queueName = route
     consumerChan <- AMQP.openChannel conn
     void $ AMQP.declareQueue consumerChan AMQP.newQueue {AMQP.queueName}
