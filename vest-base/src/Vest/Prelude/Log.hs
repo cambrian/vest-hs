@@ -24,8 +24,8 @@ withLogLock action = do
   logLock <- readIORef logLockRef
   Lock.with logLock action
 
-getTestMode :: IO Bool
-getTestMode = isJust <$> lookupEnv "___TEST_MODE_DO_NOT_SET"
+shouldSwallowLogs :: IO Bool
+shouldSwallowLogs = isJust <$> lookupEnv "VEST_SWALLOW_LOGS"
 
 data LogLevel
   = Debug
@@ -37,7 +37,7 @@ type LogMessage a = (Time, LogLevel, a)
 
 log :: Show a => LogLevel -> Text -> a -> IO ()
 log level context a =
-  unlessM getTestMode $
+  unlessM shouldSwallowLogs $
   withLogLock $ do
     time <- now
     putErrText $ show (time, level, context, a)
