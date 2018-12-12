@@ -4,20 +4,27 @@ module Test
   , testCase'
   , testWithResource
   , testWithLoadableResource
-  , testWithSeededDb
+  , testWithSandbox
   , testWithService
   , ignoreIO
   , TestService
   ) where
 
+import Control.Concurrent.Lock (Lock)
+import qualified Control.Concurrent.Lock as Lock
 import Vest
 
 import GHC.Base (String)
 import Postgres
+import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty as Reexports (TestTree, defaultMain, testGroup)
 import qualified Test.Tasty as Tasty
 import Test.Tasty.ExpectedFailure as Reexports (ignoreTest)
 import Test.Tasty.Golden (goldenVsStringDiff)
+
+sandboxLock :: Lock
+{-# NOINLINE sandboxLock #-}
+sandboxLock = unsafePerformIO Lock.new
 
 diffCmd :: FilePath -> FilePath -> [String]
 diffCmd ref new = ["diff", "-u", "--color", ref, new]
@@ -69,24 +76,25 @@ testWithLoadableResource configDir =
         makeLoadable @a [path])
     (cleanupLogged @a)
 
-data TestNamespace
+data Test
 
-instance HasNamespace TestNamespace where
-  type Namespace TestNamespace = "test"
+instance HasNamespace Test where
+  type Namespace Test = "test"
 
-testWithSeededDb ::
-     (Pool (Specific TestNamespace Connection) -> IO ())
-  -> FilePath
-  -> TestTree
-  -> TestTree
--- ^ TODO: would be nice to auto check schema, truncate, seed values, but beam is annoying to work with.
-testWithSeededDb f configPath test =
+testWithSandbox :: [Pg ()] -> Path Rel Dir -> TestTree -> TestTree
+-- ^ Resets amqp, redis, blockchain, and clears and seeds databases
+-- TODO: support >1 db
+testWithSandbox dbSeed configDir test =
   Tasty.withResource
-    (do path <- resolveDir' configPath
-        db <- makeLoadable @(Pool (Specific TestNamespace Connection)) [path]
-        f db
-        return db)
-    (cleanupLogged @(Pool (Specific TestNamespace Connection)))
+    (do Lock.acquire sandboxLock
+        dir <- getCurrentDir
+        -- clear amqp
+        -- clear redis
+        -- reset blockchain state
+        withLoadable [dir </> configDir] $ \(db :: Pool (Specific Test Connection)) -> do
+          runLoggedTransaction db $ do forM_ dbSeed identity -- also clear db
+        return ())
+    (\() -> Lock.release sandboxLock)
     (const test)
 
 testWithService ::

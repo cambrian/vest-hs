@@ -9,20 +9,13 @@ module Vest.Prelude.Log
 
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
-import Data.IORef
-import System.IO.Unsafe
+import System.IO.Unsafe (unsafePerformIO)
 import Vest.Prelude.Core
 import Vest.Prelude.Time
 
--- DO NOT DO THIS ON YOUR OWN!
-logLockRef :: IORef Lock
-{-# NOINLINE logLockRef #-}
-logLockRef = unsafePerformIO (Lock.new >>= newIORef)
-
-withLogLock :: IO a -> IO a
-withLogLock action = do
-  logLock <- readIORef logLockRef
-  Lock.with logLock action
+logLock :: Lock
+{-# NOINLINE logLock #-}
+logLock = unsafePerformIO Lock.new
 
 shouldSwallowLogs :: IO Bool
 shouldSwallowLogs = isJust <$> lookupEnv "VEST_SWALLOW_LOGS"
@@ -38,7 +31,7 @@ type LogMessage a = (Time, LogLevel, a)
 log :: Show a => LogLevel -> Text -> a -> IO ()
 log level context a =
   unlessM shouldSwallowLogs $
-  withLogLock $ do
+  Lock.with logLock $ do
     time <- now
     putErrText $ show (time, level, context, a)
 
