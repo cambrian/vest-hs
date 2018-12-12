@@ -89,7 +89,7 @@ getRewardInfo T {httpClient} rewardBlockCycle_ delegateIds = do
 -- problem manually.
 streamProvisionalBlockEvents ::
      T
-  -> Word8
+  -> Word64
   -> IndexOf BlockEvent
   -> IO (Stream QueueBuffer BlockEvent, Stream QueueBuffer [BlockHash])
 streamProvisionalBlockEvents T {httpClient} finalizationLag startBlockNumber = do

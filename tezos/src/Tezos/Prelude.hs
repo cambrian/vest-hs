@@ -64,12 +64,12 @@ instance Indexable BlockEvent where
   type IndexOf BlockEvent = Word64
   index = number
 
--- | The Word8 field is the number of blocks for which the operation has been in a given state
+-- | The Word64 field is the number of blocks for which the operation has been in a given state
 -- (i.e. confirmations of that state).
 -- Eventually: Move back to Vest.Prelude.Blockchain if other blockchains use this?
 data OperationStatus
-  = NotIncluded Word8
-  | Included (BlockHash, Word8)
+  = NotIncluded Word64
+  | Included (BlockHash, Word64)
   | Confirmed BlockHash
   | Rejected
   deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
@@ -78,5 +78,5 @@ data InvalidCycleException =
   InvalidCycleException
   deriving (Eq, Ord, Show, Read, Generic, Exception, Hashable, FromJSON, ToJSON)
 
-defaultFinalizationLag :: Word8
+defaultFinalizationLag :: Word64
 defaultFinalizationLag = 60
