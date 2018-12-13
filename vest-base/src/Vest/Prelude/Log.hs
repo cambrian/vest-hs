@@ -27,10 +27,9 @@ data LogLevel
 type LogMessage a = (Time, LogLevel, a)
 
 log :: Show a => LogLevel -> Text -> a -> IO ()
-log level context a =
-  Lock.with logLock $ do
-    time <- now
-    putErrText $ show (time, level, context, a)
+log level context a = do
+  time <- now
+  Lock.with logLock $ putErrText $ show (time, level, context, a)
 
 log_ :: LogLevel -> Text -> IO ()
 log_ level context = log level context ()
