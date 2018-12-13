@@ -49,6 +49,7 @@ dependencies:
 - safe-money-aeson        >= 0.1
 - servant                 >= 0.14
 - servant-client          >= 0.14
+- silently                >= 1.2
 - singletons              >= 2.4
 - stm                     >= 2.4
 - stm-chans               >= 3.0

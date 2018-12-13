@@ -12,15 +12,15 @@ module Test
 
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
-import Vest
-
 import GHC.Base (String)
 import Postgres
+import System.IO.Silently (hSilence)
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty as Reexports (TestTree, defaultMain, testGroup)
 import qualified Test.Tasty as Tasty
 import Test.Tasty.ExpectedFailure as Reexports (ignoreTest)
 import Test.Tasty.Golden (goldenVsStringDiff)
+import Vest
 
 sandboxLock :: Lock
 {-# NOINLINE sandboxLock #-}
@@ -40,7 +40,8 @@ testCase' ::
   -> TestTree
 testCase' name path test =
   goldenVsStringDiff (unpack name) diffCmd (toFilePath path) $
-  (convertString <$> test) `catchAny` (return . convertString . show)
+  (convertString <$> hSilence [stderr] test) `catchAny`
+  (return . convertString . show)
 
 newtype TestService a = TestService
   { serviceThread :: Async Void

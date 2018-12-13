@@ -20,9 +20,8 @@ pg_ctl -D /usr/local/var/postgres -l ~/.vest-hs/postgres-run.log start > ~/.vest
 # Enable recent history for RabbitMQ.
 /usr/local/sbin/rabbitmq-plugins enable rabbitmq_recent_history_exchange
 
-if [ -n "$1" ] && [ "$1" == "-t" ]
-  then
-    (export VEST_SWALLOW_LOGS=true && stack test --fast --file-watch --no-rerun-tests)
+if [ -n "$1" ] && [ "$1" == "-t" ]; then
+  stack test --fast --file-watch --no-rerun-tests
 else
   ghcid
 fi

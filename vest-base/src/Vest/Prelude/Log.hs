@@ -13,12 +13,10 @@ import System.IO.Unsafe (unsafePerformIO)
 import Vest.Prelude.Core
 import Vest.Prelude.Time
 
+-- | Prevents logs from different threads from getting interleaved
 logLock :: Lock
 {-# NOINLINE logLock #-}
 logLock = unsafePerformIO Lock.new
-
-shouldSwallowLogs :: IO Bool
-shouldSwallowLogs = isJust <$> lookupEnv "VEST_SWALLOW_LOGS"
 
 data LogLevel
   = Debug
@@ -30,7 +28,6 @@ type LogMessage a = (Time, LogLevel, a)
 
 log :: Show a => LogLevel -> Text -> a -> IO ()
 log level context a =
-  unlessM shouldSwallowLogs $
   Lock.with logLock $ do
     time <- now
     putErrText $ show (time, level, context, a)
