@@ -1,3 +1,19 @@
+**Note:** This read-only repository comprises a web microservices framework written in Haskell. It
+was originally written to support a financial derivatives marketplace for Proof-of-Stake (PoS)
+blockchains, although the business logic for the marketplace was left incomplete when the project
+had to pivot.
+
+In the hope that portions of the _framework_ might be useful to future projects, it is now open
+source. Besides a highly type-safe way of declaring a service interface, this framework has varying
+levels of support for DB persistence, caching layers, RPC transport layers, sane config
+management, and inter-service authentication.
+
+Unfortunately, it is less documented than we'd like it to be, given the fate of the project. The
+best places to start digging are the partially-complete services in the `services` directory, and we
+are more than happy to answer questions sent our way!
+
+---
+
 # vest-hs
 
 Monorepo for all Haskell packages.
